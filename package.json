@@ -17,6 +17,7 @@
     "db:migrate": "supabase db push",
     "db:reset": "supabase db reset"
   },
+  "packageManager": "npm@11.6.3",
   "devDependencies": {
     "turbo": "^2.3.3"
   },
