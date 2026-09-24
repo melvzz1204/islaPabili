@@ -5,6 +5,7 @@ export type AuthStackParamList = {
   Login: undefined;
   Register: undefined;
   Otp: undefined;
+  Phone: undefined;
 };
 
 export type AuthScreen<Route extends keyof AuthStackParamList> =

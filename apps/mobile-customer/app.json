@@ -6,14 +6,15 @@
     "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "ph.islapabili.customer"
     },
     "android": {
-      "package": "ph.islapabili.customer",
-      "edgeToEdgeEnabled": true
-    }
+      "package": "ph.islapabili.customer"
+    },
+    "plugins": [
+      "expo-web-browser"
+    ]
   }
 }

@@ -46,14 +46,45 @@ export async function verifyEmailOtp(
   return { error: message(error) };
 }
 
+export type OAuthResult = {
+  url: string | null;
+  error: string | null;
+};
+
 export async function signInWithProvider(
   client: Supabase,
   provider: Extract<Provider, 'google' | 'facebook'>,
   redirectTo: string,
-): Promise<AuthResult> {
-  const { error } = await client.auth.signInWithOAuth({
+): Promise<OAuthResult> {
+  const { data, error } = await client.auth.signInWithOAuth({
     provider,
-    options: { redirectTo },
+    options: { redirectTo, skipBrowserRedirect: true },
+  });
+  if (error) return { url: null, error: message(error) };
+  return { url: data.url, error: null };
+}
+
+export async function exchangeOAuthCode(client: Supabase, url: string): Promise<AuthResult> {
+  const { error } = await client.auth.exchangeCodeForSession(url);
+  return { error: message(error) };
+}
+
+export async function sendPhoneOtp(client: Supabase, phone: string): Promise<AuthResult> {
+  const { error } = await client.auth.signInWithOtp({
+    phone,
+    options: { channel: 'sms', shouldCreateUser: true },
+  });
+  return { error: message(error) };
+}
+
+export async function verifyPhoneOtp(
+  client: Supabase,
+  input: { phone: string; token: string },
+): Promise<AuthResult> {
+  const { error } = await client.auth.verifyOtp({
+    phone: input.phone,
+    token: input.token,
+    type: 'sms',
   });
   return { error: message(error) };
 }

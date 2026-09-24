@@ -6,14 +6,12 @@
     "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "ph.islapabili.rider"
     },
     "android": {
-      "package": "ph.islapabili.rider",
-      "edgeToEdgeEnabled": true
+      "package": "ph.islapabili.rider"
     },
     "plugins": ["expo-image-picker"]
   }
