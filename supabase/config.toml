@@ -1,0 +1,42 @@
+# IslaPabili - Supabase project configuration.
+# Used by the Supabase CLI (`supabase init/start/push`).
+# NOTE: This project is deployed to https://wxkbdejcwkpyggmmohgo.supabase.co
+
+project_id = "islapabili"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+major_version = 15
+
+[auth]
+enabled = true
+site_url = "http://localhost:3001"
+additional_redirect_urls = ["http://localhost:8081"]
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = false
+
+[auth.phone]
+enable_signup = true
+
+[auth.external]
+enabled = false
+
+[storage]
+enabled = true
+file_size_limit = "50MB"
+
+[realtime]
+enabled = true
+
+[analytics]
+enabled = false
