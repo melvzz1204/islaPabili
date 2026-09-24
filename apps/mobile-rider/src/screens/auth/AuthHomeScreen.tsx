@@ -19,6 +19,11 @@ export default function AuthHomeScreen({ navigation }: Props) {
         variant="secondary"
         onPress={() => navigation.navigate('Register')}
       />
+      <Button
+        title="Continue with phone"
+        variant="secondary"
+        onPress={() => navigation.navigate('Phone')}
+      />
       <Pressable
         style={styles.otpLink}
         onPress={() => navigation.navigate('Otp')}

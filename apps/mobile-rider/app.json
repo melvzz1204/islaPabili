@@ -13,6 +13,9 @@
     "android": {
       "package": "ph.islapabili.rider"
     },
-    "plugins": ["expo-image-picker"]
+    "plugins": [
+      "expo-image-picker",
+      "expo-web-browser"
+    ]
   }
 }

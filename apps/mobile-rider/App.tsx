@@ -12,6 +12,7 @@ import AuthHomeScreen from './src/screens/auth/AuthHomeScreen';
 import LoginScreen from './src/screens/auth/LoginScreen';
 import RegisterScreen from './src/screens/auth/RegisterScreen';
 import OtpScreen from './src/screens/auth/OtpScreen';
+import PhoneScreen from './src/screens/auth/PhoneScreen';
 import RiderApplicationScreen from './src/screens/RiderApplicationScreen';
 import RiderStatusScreen from './src/screens/RiderStatusScreen';
 import RiderHomeScreen from './src/screens/RiderHomeScreen';
@@ -79,6 +80,7 @@ function Root() {
         <AuthStack.Screen name="Login" component={LoginScreen} />
         <AuthStack.Screen name="Register" component={RegisterScreen} />
         <AuthStack.Screen name="Otp" component={OtpScreen} />
+        <AuthStack.Screen name="Phone" component={PhoneScreen} />
       </AuthStack.Navigator>
     );
   }
