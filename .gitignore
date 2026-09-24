@@ -6,11 +6,12 @@ dist/
 build/
 coverage/
 *.tsbuildinfo
-
 # Environment (keys/URLs must never be committed)
+
 .env
 .env.*
 !.env.example
+**/token.*
 
 # Tooling
 .turbo/
