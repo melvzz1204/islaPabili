@@ -12,13 +12,25 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@isla/shared": "0.1.0",
+    "@isla/supabase": "0.1.0",
+    "@react-native-async-storage/async-storage": "1.23.1",
+    "@react-navigation/native": "^7.4.1",
+    "@react-navigation/native-stack": "~7.2.0",
     "expo": "~52.0.0",
-    "expo-status-bar": "~2.0.0",
+    "expo-image-picker": "~16.0.6",
+    "expo-linking": "~7.0.5",
+    "expo-status-bar": "~2.0.1",
     "react": "18.3.1",
-    "react-native": "0.76.5"
+    "react-native": "0.76.5",
+    "react-native-get-random-values": "~1.11.0",
+    "react-native-safe-area-context": "4.12.0",
+    "react-native-screens": "~4.4.0",
+    "react-native-url-polyfill": "^2.0.0"
   },
   "devDependencies": {
     "@isla/eslint-config": "0.1.0",
+    "@types/react": "^18.3.12",
     "eslint": "^9.17.0",
     "typescript": "~5.6.2"
   }

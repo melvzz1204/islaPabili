@@ -1,0 +1,86 @@
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type PropsWithChildren,
+} from 'react';
+import type { Session } from '@supabase/supabase-js';
+import type { Supabase } from '../client';
+import type { Database } from '../database';
+
+export type Profile = Database['public']['Tables']['profiles']['Row'];
+
+type AuthContextValue = {
+  client: Supabase;
+  session: Session | null;
+  profile: Profile | null;
+  loading: boolean;
+  profileLoading: boolean;
+  refreshProfile: () => Promise<void>;
+};
+
+const AuthContext = createContext<AuthContextValue | null>(null);
+
+export function AuthProvider({ client, children }: PropsWithChildren<{ client: Supabase }>) {
+  const [session, setSession] = useState<Session | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [profileLoading, setProfileLoading] = useState(false);
+
+  const refreshProfile = useCallback(async () => {
+    const { data: authData } = await client.auth.getUser();
+    const userId = authData.user?.id;
+    if (!userId) {
+      setProfile(null);
+      setProfileLoading(false);
+      return;
+    }
+    setProfileLoading(true);
+    const { data } = await client
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle();
+    if (data) setProfile(data);
+    setProfileLoading(false);
+  }, [client]);
+
+  useEffect(() => {
+    let active = true;
+    void client.auth.getSession().then(({ data }) => {
+      if (!active) return;
+      setSession(data.session);
+      setLoading(false);
+    });
+    const { data: sub } = client.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+      if (nextSession) {
+        void refreshProfile();
+      } else {
+        setProfile(null);
+      }
+    });
+    return () => {
+      active = false;
+      sub.subscription.unsubscribe();
+    };
+  }, [client, refreshProfile]);
+
+  const value = useMemo(
+    () => ({ client, session, profile, loading, profileLoading, refreshProfile }),
+    [client, loading, profile, profileLoading, refreshProfile, session],
+  );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export function useAuth(): AuthContextValue {
+  const ctx = useContext(AuthContext);
+  if (!ctx) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return ctx;
+}

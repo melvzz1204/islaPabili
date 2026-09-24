@@ -2,6 +2,7 @@
   "expo": {
     "name": "IslaPabili Rider",
     "slug": "islapabili-rider",
+    "scheme": "islapabili-rider",
     "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
@@ -13,6 +14,7 @@
     "android": {
       "package": "ph.islapabili.rider",
       "edgeToEdgeEnabled": true
-    }
+    },
+    "plugins": ["expo-image-picker"]
   }
 }
