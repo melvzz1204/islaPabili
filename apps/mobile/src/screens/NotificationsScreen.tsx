@@ -139,8 +139,12 @@ export default function NotificationsScreen({}: Props) {
     }
     // Rider-application notifications land on the rider gate (status screen);
     // rows written before 0020 have no kind, so fall back to title matching.
+    // Pabili broadcasts (kind pabili, no order) also land on the Rider tab,
+    // where the rider accepts them; customer pabili updates carry an order_id
+    // and land on Orders below.
     const isRiderItem =
       n.kind === 'rider_application' ||
+      (n.kind === 'pabili' && !n.order_id) ||
       n.title === 'Application received' ||
       n.title.startsWith('Rider application');
     if (isRiderItem) {

@@ -139,7 +139,55 @@ export default function HomeScreen({}: Props) {
         </View>
       </View>
 
-      {/* Search entry point */}
+      {/* Pabili CTA — the live flow, so it sits on top */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Create a pabili list"
+        onPress={() => navigation.navigate('PabiliCreate')}
+        style={({ pressed }) => [pressed && styles.pressed]}
+      >
+        <Card style={styles.riderCard} variant="flat">
+          <View style={styles.pabiliIcon}>
+            <AppIcon name="pabili" size={24} color={colors.onPrimary} />
+          </View>
+          <View style={styles.riderText}>
+            <Text style={styles.riderTitle}>Pabili errand</Text>
+            <Text style={styles.riderBody}>Type what you need — a rider will buy it and deliver it to you.</Text>
+          </View>
+          <Badge label="New" status="accent" />
+        </Card>
+      </Pressable>
+
+      {/* Jollibee shortcut — opens the pabili form preloaded */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Order Jollibee"
+        onPress={() => navigation.navigate('PabiliCreate', { comboId: 'jollibee' })}
+        style={({ pressed }) => [pressed && styles.pressed]}
+      >
+        <View style={styles.jollibeeTile}>
+          <View style={styles.jollibeeText}>
+            <Text style={styles.jollibeeTitle}>Jollibee</Text>
+            <Text style={styles.jollibeeSub} numberOfLines={1}>
+              Chickenjoy • Spaghetti • Burgers — tap to order
+            </Text>
+          </View>
+          <View style={styles.jollibeeBadge}>
+            <Text style={styles.jollibeeBadgeText}>Order</Text>
+          </View>
+        </View>
+      </Pressable>
+
+      {/* Catalog pause notice */}
+      <Card variant="tinted" style={styles.soonCard}>
+        <Text style={styles.soonTitle}>Store catalog coming soon</Text>
+        <Text style={styles.soonBody}>
+          Merchant stores are still onboarding — the sections below are paused. Send a pabili list instead.
+        </Text>
+      </Card>
+
+      {/* Search entry point (paused with the catalog) */}
+      <View pointerEvents="none" style={styles.dimmed}>
       <Pressable
         accessibilityRole="search"
         accessibilityLabel="Search stores and products"
@@ -152,6 +200,7 @@ export default function HomeScreen({}: Props) {
           <AppIcon name="filter" size={15} color={colors.primary} />
         </View>
       </Pressable>
+      </View>
 
       {/* Active order tracking */}
       {activeOrder ? (
@@ -176,8 +225,8 @@ export default function HomeScreen({}: Props) {
         </Pressable>
       ) : null}
 
-      {/* Categories */}
-      <View style={styles.section}>
+      {/* Categories (paused with the catalog) */}
+      <View pointerEvents="none" style={[styles.section, styles.dimmed]}>
         <SectionHeader title="Shop by category" />
         <View style={styles.categoryGrid}>
           {CATEGORIES.map((cat) => (
@@ -205,12 +254,10 @@ export default function HomeScreen({}: Props) {
       </View>
 
       {/* Nearby stores rail */}
-      <View style={styles.section}>
+      <View pointerEvents="none" style={[styles.section, styles.dimmed]}>
         <SectionHeader
           title="Nearby stores"
-          subtitle={shouldFilterTowns(optedTowns) ? `In your ${townLabel} areas` : 'Delivering around you'}
-          actionLabel="See all"
-          onAction={goShop}
+          subtitle="Paused while merchants onboard"
         />
         {loadingStores ? (
           <View style={styles.rail}>
@@ -315,6 +362,10 @@ const styles = StyleSheet.create({
   activeBody: { ...typography.caption, color: colors.primaryDeep, textTransform: 'capitalize' },
 
   section: { gap: spacing.md },
+  dimmed: { opacity: 0.4 },
+  soonCard: { gap: spacing.xs },
+  soonTitle: { ...typography.subhead, fontWeight: '700' },
+  soonBody: { ...typography.body, color: colors.muted },
 
   categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   category: {
@@ -356,6 +407,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  pabiliIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: radius.md,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  jollibeeTile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: '#D8232A',
+  },
+  jollibeeText: { flex: 1, gap: 1 },
+  jollibeeTitle: { color: '#FFFFFF', fontSize: 20, fontWeight: '800' },
+  jollibeeSub: { color: 'rgba(255,255,255,0.85)', fontSize: 12.5 },
+  jollibeeBadge: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.xs,
+  },
+  jollibeeBadgeText: { color: '#D8232A', fontWeight: '800', fontSize: 13 },
   riderText: { flex: 1, gap: 2 },
   riderTitle: { ...typography.subhead, fontWeight: '700' },
   riderBody: { ...typography.caption },

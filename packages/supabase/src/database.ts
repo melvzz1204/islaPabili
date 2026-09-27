@@ -404,6 +404,7 @@ export type Database = {
           rider_earnings_estimate: number
           rider_id: string | null
           status: Database["public"]["Enums"]["order_status"]
+          store_name: string | null
           tip_amount: number
           total_delivery_fee: number
           town: Database["public"]["Enums"]["island_town"]
@@ -444,6 +445,7 @@ export type Database = {
           rider_earnings_estimate?: number
           rider_id?: string | null
           status?: Database["public"]["Enums"]["order_status"]
+          store_name?: string | null
           tip_amount?: number
           total_delivery_fee?: number
           town: Database["public"]["Enums"]["island_town"]
@@ -483,6 +485,7 @@ export type Database = {
           rider_earnings_estimate?: number
           rider_id?: string | null
           status?: Database["public"]["Enums"]["order_status"]
+          store_name?: string | null
           tip_amount?: number
           total_delivery_fee?: number
           town?: Database["public"]["Enums"]["island_town"]
@@ -786,6 +789,8 @@ export type Database = {
       }
       rider_status: {
         Row: {
+          current_lat: number | null
+          current_lng: number | null
           current_town: Database["public"]["Enums"]["island_town"] | null
           last_seen_at: string
           on_duty: boolean
@@ -794,6 +799,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          current_lat?: number | null
+          current_lng?: number | null
           current_town?: Database["public"]["Enums"]["island_town"] | null
           last_seen_at?: string
           on_duty?: boolean
@@ -802,6 +809,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          current_lat?: number | null
+          current_lng?: number | null
           current_town?: Database["public"]["Enums"]["island_town"] | null
           last_seen_at?: string
           on_duty?: boolean
@@ -974,6 +983,18 @@ export type Database = {
       review_rider_application: {
         Args: { p_application_id: string; p_decision: string; p_reason?: string | null }
         Returns: Database["public"]["Tables"]["rider_applications"]["Row"]
+      }
+      accept_pabili_order: {
+        Args: { p_order_id: string }
+        Returns: Database["public"]["Tables"]["orders"]["Row"]
+      }
+      request_pabili_riders: {
+        Args: { p_order_id: string }
+        Returns: number
+      }
+      respond_pabili_request: {
+        Args: { p_order_id: string; p_decision: string }
+        Returns: Database["public"]["Tables"]["orders"]["Row"]
       }
     }
     Enums: {

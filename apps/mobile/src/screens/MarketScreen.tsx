@@ -5,6 +5,7 @@ import { resolveOptedTowns, shouldFilterTowns, TOWN_LABELS } from '@isla/shared'
 import { useAuth } from '@isla/supabase';
 import {
   Button,
+  Card,
   Chip,
   ChipRow,
   EmptyState,
@@ -117,6 +118,15 @@ export default function MarketScreen({}: Props) {
         )}
       </View>
 
+      <Card variant="tinted" style={styles.soonCard}>
+        <Text style={styles.soonTitle}>Store catalog coming soon</Text>
+        <Text style={styles.soonBody}>
+          We&apos;re still onboarding merchants. Meanwhile, send a pabili list and a rider will shop for you.
+        </Text>
+        <Button title="Create pabili list" onPress={() => navigation.navigate('PabiliCreate')} />
+      </Card>
+
+      <View pointerEvents="none" style={styles.dimmed}>
       <SearchBar
         value={query}
         onChangeText={setQuery}
@@ -220,6 +230,7 @@ export default function MarketScreen({}: Props) {
           ))}
         </View>
       )}
+      </View>
     </Screen>
   );
 }
@@ -234,6 +245,11 @@ const styles = StyleSheet.create({
   brand: { flex: 1, gap: 1 },
   brandName: { ...typography.display, fontSize: 27 },
   brandSub: { ...typography.caption },
+
+  soonCard: { gap: spacing.sm },
+  soonTitle: { ...typography.subhead, fontWeight: '700' },
+  soonBody: { ...typography.body },
+  dimmed: { opacity: 0.4, gap: spacing.md },
 
   groups: { gap: spacing.lg },
   group: { gap: spacing.sm },

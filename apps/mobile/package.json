@@ -8,7 +8,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "node --stack-size=8192 ./node_modules/typescript/lib/tsc.js --noEmit",
     "lint": "eslint ."
   },
   "dependencies": {
@@ -24,6 +24,7 @@
     "expo-image-manipulator": "~57.0.20",
     "expo-image-picker": "~57.0.20",
     "expo-linking": "~57.0.11",
+    "expo-location": "~57.0.20",
     "expo-splash-screen": "~57.0.9",
     "expo-status-bar": "~57.0.1",
     "expo-updates": "~57.0.23",

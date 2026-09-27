@@ -21,6 +21,7 @@ import {
   type TimelineStep,
 } from '@isla/ui';
 import { peso } from '../marketplace/data';
+import { callRpc } from '../lib/rpc';
 import type { RootNavProp, TabScreen } from '../navigation/types';
 
 type Props = TabScreen<'Orders'>;
@@ -145,6 +146,27 @@ export default function OrdersScreen({}: Props) {
     ]);
     setItems(itemRows ?? []);
     setLogs(logRows ?? []);
+  };
+
+  /** Re-offer a waiting pabili list to whoever is on duty right now. */
+  const retryDispatch = async (order: OrderRow) => {
+    setActing(true);
+    const { data: offered, error } = await callRpc<number>(client, 'request_pabili_riders', {
+      p_order_id: order.id,
+    });
+    setActing(false);
+    if (error) {
+      showToast({ message: error.message, type: 'error' });
+      return;
+    }
+    showToast({
+      message:
+        (offered ?? 0) > 0
+          ? `Looking again — ${offered} rider${offered === 1 ? '' : 's'} on duty notified.`
+          : 'No riders on duty right now. Please retry again later.',
+      type: (offered ?? 0) > 0 ? 'success' : 'error',
+    });
+    await load();
   };
 
   const transition = async (order: OrderRow, patch: Partial<OrderRow>, done: string) => {
@@ -281,6 +303,20 @@ export default function OrdersScreen({}: Props) {
                   loading={acting}
                   onPress={() => void transition(selected, { status: 'cancelled' }, 'Order cancelled.')}
                 />
+              ) : selected.is_custom_list && selected.status === 'pending_dispatch' ? (
+                <>
+                  <Button
+                    title="Retry finding rider"
+                    loading={acting}
+                    onPress={() => void retryDispatch(selected)}
+                  />
+                  <Button
+                    title="Cancel pabili request"
+                    variant="danger"
+                    disabled={acting}
+                    onPress={() => void transition(selected, { status: 'cancelled' }, 'Pabili request cancelled.')}
+                  />
+                </>
               ) : null}
               <Button title="Close" variant="secondary" onPress={() => setSelected(null)} />
             </View>
@@ -320,8 +356,15 @@ export default function OrdersScreen({}: Props) {
               ))
             )}
 
-            <Text style={styles.sectionTitle}>Progress</Text>
-            {timelineSteps.length === 0 ? (
+            {selected.is_custom_list && selected.status === 'pending_dispatch' ? (
+              <Text style={styles.muted}>
+                {Date.now() - new Date(selected.created_at).getTime() > 5 * 60 * 1000
+                  ? 'Still looking — the last 5-minute offer round lapsed with no takers. Hit “Retry finding rider” below.'
+                  : 'Live now — on-duty riders in your town are being notified. First to accept wins.'}
+              </Text>
+            ) : null}
+
+            <Text style={styles.sectionTitle}>Progress</Text>            {timelineSteps.length === 0 ? (
               <Text style={styles.muted}>Status updates will appear here.</Text>
             ) : (
               <Timeline steps={timelineSteps} />

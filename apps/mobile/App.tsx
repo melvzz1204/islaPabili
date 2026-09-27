@@ -22,6 +22,7 @@ import MarketScreen from './src/screens/MarketScreen';
 import StoreScreen from './src/screens/StoreScreen';
 import CartScreen from './src/screens/CartScreen';
 import CheckoutScreen from './src/screens/CheckoutScreen';
+import PabiliCreateScreen from './src/screens/PabiliCreateScreen';
 import OrdersScreen from './src/screens/OrdersScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
 import RiderGateScreen from './src/screens/RiderGateScreen';
@@ -139,6 +140,7 @@ function Root() {
       <Stack.Screen name="Store" component={StoreScreen} />
       <Stack.Screen name="Cart" component={CartScreen} />
       <Stack.Screen name="Checkout" component={CheckoutScreen} />
+      <Stack.Screen name="PabiliCreate" component={PabiliCreateScreen} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} />
       <Stack.Screen name="Rider" component={RiderGateScreen} />
       <Stack.Screen name="Onboarding" component={OnboardingScreen} />

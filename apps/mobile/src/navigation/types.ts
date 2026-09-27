@@ -21,6 +21,7 @@ export type RootStackParamList = {
   Store: { merchantId: string };
   Cart: undefined;
   Checkout: undefined;
+  PabiliCreate: { comboId?: string } | undefined;
   Notifications: undefined;
   Rider: undefined;
   Onboarding: undefined;
