@@ -34,10 +34,7 @@ export function AdminLogin({ onSignedIn }: { onSignedIn: () => void }) {
       <div className="auth-card">
         <div className="auth-brand">
           <img src="/islapabili_logo.svg" alt="IslaPabili" />
-          <div>
-            <strong>IslaPabili</strong>
-            <span>Island admin console</span>
-          </div>
+          <span>Island admin console</span>
         </div>
         <h1>Welcome back, Admin</h1>
         <p className="muted">Live view of orders, riders, stores and money across Marinduque.</p>
@@ -70,7 +67,6 @@ export function AdminLogin({ onSignedIn }: { onSignedIn: () => void }) {
         </form>
       </div>
       <div className="auth-side">
-        <div className="auth-metric"><strong>6</strong><span>municipalities live</span></div>
         <div className="auth-metric"><strong>₱40 + ₱10/km</strong><span>transparent island fare</span></div>
         <div className="auth-metric"><strong>Live</strong><span>orders · riders · stores</span></div>
         <p>“Salamat sa pag-Pabili” — every completed order, rated and settled.</p>

@@ -246,9 +246,8 @@ select.input { width: auto; }
 .boot img { width: 72px; }
 .auth-wrap { display: grid; grid-template-columns: 440px 340px; gap: 0; background: #fff; border-radius: 24px; overflow: hidden; box-shadow: var(--shadow); border: 1px solid var(--line); max-width: 800px; width: 100%; }
 .auth-card { padding: 34px; display: flex; flex-direction: column; gap: 10px; }
-.auth-brand { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; }
-.auth-brand img { width: 44px; height: 44px; }
-.auth-brand strong { display: block; }
+.auth-brand { display: flex; flex-direction: column; gap: 6px; align-items: center; text-align: center; margin-bottom: 8px; }
+.auth-brand img { width: 210px; height: auto; }
 .auth-brand span { font-size: 12px; color: var(--mut); }
 .auth-side { background: linear-gradient(160deg, #0b2424, #008080); color: #dff3f1; padding: 30px; display: flex; flex-direction: column; gap: 14px; justify-content: center; }
 .auth-metric strong { display: block; font-size: 22px; font-family: var(--isla-font-display); color: #fff; }
