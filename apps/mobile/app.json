@@ -16,7 +16,10 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#065F59"
-      }
+      },
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "name": "IslaPabili",
@@ -35,6 +38,11 @@
           "backgroundColor": "#FFFFFF"
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "d8522891-0d14-408a-b9d9-9a2f95feb2e0"
+      }
+    }
   }
 }
