@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "d8522891-0d14-408a-b9d9-9a2f95feb2e0"
+      }
+    },
+    "android": {
+      "package": "com.melvzqwerty.islapabili"
+    }
+  }
+}
