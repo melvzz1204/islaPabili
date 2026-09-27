@@ -18,6 +18,7 @@ export function getSupabaseClient(env: SupabaseEnv, storage?: SupportedStorage):
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: false,
+      flowType: 'pkce',
       ...(storage ? { storage } : {}),
     },
   });

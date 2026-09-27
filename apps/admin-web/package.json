@@ -11,6 +11,9 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@isla/shared": "0.1.0",
+    "@isla/supabase": "0.1.0",
+    "@isla/ui": "0.1.0",
     "react": "19.2.3",
     "react-dom": "19.2.3"
   },

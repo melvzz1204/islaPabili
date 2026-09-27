@@ -1,0 +1,40 @@
+{
+  "expo": {
+    "name": "IslaPabili",
+    "slug": "islapabili",
+    "scheme": "islapabili",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "icon": "./assets/icon.png",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "ph.islapabili.app"
+    },
+    "android": {
+      "package": "ph.islapabili.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#065F59"
+      }
+    },
+    "web": {
+      "name": "IslaPabili",
+      "shortName": "IslaPabili",
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-image-picker",
+      "expo-web-browser",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#FFFFFF"
+        }
+      ]
+    ]
+  }
+}

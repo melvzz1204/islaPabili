@@ -53,6 +53,101 @@ export type Database = {
         }
         Relationships: []
       }
+      merchant_applications: {
+        Row: {
+          address: string | null
+          admin_notes: string | null
+          applicant_id: string
+          business_permit_url: string | null
+          category: Database["public"]["Enums"]["merchant_category"]
+          created_at: string
+          id: string
+          phone: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: Database["public"]["Enums"]["approval_status"]
+          store_name: string
+          store_photo_url: string | null
+          town: Database["public"]["Enums"]["island_town"]
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          admin_notes?: string | null
+          applicant_id: string
+          business_permit_url?: string | null
+          category: Database["public"]["Enums"]["merchant_category"]
+          created_at?: string
+          id?: string
+          phone?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: Database["public"]["Enums"]["approval_status"]
+          store_name: string
+          store_photo_url?: string | null
+          town: Database["public"]["Enums"]["island_town"]
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          admin_notes?: string | null
+          applicant_id?: string
+          business_permit_url?: string | null
+          category?: Database["public"]["Enums"]["merchant_category"]
+          created_at?: string
+          id?: string
+          phone?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: Database["public"]["Enums"]["approval_status"]
+          store_name?: string
+          store_photo_url?: string | null
+          town?: Database["public"]["Enums"]["island_town"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "merchant_applications_applicant_id_fkey"
+            columns: ["applicant_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      merchant_owners: {
+        Row: {
+          created_at: string
+          merchant_id: string
+          profile_id: string
+        }
+        Insert: {
+          created_at?: string
+          merchant_id: string
+          profile_id: string
+        }
+        Update: {
+          created_at?: string
+          merchant_id?: string
+          profile_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "merchant_owners_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "merchant_owners_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       merchants: {
         Row: {
           address: string | null
@@ -97,6 +192,54 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      notifications: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          is_read: boolean
+          kind: string | null
+          order_id: string | null
+          title: string
+          user_id: string
+        }
+        Insert: {
+          body?: string
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          kind?: string | null
+          order_id?: string | null
+          title: string
+          user_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          kind?: string | null
+          order_id?: string | null
+          title?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       order_items: {
         Row: {
@@ -244,6 +387,7 @@ export type Database = {
           dropoff_lng: number | null
           dropoff_notes: string | null
           est_items_total: number
+          fulfillment_mode: string
           grand_total: number
           id: string
           in_transit_at: string | null
@@ -282,13 +426,15 @@ export type Database = {
           dropoff_lng?: number | null
           dropoff_notes?: string | null
           est_items_total?: number
+          fulfillment_mode?: string
           grand_total?: number
           id?: string
           in_transit_at?: string | null
           is_custom_list?: boolean
           is_paid?: boolean
           merchant_id?: string | null
-          order_number: string
+          // Filled by trg_orders_assign_number when omitted.
+          order_number?: string
           payment_method?: Database["public"]["Enums"]["payment_method"]
           per_km_rate?: number
           pickup_lat?: number | null
@@ -320,6 +466,7 @@ export type Database = {
           dropoff_lng?: number | null
           dropoff_notes?: string | null
           est_items_total?: number
+          fulfillment_mode?: string
           grand_total?: number
           id?: string
           in_transit_at?: string | null
@@ -386,7 +533,9 @@ export type Database = {
           is_active: boolean
           phone: string | null
           role: Database["public"]["Enums"]["user_role"]
+          town_preferences: Database["public"]["Enums"]["island_town"][]
           updated_at: string
+          username: string | null
         }
         Insert: {
           address?: string | null
@@ -399,7 +548,9 @@ export type Database = {
           is_active?: boolean
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"]
+          town_preferences?: Database["public"]["Enums"]["island_town"][]
           updated_at?: string
+          username?: string | null
         }
         Update: {
           address?: string | null
@@ -412,9 +563,64 @@ export type Database = {
           is_active?: boolean
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"]
+          town_preferences?: Database["public"]["Enums"]["island_town"][]
           updated_at?: string
+          username?: string | null
         }
         Relationships: []
+      }
+      products: {
+        Row: {
+          category: string
+          created_at: string
+          description: string
+          id: string
+          is_active: boolean
+          merchant_id: string
+          name: string
+          photo_url: string | null
+          price: number
+          stock: number
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          description?: string
+          id?: string
+          is_active?: boolean
+          merchant_id: string
+          name: string
+          photo_url?: string | null
+          price: number
+          stock?: number
+          unit?: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          description?: string
+          id?: string
+          is_active?: boolean
+          merchant_id?: string
+          name?: string
+          photo_url?: string | null
+          price?: number
+          stock?: number
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "products_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       ratings: {
         Row: {
@@ -476,10 +682,12 @@ export type Database = {
           admin_notes: string | null
           bg_clearance_url: string | null
           created_at: string
-          driver_license_url: string | null
+          driver_license_back_url: string | null
+          driver_license_front_url: string | null
           driving_experience_years: number | null
           helmet_photo_url: string | null
           id: string
+          operating_towns: Database["public"]["Enums"]["island_town"][]
           reviewed_at: string | null
           reviewed_by: string | null
           rider_id: string
@@ -493,10 +701,12 @@ export type Database = {
           admin_notes?: string | null
           bg_clearance_url?: string | null
           created_at?: string
-          driver_license_url?: string | null
+          driver_license_back_url?: string | null
+          driver_license_front_url?: string | null
           driving_experience_years?: number | null
           helmet_photo_url?: string | null
           id?: string
+          operating_towns?: Database["public"]["Enums"]["island_town"][]
           reviewed_at?: string | null
           reviewed_by?: string | null
           rider_id: string
@@ -510,10 +720,12 @@ export type Database = {
           admin_notes?: string | null
           bg_clearance_url?: string | null
           created_at?: string
-          driver_license_url?: string | null
+          driver_license_back_url?: string | null
+          driver_license_front_url?: string | null
           driving_experience_years?: number | null
           helmet_photo_url?: string | null
           id?: string
+          operating_towns?: Database["public"]["Enums"]["island_town"][]
           reviewed_at?: string | null
           reviewed_by?: string | null
           rider_id?: string
@@ -577,6 +789,7 @@ export type Database = {
           current_town: Database["public"]["Enums"]["island_town"] | null
           last_seen_at: string
           on_duty: boolean
+          operating_towns: Database["public"]["Enums"]["island_town"][]
           rider_id: string
           updated_at: string
         }
@@ -584,6 +797,7 @@ export type Database = {
           current_town?: Database["public"]["Enums"]["island_town"] | null
           last_seen_at?: string
           on_duty?: boolean
+          operating_towns?: Database["public"]["Enums"]["island_town"][]
           rider_id: string
           updated_at?: string
         }
@@ -591,6 +805,7 @@ export type Database = {
           current_town?: Database["public"]["Enums"]["island_town"] | null
           last_seen_at?: string
           on_duty?: boolean
+          operating_towns?: Database["public"]["Enums"]["island_town"][]
           rider_id?: string
           updated_at?: string
         }
@@ -754,6 +969,12 @@ export type Database = {
         Returns: Database["public"]["Enums"]["user_role"]
       }
       is_admin: { Args: never; Returns: boolean }
+      is_merchant_owner: { Args: { p_merchant_id: string }; Returns: boolean }
+      is_username_taken: { Args: { p_username: string }; Returns: boolean }
+      review_rider_application: {
+        Args: { p_application_id: string; p_decision: string; p_reason?: string | null }
+        Returns: Database["public"]["Tables"]["rider_applications"]["Row"]
+      }
     }
     Enums: {
       approval_status: "pending" | "approved" | "rejected"
@@ -773,6 +994,10 @@ export type Database = {
         | "completed"
         | "cancelled"
         | "failed"
+        | "awaiting_merchant"
+        | "preparing"
+        | "ready"
+        | "declined"
       payment_method: "cod" | "ewallet"
       request_status: "pending" | "accepted" | "declined" | "expired"
       transaction_kind:
@@ -783,7 +1008,7 @@ export type Database = {
         | "cashout"
         | "adjustment"
       transaction_status: "pending" | "settled" | "failed" | "refunded"
-      user_role: "customer" | "rider" | "admin"
+      user_role: "customer" | "rider" | "admin" | "merchant"
       voucher_discount_type: "fixed" | "percent"
     }
     CompositeTypes: {

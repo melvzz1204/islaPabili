@@ -28,6 +28,14 @@ enable_confirmations = false
 [auth.phone]
 enable_signup = true
 
+# Custom SMS delivery via Semaphore (replaces Twilio). The URI below is for
+# `supabase start` local dev; production is wired in Dashboard > Auth > Hooks
+# pointing at the deployed function URL with its own hook secret.
+[auth.hook.send_sms]
+enabled = true
+uri = "http://host.docker.internal:54321/functions/v1/send-sms"
+secrets = "v1,whsec_c3VwZXItc2VjcmV0LWZvci1sb2NhbC1kZXYtdGVzdGluZy0wMTIzNDU2Nw=="
+
 [auth.external]
 enabled = false
 

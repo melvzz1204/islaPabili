@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1340 400" role="img" aria-label="IslaPabili logo">
+  <defs>
+    <linearGradient id="isla-bg-h" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0D9488"/>
+      <stop offset="1" stop-color="#065F59"/>
+    </linearGradient>
+    <clipPath id="isla-tile">
+      <rect x="24" y="24" width="352" height="352" rx="80"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#isla-tile)">
+    <rect x="24" y="24" width="352" height="352" fill="url(#isla-bg-h)"/>
+    <g transform="translate(24, 24) scale(0.34375)">
+      <path d="M 412 430 A 100 100 0 0 1 612 430" fill="none" stroke="#F97316" stroke-width="44" stroke-linecap="round"/>
+      <rect x="312" y="430" width="400" height="340" rx="96" fill="#FFFFFF"/>
+      <path d="M 452 612 Q 512 672 572 612" fill="none" stroke="#F97316" stroke-width="26" stroke-linecap="round"/>
+      <polygon points="606,726 770,726 688,884" fill="#FFFFFF"/>
+      <circle cx="688" cy="690" r="120" fill="#FFFFFF"/>
+      <polygon points="620,734 756,734 688,866" fill="#F97316"/>
+      <circle cx="688" cy="690" r="100" fill="#F97316"/>
+      <circle cx="688" cy="690" r="36" fill="#FFFFFF"/>
+    </g>
+  </g>
+  <text x="428" y="212" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="132" font-weight="800" letter-spacing="-2">
+    <tspan fill="#0B1220">Isla</tspan><tspan fill="#0D9488">Pabili</tspan>
+  </text>
+  <text x="432" y="288" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="44" font-weight="600" fill="#7A8699">Bili at Deliver sa Pintuan Mo.</text>
+</svg>

@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="IslaPabili logo">
+  <defs>
+    <linearGradient id="isla-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0D9488"/>
+      <stop offset="1" stop-color="#065F59"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#isla-bg)"/>
+  <ellipse cx="160" cy="180" rx="300" ry="140" fill="#FFFFFF" opacity="0.08"/>
+  <!-- bag handle (ends tuck under the bag top edge) -->
+  <path d="M 412 430 A 100 100 0 0 1 612 430" fill="none" stroke="#F97316" stroke-width="44" stroke-linecap="round"/>
+  <!-- bag body -->
+  <rect x="312" y="430" width="400" height="340" rx="96" fill="#FFFFFF"/>
+  <!-- smile / sea wave -->
+  <path d="M 452 612 Q 512 672 572 612" fill="none" stroke="#F97316" stroke-width="26" stroke-linecap="round"/>
+  <!-- location pin with sticker ring -->
+  <polygon points="606,726 770,726 688,884" fill="#FFFFFF"/>
+  <circle cx="688" cy="690" r="120" fill="#FFFFFF"/>
+  <polygon points="620,734 756,734 688,866" fill="#F97316"/>
+  <circle cx="688" cy="690" r="100" fill="#F97316"/>
+  <circle cx="688" cy="690" r="36" fill="#FFFFFF"/>
+</svg>
