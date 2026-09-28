@@ -23,6 +23,7 @@ import {
 import { fetchMerchants, peso, type Merchant, type MerchantKind } from '../marketplace/data';
 import { StoreRailCard } from '../marketplace/components';
 import { useUnreadCount } from './NotificationsScreen';
+import { useUnreadMessages } from '../messaging/chat';
 import type { RootNavProp, TabScreen } from '../navigation/types';
 
 type Props = TabScreen<'Home'>;
@@ -56,6 +57,7 @@ export default function HomeScreen({}: Props) {
   const { client, profile } = useAuth();
   const { showToast } = useToast();
   const unread = useUnreadCount();
+  const unreadMessages = useUnreadMessages('customer');
   const [merchants, setMerchants] = useState<Merchant[]>([]);
   const [loadingStores, setLoadingStores] = useState(true);
   const [activeOrder, setActiveOrder] = useState<OrderRow | null>(null);
@@ -104,7 +106,7 @@ export default function HomeScreen({}: Props) {
 
     void loadOrder();
     const channel = client
-      .channel(`home-orders-${profile.id}`)
+      .channel(`home-orders-${profile.id}-${Math.random().toString(36).slice(2, 9)}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'orders', filter: `customer_id=eq.${profile.id}` },
@@ -147,6 +149,13 @@ export default function HomeScreen({}: Props) {
           </View>
         </View>
         <View style={styles.headerActions}>
+          <IconButton
+            icon="message"
+            label={unreadMessages > 0 ? `Messages, ${unreadMessages} unread` : 'Messages'}
+            onPress={() => navigation.navigate('Messages')}
+            tone="soft"
+            badge={unreadMessages}
+          />
           <IconButton
             icon="bell"
             label={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}

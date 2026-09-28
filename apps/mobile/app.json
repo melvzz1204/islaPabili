@@ -18,7 +18,9 @@
         "backgroundColor": "#065F59"
       },
       "permissions": [
-        "android.permission.RECORD_AUDIO"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
       ]
     },
     "web": {
@@ -29,6 +31,14 @@
     "plugins": [
       "expo-image-picker",
       "expo-web-browser",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "IslaPabili uses your location to track deliveries live.",
+          "isIosBackgroundLocationEnabled": false,
+          "isAndroidBackgroundLocationEnabled": false
+        }
+      ],
       [
         "expo-splash-screen",
         {

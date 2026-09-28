@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { resendSignupEmail, signInWithPassword, useAuth } from '@isla/supabase';
 import {
@@ -11,6 +11,8 @@ import {
   ScreenHeader,
   TextField,
   TextLink,
+  colors,
+  radius,
   useToast,
 } from '@isla/ui';
 import { formatCooldown, useResendCooldown } from '../../lib/useResendCooldown';
@@ -63,11 +65,12 @@ export default function LoginScreen() {
   const canResend = needsConfirmation && login.includes('@');
 
   return (
-    <Screen>
+    <Screen background={colors.primaryTint}>
       <ScreenHeader title="" onBack={() => navigation.goBack()} />
 
       <AuthHeader
         icon="user"
+        align="center"
         title="Welcome back"
         subtitle="Mag-order pabili anywhere in Marinduque."
       />
@@ -82,15 +85,17 @@ export default function LoginScreen() {
         autoComplete="username"
         value={login}
         onChangeText={setLogin}
+        fieldStyle={styles.field}
       />
       <PasswordField
         placeholder="Password"
         value={password}
         onChangeText={setPassword}
         autoComplete="current-password"
+        fieldStyle={styles.field}
       />
 
-      <Button title="Log in" onPress={() => void handleLogin()} loading={submitting} />
+      <Button title="Log in" style={styles.pill} onPress={() => void handleLogin()} loading={submitting} />
 
       {canResend ? (
         <Button
@@ -122,3 +127,12 @@ export default function LoginScreen() {
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  field: {
+    backgroundColor: colors.surfaceSunken,
+    borderColor: 'transparent',
+    borderRadius: radius.pill,
+  },
+  pill: { borderRadius: radius.pill },
+});

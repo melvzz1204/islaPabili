@@ -3,7 +3,7 @@ import { Alert, StyleSheet, Text } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { isValidPhPhone, normalizePhPhone } from '@isla/shared';
 import { sendPhoneOtp, useAuth, verifyPhoneOtp } from '@isla/supabase';
-import { Button, Screen, ScreenHeader, TextField, TextLink, colors, typography } from '@isla/ui';
+import { Button, Screen, ScreenHeader, TextField, TextLink, colors, radius, typography } from '@isla/ui';
 import { RolePicker } from '../../components/RolePicker';
 import { useAuthMode } from '../../lib/authMode';
 
@@ -57,7 +57,7 @@ export default function PhoneScreen() {
     : null;
 
   return (
-    <Screen>
+    <Screen background={colors.primaryTint}>
       <ScreenHeader title="Continue with phone" onBack={() => navigation.goBack()} />
 
       <RolePicker value={mode} onChange={setMode} />
@@ -76,6 +76,7 @@ export default function PhoneScreen() {
         onChangeText={setPhoneInput}
         editable={step === 'request'}
         error={numberError}
+        fieldStyle={styles.field}
         hint={
           step === 'request'
             ? "We'll text you a one-time code you can use to log in."
@@ -91,11 +92,13 @@ export default function PhoneScreen() {
           value={token}
           onChangeText={setToken}
           autoFocus
+          fieldStyle={styles.field}
         />
       ) : null}
 
       <Button
         title={step === 'request' ? 'Send code' : 'Log in'}
+        style={styles.pill}
         onPress={step === 'request' ? () => void sendCode() : () => void handleVerify()}
         loading={submitting}
       />
@@ -123,4 +126,10 @@ export default function PhoneScreen() {
 
 const styles = StyleSheet.create({
   note: { ...typography.caption, color: colors.muted },
+  field: {
+    backgroundColor: colors.surfaceSunken,
+    borderColor: 'transparent',
+    borderRadius: radius.pill,
+  },
+  pill: { borderRadius: radius.pill },
 });

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useAuth, type Database } from '@isla/supabase';
@@ -40,6 +40,11 @@ export function useUnreadCount(): number {
     setUnread(count ?? 0);
   }, [client, uid]);
 
+  // Per-hook suffix: client.channel() reuses the instance for an identical
+  // topic and realtime-js throws on `.on()` after `.subscribe()`, so
+  // concurrent mounts must never share a topic.
+  const instanceId = useMemo(() => Math.random().toString(36).slice(2, 9), []);
+
   useEffect(() => {
     if (!uid) {
       setUnread(0);
@@ -47,7 +52,7 @@ export function useUnreadCount(): number {
     }
     void refresh();
     const channel = client
-      .channel(`notifications-ping-${uid}`)
+      .channel(`notifications-ping-${uid}-${instanceId}`)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${uid}` },
@@ -66,7 +71,7 @@ export function useUnreadCount(): number {
     return () => {
       void client.removeChannel(channel);
     };
-  }, [client, uid, refresh]);
+  }, [client, uid, refresh, instanceId]);
 
   return unread;
 }
@@ -108,9 +113,11 @@ export default function NotificationsScreen({}: Props) {
     }, [load]),
   );
 
+  const listInstanceId = useMemo(() => Math.random().toString(36).slice(2, 9), []);
+
   useEffect(() => {
     const channel = client
-      .channel('notifications-list')
+      .channel(`notifications-list-${listInstanceId}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, () => {
         void load();
       })
@@ -118,7 +125,7 @@ export default function NotificationsScreen({}: Props) {
     return () => {
       void client.removeChannel(channel);
     };
-  }, [client, load]);
+  }, [client, load, listInstanceId]);
 
   const markAllRead = async () => {
     const { data: userData } = await client.auth.getUser();
@@ -136,6 +143,11 @@ export default function NotificationsScreen({}: Props) {
     if (!n.is_read) {
       await client.from('notifications').update({ is_read: true }).eq('id', n.id);
       await load();
+    }
+    // Message notifications deep-link straight into the order chat.
+    if (n.kind === 'message' && n.order_id) {
+      navigation.navigate('Chat', { orderId: n.order_id });
+      return;
     }
     // Rider-application notifications land on the rider gate (status screen);
     // rows written before 0020 have no kind, so fall back to title matching.

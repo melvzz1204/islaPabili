@@ -11,6 +11,7 @@ const ITEMS: Item[] = [
   { tab: 'Home', label: 'Home', icon: 'home' },
   { tab: 'Shop', label: 'Shop', icon: 'storefront' },
   { tab: 'Orders', label: 'Orders', icon: 'receipt' },
+  { tab: 'Messages', label: 'Messages', icon: 'message' },
   { tab: 'Profile', label: 'Profile', icon: 'user' },
 ];
 
@@ -32,7 +33,13 @@ function useActiveTab(): keyof TabParamList | null {
           | undefined;
         const name = nested?.routes?.[nested?.index ?? -1]?.name;
         setActive(
-          name === 'Home' || name === 'Shop' || name === 'Orders' || name === 'Profile' ? name : null,
+          name === 'Home' ||
+            name === 'Shop' ||
+            name === 'Orders' ||
+            name === 'Messages' ||
+            name === 'Profile'
+            ? name
+            : null,
         );
       } catch {
         setActive(null);

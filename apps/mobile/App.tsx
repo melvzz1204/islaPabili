@@ -12,6 +12,7 @@ import { ToastProvider } from './src/ui/Toast';
 import { CartProvider } from './src/marketplace/cart';
 import { AuthModeProvider, useAuthMode } from './src/lib/authMode';
 import { consumeCheckoutReturn } from './src/lib/checkoutReturn';
+import { useConversations } from './src/messaging/chat';
 import type { RootStackParamList, TabParamList } from './src/navigation/types';
 import AuthHomeScreen from './src/screens/auth/AuthHomeScreen';
 import LoginScreen from './src/screens/auth/LoginScreen';
@@ -26,6 +27,9 @@ import CheckoutScreen from './src/screens/CheckoutScreen';
 import PabiliCreateScreen from './src/screens/PabiliCreateScreen';
 import JollibeeMenuScreen from './src/screens/JollibeeMenuScreen';
 import OrdersScreen from './src/screens/OrdersScreen';
+import MessagesScreen from './src/screens/MessagesScreen';
+import ChatScreen from './src/screens/ChatScreen';
+import TrackScreen from './src/screens/TrackScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
 import RiderGateScreen from './src/screens/RiderGateScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
@@ -51,6 +55,7 @@ const TAB_ICON = {
   Home: 'home',
   Shop: 'storefront',
   Orders: 'receipt',
+  Messages: 'message',
   Profile: 'user',
 } as const;
 
@@ -75,9 +80,11 @@ function TabBarIcon({
 
 /**
  * Guest mode collapses the tabs to a single `Shop` destination with no tab bar;
- * signed-in users get the full four-tab layout.
+ * signed-in users get the full five-tab layout (Home, Shop, Orders, Messages, Profile).
  */
 function MainTabs({ guest }: { guest: boolean }) {
+  const { conversations } = useConversations('customer');
+  const unread = guest ? 0 : conversations.filter((c) => c.unread).length;
   if (guest) {
     return (
       <Tabs.Navigator screenOptions={{ headerShown: false }} tabBar={() => null}>
@@ -100,6 +107,11 @@ function MainTabs({ guest }: { guest: boolean }) {
       <Tabs.Screen name="Home" component={HomeScreen} />
       <Tabs.Screen name="Shop" component={MarketScreen} />
       <Tabs.Screen name="Orders" component={OrdersScreen} />
+      <Tabs.Screen
+        name="Messages"
+        component={MessagesScreen}
+        options={{ tabBarBadge: unread > 0 ? unread : undefined }}
+      />
       <Tabs.Screen name="Profile" component={ProfileScreen} />
     </Tabs.Navigator>
   );
@@ -181,6 +193,8 @@ function Root() {
       <Stack.Screen name="PabiliCreate" component={PabiliCreateScreen} />
       <Stack.Screen name="JollibeeMenu" component={JollibeeMenuScreen} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} />
+      <Stack.Screen name="Chat" component={ChatScreen} />
+      <Stack.Screen name="Track" component={TrackScreen} />
       <Stack.Screen name="Rider" component={RiderGateScreen} />
       <Stack.Screen name="Onboarding" component={OnboardingScreen} />
       <Stack.Screen name="AuthHome" component={AuthHomeScreen} />

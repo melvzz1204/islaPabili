@@ -111,7 +111,7 @@ export default function OrdersScreen({}: Props) {
   useEffect(() => {
     if (!profile) return;
     const channel = client
-      .channel(`orders-customer-${profile.id}`)
+      .channel(`orders-customer-${profile.id}-${Math.random().toString(36).slice(2, 9)}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'orders', filter: `customer_id=eq.${profile.id}` },
@@ -333,6 +333,28 @@ export default function OrdersScreen({}: Props) {
                     variant="danger"
                     disabled={acting}
                     onPress={() => void transition(selected, { status: 'cancelled' }, 'Pabili request cancelled.')}
+                  />
+                </>
+              ) : null}
+              {selected.rider_id &&
+              ['rider_assigned', 'items_purchased', 'in_transit', 'completed'].includes(selected.status) ? (
+                <>
+                  <Button
+                    title="Track rider"
+                    onPress={() => {
+                      const orderId = selected.id;
+                      setSelected(null);
+                      navigation.navigate('Track', { orderId });
+                    }}
+                  />
+                  <Button
+                    title="Message rider"
+                    variant="secondary"
+                    onPress={() => {
+                      const orderId = selected.id;
+                      setSelected(null);
+                      navigation.navigate('Chat', { orderId });
+                    }}
                   />
                 </>
               ) : null}

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { isAllTowns, isNoTowns, resolveOptedTowns, TOWN_LABELS, type Town } from '@isla/shared';
@@ -26,6 +26,9 @@ import {
   type AppIconName,
 } from '@isla/ui';
 import { peso } from '../marketplace/data';
+import { canChat, useConversations, type MessageRow } from '../messaging/chat';
+import { OrderMap, MARINDUQUE_CENTER, type LatLng } from '../maps/OrderMap';
+import { useRiderBroadcast } from '../maps/useRiderBroadcast';
 
 type RiderStatusRow = Database['public']['Tables']['rider_status']['Row'];
 type PabiliOrder = Database['public']['Tables']['orders']['Row'];
@@ -45,12 +48,13 @@ const NEXT_STEP: Record<string, { to: OrderStatus; label: string }> = {
   in_transit: { to: 'completed', label: 'Mark as completed' },
 };
 
-type RiderTab = 'dashboard' | 'requests' | 'deliveries' | 'earnings' | 'settings';
+type RiderTab = 'dashboard' | 'requests' | 'deliveries' | 'messages' | 'earnings' | 'settings';
 
 const TABS: { value: RiderTab; label: string; icon: AppIconName }[] = [
   { value: 'dashboard', label: 'Dashboard', icon: 'home' },
   { value: 'requests', label: 'Requests', icon: 'pabili' },
   { value: 'deliveries', label: 'Deliveries', icon: 'rider' },
+  { value: 'messages', label: 'Messages', icon: 'message' },
   { value: 'earnings', label: 'Earnings', icon: 'wallet' },
   { value: 'settings', label: 'Settings', icon: 'settings' },
 ];
@@ -70,6 +74,11 @@ export default function RiderHomeScreen() {
   const [history, setHistory] = useState<DoneOrder[]>([]);
   const [working, setWorking] = useState<string | null>(null);
   const [logoutOpen, setLogoutOpen] = useState(false);
+  const [mapOrderId, setMapOrderId] = useState<string | null>(null);
+
+  // Live GPS broadcast while holding an active delivery — this is what the
+  // customer watches on the Track screen.
+  useRiderBroadcast(mine.length > 0);
 
   // Prefer the recorded operating area; fall back to the customer's opted-in
   // towns so a rider who has not applied yet still shows something sensible.
@@ -184,7 +193,7 @@ export default function RiderHomeScreen() {
   useEffect(() => {
     if (!profile) return;
     const channel = client
-      .channel(`rider-pabili-${profile.id}`)
+      .channel(`rider-pabili-${profile.id}-${Math.random().toString(36).slice(2, 9)}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'orders', filter: `rider_id=eq.${profile.id}` },
@@ -340,7 +349,12 @@ export default function RiderHomeScreen() {
 
   return (
     <Screen footer={<RiderTabBar tab={tab} onChange={setTab} requestCount={incoming.length} />} footerHeight={RIDER_BAR_HEIGHT}>
-      {tab === 'dashboard' ? (
+      {mapOrderId ? (
+        <RiderTrackView
+          order={mine.find((o) => o.id === mapOrderId) ?? null}
+          onBack={() => setMapOrderId(null)}
+        />
+      ) : tab === 'dashboard' ? (
         <DashboardView
           name={riderName}
           initial={initial}
@@ -369,7 +383,10 @@ export default function RiderHomeScreen() {
           working={working}
           distanceTo={distanceTo}
           onAdvance={(order) => void advance(order)}
+          onOpenMap={(order) => setMapOrderId(order.id)}
         />
+      ) : tab === 'messages' ? (
+        <RiderMessagesView />
       ) : tab === 'earnings' ? (
         <EarningsView stats={stats} history={history} />
       ) : (
@@ -635,6 +652,7 @@ function DeliveriesView({
   working,
   distanceTo,
   onAdvance,
+  onOpenMap,
 }: {
   mine: PabiliOrder[];
   mineItems: Record<string, PabiliItem[]>;
@@ -642,6 +660,7 @@ function DeliveriesView({
   working: string | null;
   distanceTo: (lat: number | null, lng: number | null) => string | null;
   onAdvance: (order: PabiliOrder) => void;
+  onOpenMap: (order: PabiliOrder) => void;
 }) {
   return (
     <View style={styles.tabBody}>
@@ -695,6 +714,7 @@ function DeliveriesView({
                   onPress={() => onAdvance(o)}
                 />
               ) : null}
+              <Button title="Open map" variant="secondary" onPress={() => onOpenMap(o)} />
             </Card>
           );
         })
@@ -715,6 +735,303 @@ function DeliveriesView({
           ))
         )}
       </View>
+    </View>
+  );
+}
+
+// --- Messages (rider <-> customer per-order chat) -------------------------------
+
+function RiderMessagesView() {
+  const { client, profile } = useAuth();
+  const { showToast } = useToast();
+  const { conversations, refresh } = useConversations('rider');
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<MessageRow[]>([]);
+  const [draft, setDraft] = useState('');
+  const [sending, setSending] = useState(false);
+  const [customerNames, setCustomerNames] = useState<Record<string, string>>({});
+
+  useFocusEffect(
+    useCallback(() => {
+      void refresh();
+    }, [refresh]),
+  );
+
+  useEffect(() => {
+    const ids = [...new Set(conversations.map((c) => c.order.customer_id))];
+    if (ids.length === 0) return;
+    let active = true;
+    void (async () => {
+      const { data } = await client.from('profiles').select('id, full_name').in('id', ids);
+      if (!active) return;
+      const map: Record<string, string> = {};
+      for (const row of (data ?? []) as { id: string; full_name: string }[]) {
+        map[row.id] = row.full_name?.trim() || 'Customer';
+      }
+      setCustomerNames(map);
+    })();
+    return () => {
+      active = false;
+    };
+  }, [client, conversations]);
+
+  const open = conversations.find((c) => c.order.id === openId)?.order ?? null;
+
+  const loadThread = useCallback(
+    async (orderId: string) => {
+      const { data } = await client
+        .from('order_messages')
+        .select('*')
+        .eq('order_id', orderId)
+        .order('created_at', { ascending: true })
+        .limit(200);
+      setMessages((data ?? []) as MessageRow[]);
+    },
+    [client],
+  );
+
+  useEffect(() => {
+    if (openId) void loadThread(openId);
+    else setMessages([]);
+  }, [openId, loadThread]);
+
+  // Per-mount suffix: concurrent mounts must never share a realtime topic
+  // (realtime-js throws on `.on()` after `.subscribe()` for the same topic).
+  const chatInstanceId = useMemo(() => Math.random().toString(36).slice(2, 9), []);
+
+  useEffect(() => {
+    if (!openId) return;
+    const channel = client
+      .channel(`rider-chat-${openId}-${chatInstanceId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'order_messages', filter: `order_id=eq.${openId}` },
+        (payload) => {
+          const row = payload.new as MessageRow;
+          setMessages((prev) => (prev.some((m) => m.id === row.id) ? prev : [...prev, row]));
+        },
+      )
+      .subscribe();
+    return () => {
+      void client.removeChannel(channel);
+    };
+  }, [client, openId, chatInstanceId]);
+
+  const send = async () => {
+    const body = draft.trim();
+    if (!body || !profile || !openId || sending) return;
+    if (open && !canChat(open.status)) {
+      showToast({ message: 'This chat is closed — the order is no longer active.', type: 'info' });
+      return;
+    }
+    setSending(true);
+    const { error } = await client.from('order_messages').insert({
+      order_id: openId,
+      sender_id: profile.id,
+      body: body.slice(0, 2000),
+    });
+    setSending(false);
+    if (error) {
+      showToast({ message: error.message, type: 'error' });
+      return;
+    }
+    setDraft('');
+    await loadThread(openId);
+    await refresh();
+  };
+
+  if (open) {
+    const chatOpen = canChat(open.status);
+    return (
+      <View style={styles.tabBody}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Back to conversations"
+          onPress={() => setOpenId(null)}
+          style={({ pressed }) => [styles.backRow, pressed && styles.pressed]}
+        >
+          <AppIcon name="back" size={18} color={colors.primary} />
+          <Text style={styles.backText}>All messages</Text>
+        </Pressable>
+        <View style={styles.greetText}>
+          <Text style={styles.screenTitle}>#{open.order_number}</Text>
+          <Text style={styles.muted}>
+            {customerNames[open.customer_id] ?? 'Customer'} · {open.status.replace(/_/g, ' ')}
+          </Text>
+        </View>
+        <View style={styles.threadBox}>
+          {messages.length === 0 ? (
+            <Text style={styles.muted}>Say hello — coordinate pickup and drop-off here.</Text>
+          ) : (
+            messages.map((m) => {
+              const mine = m.sender_id === profile?.id;
+              return (
+                <View key={m.id} style={[styles.chatRow, mine ? styles.chatRowMine : styles.chatRowTheirs]}>
+                  <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
+                    <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{m.body}</Text>
+                  </View>
+                </View>
+              );
+            })
+          )}
+        </View>
+        {chatOpen ? (
+          <View style={styles.composer}>
+            <TextInput
+              value={draft}
+              onChangeText={setDraft}
+              placeholder="Write to customer…"
+              placeholderTextColor={colors.faint}
+              multiline
+              maxLength={2000}
+              style={styles.chatInput}
+            />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Send message"
+              onPress={() => void send()}
+              disabled={!draft.trim() || sending}
+              style={[styles.sendBtn, (!draft.trim() || sending) && styles.sendDisabled]}
+            >
+              <AppIcon name="send" size={18} color={colors.onPrimary} />
+            </Pressable>
+          </View>
+        ) : (
+          <Text style={styles.muted}>Chat closed — this order is {open.status.replace(/_/g, ' ')}.</Text>
+        )}
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.tabBody}>
+      <View style={styles.greetRow}>
+        <View style={styles.greetText}>
+          <Text style={styles.screenTitle}>Messages</Text>
+          <Text style={styles.muted}>
+            {conversations.length ? 'Coordinate with your customers' : 'Accepted orders show up here for chat.'}
+          </Text>
+        </View>
+      </View>
+      {conversations.length === 0 ? (
+        <EmptyState
+          title="No conversations yet"
+          message="Accept a delivery to start chatting with the customer."
+          icon="message"
+        />
+      ) : (
+        conversations.map(({ order, lastMessage, unread }) => (
+          <Pressable
+            key={order.id}
+            accessibilityRole="button"
+            accessibilityLabel={`Chat for order ${order.order_number}`}
+            onPress={() => setOpenId(order.id)}
+            style={({ pressed }) => [pressed && styles.pressed]}
+          >
+            <Card variant="flat" style={styles.msgCard}>
+              <View style={styles.msgAvatar}>
+                <AppIcon name="user" size={22} color={colors.primaryDeep} />
+              </View>
+              <View style={styles.greetText}>
+                <Text style={styles.msgName} numberOfLines={1}>
+                  {customerNames[order.customer_id] ?? 'Customer'} · #{order.order_number}
+                </Text>
+                <Text style={[styles.muted, unread && styles.msgUnread]} numberOfLines={1}>
+                  {lastMessage
+                    ? `${lastMessage.sender_id === profile?.id ? 'You: ' : ''}${lastMessage.body}`
+                    : 'Say hello to coordinate delivery.'}
+                </Text>
+              </View>
+              {unread ? <View style={styles.unreadDot} /> : null}
+            </Card>
+          </Pressable>
+        ))
+      )}
+    </View>
+  );
+}
+
+// --- Rider delivery map (rider sees customer drop-off + self) --------------------
+
+function RiderTrackView({ order, onBack }: { order: PabiliOrder | null; onBack: () => void }) {
+  const [self, setSelf] = useState<LatLng | null>(null);
+
+  useEffect(() => {
+    let sub: Location.LocationSubscription | null = null;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const perm = await Location.requestForegroundPermissionsAsync();
+        if (!perm.granted || cancelled) return;
+        const first = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        if (!cancelled) setSelf({ lat: first.coords.latitude, lng: first.coords.longitude });
+        sub = await Location.watchPositionAsync(
+          { accuracy: Location.Accuracy.Balanced, timeInterval: 10_000, distanceInterval: 10 },
+          (pos) => {
+            if (!cancelled) setSelf({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+          },
+        );
+      } catch {
+        // Map still shows the customer pin without GPS.
+      }
+    })();
+    return () => {
+      cancelled = true;
+      sub?.remove();
+    };
+  }, []);
+
+  if (!order) {
+    return (
+      <View style={styles.tabBody}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Back to deliveries"
+          onPress={onBack}
+          style={({ pressed }) => [styles.backRow, pressed && styles.pressed]}
+        >
+          <AppIcon name="back" size={18} color={colors.primary} />
+          <Text style={styles.backText}>Deliveries</Text>
+        </Pressable>
+        <Text style={styles.muted}>That order is no longer active.</Text>
+      </View>
+    );
+  }
+
+  const dropoff: LatLng | null =
+    order.dropoff_lat != null && order.dropoff_lng != null
+      ? { lat: order.dropoff_lat, lng: order.dropoff_lng }
+      : null;
+
+  return (
+    <View style={styles.tabBody}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Back to deliveries"
+        onPress={onBack}
+        style={({ pressed }) => [styles.backRow, pressed && styles.pressed]}
+      >
+        <AppIcon name="back" size={18} color={colors.primary} />
+        <Text style={styles.backText}>Deliveries</Text>
+      </Pressable>
+      <View style={styles.greetText}>
+        <Text style={styles.screenTitle}>#{order.order_number}</Text>
+        <Text style={styles.muted} numberOfLines={2}>
+          {TOWN_LABELS[order.town]} · {order.dropoff_address}
+        </Text>
+      </View>
+      <View style={styles.mapBox}>
+        <OrderMap
+          self={self ?? MARINDUQUE_CENTER}
+          selfLabel="You"
+          other={dropoff}
+          otherLabel="Customer"
+          initialCenter={dropoff ?? MARINDUQUE_CENTER}
+        />
+      </View>
+      {dropoff ? null : (
+        <Text style={styles.muted}>No customer GPS pinned — follow the written address above.</Text>
+      )}
     </View>
   );
 }
@@ -831,11 +1148,13 @@ function RiderTabBar({
   onChange: (tab: RiderTab) => void;
   requestCount: number;
 }) {
+  const { conversations } = useConversations('rider');
+  const unreadMessages = conversations.filter((c) => c.unread).length;
   return (
     <View style={[styles.bar, shadows.sticky]}>
       {TABS.map((t) => {
         const active = tab === t.value;
-        const badge = t.value === 'requests' ? requestCount : 0;
+        const badge = t.value === 'requests' ? requestCount : t.value === 'messages' ? unreadMessages : 0;
         return (
           <Pressable
             key={t.value}
@@ -1002,4 +1321,39 @@ const styles = StyleSheet.create({
   badgeText: { ...typography.micro, fontSize: 10, color: colors.onPrimary },
   modalFoot: { flexDirection: 'row', gap: spacing.sm },
   pressed: { opacity: 0.7 },
+
+  // Rider messages
+  backRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  backText: { ...typography.label, color: colors.primary, fontWeight: '700' },
+  threadBox: { gap: spacing.sm },
+  chatRow: { flexDirection: 'row' },
+  chatRowMine: { justifyContent: 'flex-end' },
+  chatRowTheirs: { justifyContent: 'flex-start' },
+  bubble: { maxWidth: '85%', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.lg },
+  bubbleMine: { backgroundColor: colors.primary, borderBottomRightRadius: radius.sm },
+  bubbleTheirs: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.hairline, borderBottomLeftRadius: radius.sm },
+  bubbleText: { ...typography.body, color: colors.text },
+  bubbleTextMine: { color: colors.onPrimary },
+  composer: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm },
+  chatInput: {
+    flex: 1,
+    minHeight: 46,
+    maxHeight: 110,
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.hairline,
+    ...typography.body,
+    color: colors.text,
+  },
+  sendBtn: { width: 46, height: 46, borderRadius: 23, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
+  sendDisabled: { opacity: 0.45 },
+  msgCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  msgAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primaryTint, alignItems: 'center', justifyContent: 'center' },
+  msgName: { ...typography.subhead, fontWeight: '700' },
+  msgUnread: { color: colors.text, fontWeight: '700' },
+  unreadDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: colors.primary },
+  mapBox: { height: 440, borderRadius: radius.lg, overflow: 'hidden' },
 });

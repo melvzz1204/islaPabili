@@ -13,6 +13,7 @@ export type TabParamList = {
   Home: undefined;
   Shop: undefined;
   Orders: undefined;
+  Messages: undefined;
   Profile: undefined;
 };
 
@@ -21,6 +22,8 @@ export type RootStackParamList = {
   Store: { merchantId: string };
   Cart: undefined;
   Checkout: undefined;
+  Chat: { orderId: string };
+  Track: { orderId: string };
   PabiliCreate: { comboId?: string; items?: { name: string; qty: string }[]; store?: string } | undefined;
   JollibeeMenu: undefined;
   Notifications: undefined;

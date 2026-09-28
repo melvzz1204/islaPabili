@@ -10,7 +10,6 @@
     "lint": "eslint ."
   },
   "dependencies": {
-    "phosphor-react-native": "^2.0.0",
     "react": "19.2.3",
     "react-native": "0.86.3",
     "react-native-safe-area-context": "~5.7.0",

@@ -1,13 +1,13 @@
 import { useState } from 'react';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { useAuth, signInWithProvider, exchangeOAuthCode } from '@isla/supabase';
 import {
   AppIcon,
-  Button,
   OrDivider,
   colors,
+  radius,
   spacing,
   taglines,
   typography,
@@ -56,20 +56,33 @@ export function SocialAuth() {
 
   return (
     <View style={styles.stack}>
+      <OrDivider label="or continue with" />
       <View style={styles.row}>
-        {PROVIDERS.map((p) => (
-          <View key={p.id} style={styles.flex}>
-            <Button
-              title={p.label}
-              variant="secondary"
-              loading={pending === p.id}
-              icon={pending === p.id ? undefined : <AppIcon name={p.id} size={20} />}
+        {PROVIDERS.map((p) => {
+          const loading = pending === p.id;
+          return (
+            <Pressable
+              key={p.id}
+              accessibilityRole="button"
+              accessibilityLabel={`Continue with ${p.label}`}
+              accessibilityState={{ busy: loading, disabled: pending != null }}
               onPress={() => void handleProvider(p.id)}
-            />
-          </View>
-        ))}
+              disabled={pending != null}
+              style={({ pressed }) => [
+                styles.circle,
+                pressed && pending == null && styles.pressed,
+                pending != null && !loading && styles.dim,
+              ]}
+            >
+              {loading ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <AppIcon name={p.id} size={24} />
+              )}
+            </Pressable>
+          );
+        })}
       </View>
-      <OrDivider label="or" />
     </View>
   );
 }
@@ -93,8 +106,19 @@ export function AuthIntro() {
 
 const styles = StyleSheet.create({
   stack: { gap: spacing.md },
-  row: { flexDirection: 'row', gap: spacing.sm },
-  flex: { flex: 1 },
+  row: { flexDirection: 'row', gap: spacing.lg, justifyContent: 'center' },
+  circle: {
+    width: 56,
+    height: 56,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pressed: { opacity: 0.6, transform: [{ scale: 0.94 }] },
+  dim: { opacity: 0.45 },
 
   intro: { alignItems: 'center', gap: spacing.md, marginTop: spacing.xxl, marginBottom: spacing.sm },
   introText: { alignItems: 'center', gap: spacing.xs },

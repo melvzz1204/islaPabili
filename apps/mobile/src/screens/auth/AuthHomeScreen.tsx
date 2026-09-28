@@ -11,7 +11,7 @@ export default function AuthHomeScreen() {
   const { mode, setMode } = useAuthMode();
   const canGoBack = navigation.canGoBack();
   return (
-    <Screen>
+    <Screen background={colors.primaryTint}>
       <ScreenHeader
         title="Sign in"
         onBack={canGoBack ? () => navigation.goBack() : undefined}
@@ -34,7 +34,7 @@ export default function AuthHomeScreen() {
       <SocialAuth />
 
       <View style={styles.ctaCard}>
-        <Button title="Log in" onPress={() => navigation.navigate('Login')} />
+        <Button title="Log in" style={styles.pill} onPress={() => navigation.navigate('Login')} />
         <Button title="Create an account" variant="secondary" onPress={() => navigation.navigate('Register')} />
         <Button title="Continue with phone" variant="ghost" onPress={() => navigation.navigate('Phone')} />
       </View>
@@ -59,5 +59,6 @@ const styles = StyleSheet.create({
     borderColor: colors.hairline,
     ...shadows.card,
   },
+  pill: { borderRadius: radius.pill },
   footnote: { ...typography.caption, textAlign: 'center' },
 });

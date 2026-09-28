@@ -162,12 +162,13 @@ export default function RegisterScreen() {
   };
 
   return (
-    <Screen>
+    <Screen background={colors.primaryTint}>
       <ScreenHeader title="" onBack={() => navigation.goBack()} />
 
       <AuthHeader
         icon="pabili"
         accent
+        align="center"
         title="Create your account"
         subtitle="A minute to sign up — you'll pick your town in the next step."
       />
@@ -195,6 +196,7 @@ export default function RegisterScreen() {
           onChangeText={setFullName}
           onBlur={() => touch('fullName')}
           error={nameError}
+          fieldStyle={styles.field}
         />
         <TextField
           label="Username"
@@ -209,6 +211,7 @@ export default function RegisterScreen() {
           }}
           onBlur={() => void checkUsername()}
           error={usernameError}
+          fieldStyle={styles.field}
         />
         {usernameStatus === 'checking' ? (
           <Text style={styles.checkHint}>Checking availability…</Text>
@@ -226,6 +229,7 @@ export default function RegisterScreen() {
           onChangeText={setEmail}
           onBlur={() => touch('email')}
           error={emailError}
+          fieldStyle={styles.field}
         />
       </Card>
 
@@ -237,6 +241,7 @@ export default function RegisterScreen() {
           onChangeText={setPassword}
           onBlur={() => touch('password')}
           error={passwordError}
+          fieldStyle={styles.field}
         />
         {password.length > 0 ? (
           <View style={styles.strengthRow}>
@@ -263,6 +268,7 @@ export default function RegisterScreen() {
           onChangeText={setConfirm}
           onBlur={() => touch('confirm')}
           error={confirmError}
+          fieldStyle={styles.field}
         />
       </Card>
 
@@ -275,6 +281,7 @@ export default function RegisterScreen() {
         />
         <Button
           title="Create account"
+          style={styles.pill}
           onPress={() => void handleRegister()}
           loading={submitting}
           disabled={!acceptedTerms}
@@ -313,4 +320,10 @@ const styles = StyleSheet.create({
   strengthLabel: { fontSize: 12, fontWeight: '700', minWidth: 52, textAlign: 'right' },
   termsCard: { borderColor: colors.primary, borderWidth: 1.5, alignItems: 'flex-start' },
   finePrint: { ...typography.caption, textAlign: 'center', alignSelf: 'center' },
+  field: {
+    backgroundColor: colors.surfaceSunken,
+    borderColor: 'transparent',
+    borderRadius: radius.pill,
+  },
+  pill: { borderRadius: radius.pill },
 });

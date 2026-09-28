@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
+import { StyleSheet, Text, TextInput, View, type StyleProp, type TextInputProps, type ViewStyle } from 'react-native';
 import { colors, layout, radius, spacing, typography } from '../tokens';
 
 export type TextFieldProps = Omit<TextInputProps, 'style'> & {
@@ -11,6 +11,8 @@ export type TextFieldProps = Omit<TextInputProps, 'style'> & {
   /** Removes the floating label for dense forms. */
   compact?: boolean;
   containerStyle?: TextInputProps['style'];
+  /** Overrides the outer field box (e.g. soft-fill pill inputs on tinted auth screens). */
+  fieldStyle?: StyleProp<ViewStyle>;
 };
 
 export function TextField({
@@ -21,6 +23,7 @@ export function TextField({
   rightAccessory,
   compact = false,
   containerStyle,
+  fieldStyle,
   ...props
 }: TextFieldProps) {
   const [focused, setFocused] = useState(false);
@@ -32,6 +35,7 @@ export function TextField({
       <View
         style={[
           styles.field,
+          fieldStyle,
           focused && styles.fieldFocused,
           !!error && styles.fieldError,
           hasAccessory && styles.fieldAccessory,

@@ -12,6 +12,7 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@expo/vector-icons": "^15.0.2",
     "@isla/shared": "0.1.0",
     "@isla/supabase": "0.1.0",
     "@isla/ui": "0.1.0",
@@ -38,7 +39,8 @@
     "react-native-screens": "~4.26.0",
     "react-native-svg": "15.15.5",
     "react-native-url-polyfill": "^2.0.0",
-    "react-native-web": "^0.21.2"
+    "react-native-web": "^0.21.2",
+    "react-native-webview": "13.16.1"
   },
   "devDependencies": {
     "@isla/eslint-config": "0.1.0",

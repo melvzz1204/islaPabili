@@ -1,156 +1,125 @@
-import type { ComponentProps } from 'react';
-import {
-  ArrowLeft,
-  Bank,
-  Bell,
-  Buildings,
-  Camera,
-  CaretDown,
-  CaretLeft,
-  CaretRight,
-  Check,
-  CheckCircle,
-  Clock,
-  Coffee,
-  CreditCard,
-  Envelope,
-  Eye,
-  EyeSlash,
-  FacebookLogo,
-  Fire,
-  FirstAid,
-  ForkKnife,
-  FunnelSimple,
-  Gear,
-  Gift,
-  GoogleLogo,
-  Heart,
-  Headset,
-  House,
-  ImageSquare,
-  Info,
-  List,
-  Lock,
-  MagnifyingGlass,
-  MapPin,
-  Minus,
-  Motorcycle,
-  NavigationArrow,
-  Package,
-  PencilSimple,
-  Phone,
-  PhoneCall,
-  PlusCircle,
-  Receipt,
-  Scooter,
-  SealCheck,
-  ShieldCheck,
-  SignOut,
-  ShoppingBagOpen,
-  ShoppingCart,
-  Sparkle,
-  Star,
-  Storefront,
-  Tag,
-  Timer,
-  TrendUp,
-  Trash,
-  Truck,
-  User,
-  Users,
-  Wallet,
-  Warning,
-  X,
-} from 'phosphor-react-native';
+import type { ComponentType } from 'react';
+import type { StyleProp, TextStyle } from 'react-native';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { colors } from './tokens';
 
 /**
- * Centralized Phosphor icon mapping.
- * Screens reference `AppIcon` names — never import Phosphor directly — so
- * icon style/weight/color changes propagate from here.
+ * Centralized vector-icon mapping (Material Community Icons + FontAwesome
+ * via @expo/vector-icons — fonts load at runtime through expo-font, so this
+ * stays OTA-safe with no native rebuild).
+ * Screens reference `AppIcon` names — never import icon sets directly — so
+ * icon set/glyph/color changes propagate from here.
+ *
+ * NOTE: vector glyphs are single-style (no duotone/fill weights like the
+ * previous set). The `weight` prop on AppIcon is accepted for API
+ * compatibility but intentionally ignored — active/emphasis states are
+ * expressed through `color`.
  */
+
+type VectorIconComponent = ComponentType<{
+  name: string;
+  size?: number;
+  color?: string;
+  style?: StyleProp<TextStyle>;
+  testID?: string;
+}>;
+
+const MCI = MaterialCommunityIcons as unknown as VectorIconComponent;
+const FA = FontAwesome as unknown as VectorIconComponent;
+
+type IconEntry = { set: VectorIconComponent; glyph: string };
+
+const mci = (glyph: string): IconEntry => ({ set: MCI, glyph });
+const fa = (glyph: string): IconEntry => ({ set: FA, glyph });
+
 export const iconMap = {
   // Navigation
-  home: House,
-  shop: Storefront,
-  storefront: Storefront,
-  cart: ShoppingCart,
-  orders: Receipt,
-  receipt: Receipt,
-  user: User,
-  profile: User,
+  home: mci('home'),
+  shop: mci('storefront'),
+  storefront: mci('storefront'),
+  cart: mci('cart'),
+  orders: mci('receipt'),
+  receipt: mci('receipt'),
+  user: mci('account'),
+  profile: mci('account'),
 
   // Documents
-  camera: Camera,
-  image: ImageSquare,
+  camera: mci('camera'),
+  image: mci('image'),
 
   // Commerce
-  pabili: ShoppingBagOpen,
-  package: Package,
-  tag: Tag,
-  gift: Gift,
-  heart: Heart,
-  rating: Star,
-  add: PlusCircle,
-  minus: Minus,
-  close: X,
-  trash: Trash,
-  edit: PencilSimple,
-  verified: SealCheck,
+  pabili: mci('shopping'),
+  package: mci('package-variant'),
+  tag: mci('tag'),
+  gift: mci('gift'),
+  heart: mci('heart'),
+  rating: mci('star'),
+  add: mci('plus-circle'),
+  minus: mci('minus'),
+  close: mci('close'),
+  trash: mci('trash-can-outline'),
+  edit: mci('pencil'),
+  verified: mci('check-decagram'),
 
   // Categories
-  categoryPharmacy: FirstAid,
-  categoryFood: ForkKnife,
-  categoryCoffee: Coffee,
-  categoryGrocery: Buildings,
-  categoryRetail: ShoppingBagOpen,
-  categoryDelivery: Truck,
+  categoryPharmacy: mci('pill'),
+  categoryFood: mci('food-fork-drink'),
+  categoryCoffee: mci('coffee'),
+  categoryGrocery: mci('basket'),
+  categoryRetail: mci('shopping-outline'),
+  categoryDelivery: mci('truck'),
 
   // Actions
-  search: MagnifyingGlass,
-  filter: FunnelSimple,
-  check: Check,
-  checkCircle: CheckCircle,
-  chevronRight: CaretRight,
-  chevronLeft: CaretLeft,
-  chevronDown: CaretDown,
-  back: ArrowLeft,
-  list: List,
-  settings: Gear,
-  support: Headset,
+  search: mci('magnify'),
+  filter: mci('filter-variant'),
+  layers: mci('layers'),
+  locate: mci('crosshairs-gps'),
+  message: mci('message-text-outline'),
+  chat: mci('chat-outline'),
+  send: mci('send'),
+  check: mci('check'),
+  checkCircle: mci('check-circle'),
+  chevronRight: mci('chevron-right'),
+  chevronLeft: mci('chevron-left'),
+  chevronDown: mci('chevron-down'),
+  back: mci('arrow-left'),
+  list: mci('format-list-bulleted'),
+  settings: mci('cog'),
+  support: mci('headset'),
 
   // Rider / delivery
-  rider: Motorcycle,
-  scooter: Scooter,
-  route: NavigationArrow,
-  earnings: TrendUp,
-  wallet: Wallet,
-  bank: Bank,
-  pay: CreditCard,
-  users: Users,
+  rider: mci('motorbike'),
+  scooter: mci('moped'),
+  route: mci('navigation'),
+  earnings: mci('trending-up'),
+  wallet: mci('wallet'),
+  bank: mci('bank'),
+  pay: mci('credit-card'),
+  users: mci('account-group'),
 
   // Status / meta
-  clock: Clock,
-  timer: Timer,
-  trending: Fire,
-  warning: Warning,
-  info: Info,
-  shield: ShieldCheck,
-  spark: Sparkle,
-  logout: SignOut,
-  pin: MapPin,
-  call: PhoneCall,
-  bell: Bell,
+  clock: mci('clock'),
+  timer: mci('timer'),
+  trending: mci('fire'),
+  warning: mci('alert'),
+  info: mci('information'),
+  shield: mci('shield-check'),
+  spark: mci('creation'),
+  logout: mci('logout'),
+  pin: mci('map-marker'),
+  call: mci('phone-in-talk'),
+  bell: mci('bell'),
 
   // Account
-  lock: Lock,
-  eye: Eye,
-  eyeOff: EyeSlash,
-  email: Envelope,
-  phone: Phone,
-  google: GoogleLogo,
-  facebook: FacebookLogo,
-} as const;
+  lock: mci('lock'),
+  eye: mci('eye'),
+  eyeOff: mci('eye-off'),
+  email: mci('email'),
+  phone: mci('phone'),
+  google: fa('google'),
+  facebook: fa('facebook'),
+} as const satisfies Record<string, IconEntry>;
 
 export type AppIconName = keyof typeof iconMap;
 
@@ -192,6 +161,11 @@ export const iconDefaults: Record<
 
   search: { color: colors.muted, style: 'regular' },
   filter: { color: colors.text, style: 'regular' },
+  layers: { color: colors.text, style: 'regular' },
+  locate: { color: colors.text, style: 'regular' },
+  message: { color: colors.text, style: 'regular' },
+  chat: { color: colors.text, style: 'regular' },
+  send: { color: colors.onPrimary, style: 'fill' },
   check: { color: colors.onPrimary, style: 'bold' },
   checkCircle: { color: colors.success, style: 'fill' },
   chevronRight: { color: colors.faint, style: 'bold' },
@@ -233,23 +207,24 @@ export const iconDefaults: Record<
   facebook: { color: '#1877F2', style: 'fill' },
 };
 
-type PhosphorProps = ComponentProps<typeof House>;
-
 export function AppIcon({
   name,
   size = 24,
   color,
-  weight,
-  ...rest
+  weight: _weight,
+  style,
+  testID,
 }: {
   name: AppIconName;
   size?: number;
   color?: string;
-  weight?: PhosphorProps['weight'];
-} & Omit<PhosphorProps, 'size' | 'color' | 'weight'>) {
-  const Cmp = iconMap[name];
+  /** Accepted for compatibility; vector glyphs render single-style. */
+  weight?: 'thin' | 'light' | 'regular' | 'bold' | 'fill' | 'duotone';
+  style?: StyleProp<TextStyle>;
+  testID?: string;
+}) {
+  const entry = iconMap[name];
   const fallback = iconDefaults[name];
-  const resolvedWeight =
-    weight ?? (fallback.style === 'fill' ? 'fill' : fallback.style === 'duotone' ? 'duotone' : 'regular');
-  return <Cmp size={size} color={color ?? fallback.color} weight={resolvedWeight} {...rest} />;
+  const Cmp = entry.set;
+  return <Cmp name={entry.glyph} size={size} color={color ?? fallback.color} style={style} testID={testID} />;
 }
