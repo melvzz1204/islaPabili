@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
 import {
   isAllTowns,
   isNoTowns,
@@ -27,7 +26,7 @@ import {
   type AppIconName,
 } from '@isla/ui';
 import { TownPicker } from '../ui/TownPicker';
-import type { RootNavProp, TabScreen } from '../navigation/types';
+import type { TabScreen } from '../navigation/types';
 
 type Props = TabScreen<'Profile'>;
 
@@ -38,11 +37,11 @@ const ACCOUNT_LINKS: { label: string; detail: string; icon: AppIconName }[] = [
   { label: 'Help & support', detail: 'FAQs and contact details', icon: 'support' },
 ];
 
-export default function ProfileScreen({}: Props) {
-  const navigation = useNavigation<RootNavProp>();
+export default function ProfileScreen({ navigation }: Props) {
   const { client, session, profile, refreshProfile } = useAuth();
   const { showToast } = useToast();
   const [confirmSignOut, setConfirmSignOut] = useState(false);
+  const [riderExitOpen, setRiderExitOpen] = useState(false);
   const [editingTowns, setEditingTowns] = useState(false);
 
   const currentTowns = useMemo(() => resolveOptedTowns(profile), [profile]);
@@ -87,13 +86,22 @@ export default function ProfileScreen({}: Props) {
     showToast({ message: 'Municipality preferences updated.', type: 'success' });
   };
 
-  const handleSignOut = async () => {
+  const handleSignOut = () => {
     setConfirmSignOut(false);
-    try {
-      await supabaseSignOut(client);
-    } catch {
+    // Redirect first — sign-out finishes in the background, so a slow
+    // network can never trap the user on this screen.
+    navigation.navigate('Shop');
+    void supabaseSignOut(client).catch(() => {
       showToast({ message: 'Could not sign out. Please try again.', type: 'error' });
-    }
+    });
+  };
+
+  const handleBecomeRider = () => {
+    setRiderExitOpen(false);
+    navigation.navigate('Shop');
+    void supabaseSignOut(client).catch(() => {
+      showToast({ message: 'Could not sign out. Please try again.', type: 'error' });
+    });
   };
 
   return (
@@ -166,8 +174,8 @@ export default function ProfileScreen({}: Props) {
           <ListRow
             icon="rider"
             title="Become a rider"
-            subtitle="Deliver pabili around Marinduque"
-            onPress={() => navigation.navigate('Rider')}
+            subtitle="Log out, then log in as a rider"
+            onPress={() => setRiderExitOpen(true)}
           />
         </Card>
       </View>
@@ -207,6 +215,23 @@ export default function ProfileScreen({}: Props) {
       >
         <Text style={styles.confirmCopy}>
           Your cart stays on this device so you can pick up where you left off.
+        </Text>
+      </SheetModal>
+
+      <SheetModal
+        visible={riderExitOpen}
+        title="Switch to rider mode?"
+        subtitle="Rider mode is separate — log out first, then log in as a rider."
+        onClose={() => setRiderExitOpen(false)}
+        footer={
+          <View style={styles.confirmRow}>
+            <Button title="Cancel" variant="secondary" onPress={() => setRiderExitOpen(false)} />
+            <Button title="Log out" variant="danger" onPress={handleBecomeRider} />
+          </View>
+        }
+      >
+        <Text style={styles.confirmCopy}>
+          Your customer cart stays on this device.
         </Text>
       </SheetModal>
     </Screen>

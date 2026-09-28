@@ -3,6 +3,9 @@ import type { Database, Supabase } from '@isla/supabase';
 
 /** Live catalog types (Supabase) for the public guest marketplace. */
 
+/** Flagship merchant — Jollibee Boac (see supabase/seed.sql). Menu/prices/stock all come from the DB. */
+export const JOLLIBEE_MERCHANT_ID = '11111111-1111-4111-8111-111111111111';
+
 export type MerchantKind = 'pharmacy' | 'restaurant' | 'grocery' | 'retail' | 'electronics';
 
 export type Merchant = {

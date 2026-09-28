@@ -33,7 +33,8 @@ type OrderStatus = Database['public']['Enums']['order_status'];
 type StatusMeta = { label: string; badge: 'pending' | 'transit' | 'delivered' | 'cancelled' | 'neutral' };
 
 const STATUS_META: Record<OrderStatus, StatusMeta> = {
-  awaiting_merchant: { label: 'Waiting for store', badge: 'pending' },
+  // No merchant counter yet — the rider shops, so merchant-wait reads as placed.
+  awaiting_merchant: { label: 'Order placed', badge: 'pending' },
   preparing: { label: 'Being prepared', badge: 'transit' },
   ready: { label: 'Ready for pickup', badge: 'transit' },
   declined: { label: 'Store is busy', badge: 'cancelled' },
@@ -59,15 +60,17 @@ const ACTIVE_STATUSES: OrderStatus[] = [
   'in_transit',
 ];
 
-/** Canonical happy path, used to render the progress timeline. */
+/** Rider-led happy path — no merchant counter step yet, the rider shops. */
 const FLOW: OrderStatus[] = [
-  'awaiting_merchant',
-  'preparing',
-  'ready',
+  'pending_dispatch',
+  'rider_assigned',
   'items_purchased',
   'in_transit',
   'completed',
 ];
+
+/** Merchant-wait states mean "placed, rider search not started yet". */
+const PLACED_STATUSES: OrderStatus[] = ['awaiting_merchant', 'preparing', 'ready'];
 
 const FULFILLMENT_LABEL: Record<string, string> = {
   merchant_pickup: 'Self-pickup',
@@ -195,21 +198,36 @@ export default function OrdersScreen({}: Props) {
       ];
     }
     const reached = new Set(logs.map((l) => l.status));
-    const currentIdx = FLOW.indexOf(selected.status);
-    return FLOW.map((status, i) => {
+    // Merchant-wait orders haven't entered the rider flow: everything after
+    // "Order placed" stays upcoming until the search starts.
+    const currentIdx = PLACED_STATUSES.includes(selected.status)
+      ? -1
+      : FLOW.indexOf(selected.status);
+    const steps: TimelineStep[] = [
+      {
+        label: 'Order placed',
+        caption: new Date(selected.created_at).toLocaleString(),
+        state: 'done',
+      },
+    ];
+    for (let i = 0; i < FLOW.length; i += 1) {
+      const status = FLOW[i]!;
       const log = logs.find((l) => l.status === status);
       const state: TimelineStep['state'] =
-        selected.status === status
-          ? 'current'
-          : i < currentIdx || (currentIdx === -1 && reached.has(status))
-            ? 'done'
-            : 'upcoming';
-      return {
+        currentIdx === -1
+          ? 'upcoming'
+          : status === selected.status
+            ? 'current'
+            : i < currentIdx || reached.has(status)
+              ? 'done'
+              : 'upcoming';
+      steps.push({
         label: metaOf(status).label,
         caption: log ? new Date(log.created_at).toLocaleString() : undefined,
         state,
-      };
-    });
+      });
+    }
+    return steps;
   }, [selected, logs]);
 
   return (
@@ -247,7 +265,7 @@ export default function OrdersScreen({}: Props) {
           title={scope === 'active' ? 'No active orders' : 'No past orders'}
           message={
             scope === 'active'
-              ? 'When you place a pabili, you can follow it here from store to doorstep.'
+              ? 'When you place an order, follow it here from rider search to doorstep.'
               : 'Completed and cancelled orders will be listed here.'
           }
           icon="orders"

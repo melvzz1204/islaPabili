@@ -1,10 +1,13 @@
 import { useNavigation } from '@react-navigation/native';
 import { Button, Screen, ScreenHeader } from '@isla/ui';
 import { AuthIntro, SocialAuth } from '../../components/SocialAuth';
+import { RolePicker } from '../../components/RolePicker';
+import { useAuthMode } from '../../lib/authMode';
 import type { RootNavProp } from '../../navigation/types';
 
 export default function AuthHomeScreen() {
   const navigation = useNavigation<RootNavProp>();
+  const { mode, setMode } = useAuthMode();
   return (
     <Screen>
       <ScreenHeader
@@ -13,6 +16,7 @@ export default function AuthHomeScreen() {
       />
 
       <AuthIntro />
+      <RolePicker value={mode} onChange={setMode} />
       <SocialAuth />
 
       <Button title="Log in" onPress={() => navigation.navigate('Login')} />

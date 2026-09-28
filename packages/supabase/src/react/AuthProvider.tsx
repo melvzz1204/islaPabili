@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type PropsWithChildren,
 } from 'react';
@@ -29,22 +30,30 @@ export function AuthProvider({ client, children }: PropsWithChildren<{ client: S
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [profileLoading, setProfileLoading] = useState(false);
+  // Tracks whether we already hold a profile so background refreshes
+  // (token renewal, tab visibility regain) update silently instead of
+  // flashing the full-screen loader on Alt+Tab return.
+  const hasProfileRef = useRef(false);
 
   const refreshProfile = useCallback(async () => {
     const { data: authData } = await client.auth.getUser();
     const userId = authData.user?.id;
     if (!userId) {
+      hasProfileRef.current = false;
       setProfile(null);
       setProfileLoading(false);
       return;
     }
-    setProfileLoading(true);
+    if (!hasProfileRef.current) setProfileLoading(true);
     const { data } = await client
       .from('profiles')
       .select('*')
       .eq('id', userId)
       .maybeSingle();
-    if (data) setProfile(data);
+    if (data) {
+      hasProfileRef.current = true;
+      setProfile(data);
+    }
     setProfileLoading(false);
   }, [client]);
 

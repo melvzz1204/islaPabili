@@ -1,13 +1,16 @@
 import { useState } from 'react';
-import { Alert } from 'react-native';
+import { Alert, StyleSheet, Text } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { isValidPhPhone, normalizePhPhone } from '@isla/shared';
 import { sendPhoneOtp, useAuth, verifyPhoneOtp } from '@isla/supabase';
-import { Button, Screen, ScreenHeader, TextField, TextLink } from '@isla/ui';
+import { Button, Screen, ScreenHeader, TextField, TextLink, colors, typography } from '@isla/ui';
+import { RolePicker } from '../../components/RolePicker';
+import { useAuthMode } from '../../lib/authMode';
 
 export default function PhoneScreen() {
   const { client } = useAuth();
   const navigation = useNavigation<{ goBack: () => void }>();
+  const { mode, setMode } = useAuthMode();
   const [step, setStep] = useState<'request' | 'verify'>('request');
   const [phoneInput, setPhoneInput] = useState('');
   const [token, setToken] = useState('');
@@ -55,7 +58,15 @@ export default function PhoneScreen() {
 
   return (
     <Screen>
-      <ScreenHeader title="" onBack={() => navigation.goBack()} />
+      <ScreenHeader title="Continue with phone" onBack={() => navigation.goBack()} />
+
+      <RolePicker value={mode} onChange={setMode} />
+
+      <Text style={styles.note}>
+        {mode === 'rider'
+          ? 'Riders sign in here, then apply or head straight to the rider dashboard.'
+          : 'Customers sign in here to order and track pabili.'}
+      </Text>
 
       <TextField
         label="Mobile number"
@@ -109,3 +120,7 @@ export default function PhoneScreen() {
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  note: { ...typography.caption, color: colors.muted },
+});

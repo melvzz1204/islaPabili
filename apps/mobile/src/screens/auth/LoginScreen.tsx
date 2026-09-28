@@ -14,12 +14,15 @@ import {
   useToast,
 } from '@isla/ui';
 import { formatCooldown, useResendCooldown } from '../../lib/useResendCooldown';
+import { RolePicker } from '../../components/RolePicker';
+import { useAuthMode } from '../../lib/authMode';
 import type { RootNavProp } from '../../navigation/types';
 
 export default function LoginScreen() {
   const { client } = useAuth();
   const { showToast } = useToast();
   const navigation = useNavigation<RootNavProp>();
+  const { mode, setMode } = useAuthMode();
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -39,7 +42,10 @@ export default function LoginScreen() {
       Alert.alert('Login failed', error);
       return;
     }
-    showToast({ message: 'Welcome back!', type: 'success' });
+    showToast({
+      message: mode === 'rider' ? 'Welcome back, rider!' : 'Welcome back!',
+      type: 'success',
+    });
   };
 
   const handleResendConfirmation = async () => {
@@ -65,6 +71,8 @@ export default function LoginScreen() {
         title="Welcome back"
         subtitle="Mag-order pabili anywhere in Marinduque."
       />
+
+      <RolePicker value={mode} onChange={setMode} />
 
       <TextField
         label="Username or email"

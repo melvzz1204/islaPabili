@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, StyleSheet, Switch, Text, View } from 'react-native';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { isAllTowns, isNoTowns, resolveOptedTowns, TOWN_LABELS, type Town } from '@isla/shared';
 import { signOut, useAuth } from '@isla/supabase';
@@ -13,16 +13,18 @@ import {
   Button,
   Card,
   EmptyState,
+  IconButton,
   Screen,
   SectionHeader,
+  SheetModal,
   colors,
+  radius,
+  shadows,
   spacing,
   typography,
   useToast,
+  type AppIconName,
 } from '@isla/ui';
-import { BottomNav, BOTTOM_NAV_HEIGHT } from '../components/BottomNav';
-import { backToShopping } from '../navigation/types';
-import type { RootNavProp } from '../navigation/types';
 import { peso } from '../marketplace/data';
 
 type RiderStatusRow = Database['public']['Tables']['rider_status']['Row'];
@@ -31,6 +33,7 @@ type PabiliItem = Database['public']['Tables']['order_items']['Row'];
 type PabiliRequest = Database['public']['Tables']['order_requests']['Row'];
 
 type IncomingOffer = { request: PabiliRequest; order: PabiliOrder; items: PabiliItem[] };
+type DoneOrder = { id: string; order_number: string; total_delivery_fee: number | string | null; created_at: string };
 
 const MINE_STATUSES = ['rider_assigned', 'items_purchased', 'in_transit'] as const;
 
@@ -39,20 +42,34 @@ type OrderStatus = Database['public']['Enums']['order_status'];
 const NEXT_STEP: Record<string, { to: OrderStatus; label: string }> = {
   rider_assigned: { to: 'items_purchased', label: 'Mark items purchased' },
   items_purchased: { to: 'in_transit', label: 'On the way' },
-  in_transit: { to: 'completed', label: 'Mark delivered' },
+  in_transit: { to: 'completed', label: 'Mark as completed' },
 };
+
+type RiderTab = 'dashboard' | 'requests' | 'deliveries' | 'earnings' | 'settings';
+
+const TABS: { value: RiderTab; label: string; icon: AppIconName }[] = [
+  { value: 'dashboard', label: 'Dashboard', icon: 'home' },
+  { value: 'requests', label: 'Requests', icon: 'pabili' },
+  { value: 'deliveries', label: 'Deliveries', icon: 'rider' },
+  { value: 'earnings', label: 'Earnings', icon: 'wallet' },
+  { value: 'settings', label: 'Settings', icon: 'settings' },
+];
+
+const RIDER_BAR_HEIGHT = 76;
 
 export default function RiderHomeScreen() {
   const { client, profile } = useAuth();
-  const navigation = useNavigation<RootNavProp>();
   const { showToast } = useToast();
+  const [tab, setTab] = useState<RiderTab>('dashboard');
   const [onDuty, setOnDuty] = useState(false);
   const [statusRow, setStatusRow] = useState<RiderStatusRow | null>(null);
   const [toggling, setToggling] = useState(false);
   const [incoming, setIncoming] = useState<IncomingOffer[]>([]);
   const [mine, setMine] = useState<PabiliOrder[]>([]);
   const [mineItems, setMineItems] = useState<Record<string, PabiliItem[]>>({});
+  const [history, setHistory] = useState<DoneOrder[]>([]);
   const [working, setWorking] = useState<string | null>(null);
+  const [logoutOpen, setLogoutOpen] = useState(false);
 
   // Prefer the recorded operating area; fall back to the customer's opted-in
   // towns so a rider who has not applied yet still shows something sensible.
@@ -138,6 +155,20 @@ export default function RiderHomeScreen() {
     setMineItems(byOrder);
   }, [client, profile]);
 
+  /** Completed deliveries: real payout history for stats + weekly chart. */
+  const loadHistory = useCallback(async () => {
+    if (!profile) return;
+    const { data, error } = await client
+      .from('orders')
+      .select('id, order_number, total_delivery_fee, created_at')
+      .eq('rider_id', profile.id)
+      .eq('status', 'completed')
+      .order('created_at', { ascending: false })
+      .limit(100);
+    if (error) return;
+    setHistory((data ?? []) as DoneOrder[]);
+  }, [client, profile]);
+
   useEffect(() => {
     void refreshStatus();
   }, [refreshStatus]);
@@ -146,7 +177,8 @@ export default function RiderHomeScreen() {
     useCallback(() => {
       void loadIncoming();
       void loadMine();
-    }, [loadIncoming, loadMine]),
+      void loadHistory();
+    }, [loadIncoming, loadMine, loadHistory]),
   );
 
   useEffect(() => {
@@ -159,6 +191,7 @@ export default function RiderHomeScreen() {
         () => {
           void loadMine();
           void loadIncoming();
+          void loadHistory();
         },
       )
       .on(
@@ -172,7 +205,7 @@ export default function RiderHomeScreen() {
     return () => {
       void client.removeChannel(channel);
     };
-  }, [client, profile, loadMine, loadIncoming]);
+  }, [client, profile, loadMine, loadIncoming, loadHistory]);
 
   const toggleDuty = async (next: boolean) => {
     if (!profile) return;
@@ -204,7 +237,7 @@ export default function RiderHomeScreen() {
     });
     setToggling(false);
     if (error) {
-      Alert.alert('Could not update duty status', error.message);
+      showToast({ message: error.message, type: 'error' });
       return;
     }
     setOnDuty(next);
@@ -248,11 +281,16 @@ export default function RiderHomeScreen() {
       message: next.to === 'completed' ? 'Delivered. Salamat!' : 'Status updated — customer notified.',
       type: 'success',
     });
-    await loadMine();
+    await Promise.all([loadMine(), loadHistory()]);
   };
 
-  const handleLogout = async () => {
-    await signOut(client);
+  const handleLogout = () => {
+    setLogoutOpen(false);
+    // Shell swaps to guest home the moment the session clears; never hold
+    // the modal open waiting on the network.
+    void signOut(client).catch(() => {
+      showToast({ message: 'Could not sign out. Please try again.', type: 'error' });
+    });
   };
 
   const areaLabel = isAllTowns(operatingTowns)
@@ -260,6 +298,9 @@ export default function RiderHomeScreen() {
     : isNoTowns(operatingTowns)
       ? 'No operating area set'
       : operatingTowns.map((t) => TOWN_LABELS[t]).join(', ');
+
+  const riderName = profile?.full_name?.trim() || 'Rider';
+  const initial = riderName.charAt(0).toUpperCase() || 'R';
 
   /** Straight-line distance from the rider's pinned GPS to a drop-off. */
   const distanceTo = (lat: number | null, lng: number | null): string | null => {
@@ -274,24 +315,165 @@ export default function RiderHomeScreen() {
     return formatDistance(haversineKm(statusRow.current_lat, statusRow.current_lng, lat, lng));
   };
 
+  const stats = useMemo(() => {
+    const totalEarned = history.reduce((n, o) => n + Number(o.total_delivery_fee ?? 0), 0);
+    const days: { key: string; label: string; value: number }[] = [];
+    const today = new Date();
+    for (let back = 6; back >= 0; back -= 1) {
+      const d = new Date(today);
+      d.setDate(today.getDate() - back);
+      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      days.push({
+        key,
+        label: d.toLocaleDateString('en-US', { weekday: 'short' }),
+        value: 0,
+      });
+    }
+    for (const o of history) {
+      const d = new Date(o.created_at);
+      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      const bucket = days.find((b) => b.key === key);
+      if (bucket) bucket.value += Number(o.total_delivery_fee ?? 0);
+    }
+    return { totalEarned, deliveries: history.length, days };
+  }, [history]);
+
   return (
-    <Screen footer={<BottomNav />} footerHeight={BOTTOM_NAV_HEIGHT}>
-      <View style={styles.header}>
-        <Text style={typography.display}>Rider Dashboard</Text>
-        <Text style={styles.subtitle} numberOfLines={2}>
-          {profile?.full_name ?? 'Rider'}
-        </Text>
+    <Screen footer={<RiderTabBar tab={tab} onChange={setTab} requestCount={incoming.length} />} footerHeight={RIDER_BAR_HEIGHT}>
+      {tab === 'dashboard' ? (
+        <DashboardView
+          name={riderName}
+          initial={initial}
+          areaLabel={areaLabel}
+          requestCount={incoming.length}
+          activeCount={mine.length}
+          onDuty={onDuty}
+          toggling={toggling}
+          onToggleDuty={toggleDuty}
+          stats={stats}
+          onBell={() => setTab('requests')}
+          onViewRequests={() => setTab('requests')}
+        />
+      ) : tab === 'requests' ? (
+        <RequestsView
+          incoming={incoming}
+          working={working}
+          distanceTo={distanceTo}
+          onRespond={(offer, decision) => void respond(offer, decision)}
+        />
+      ) : tab === 'deliveries' ? (
+        <DeliveriesView
+          mine={mine}
+          mineItems={mineItems}
+          history={history}
+          working={working}
+          distanceTo={distanceTo}
+          onAdvance={(order) => void advance(order)}
+        />
+      ) : tab === 'earnings' ? (
+        <EarningsView stats={stats} history={history} />
+      ) : (
+        <SettingsView
+          name={riderName}
+          initial={initial}
+          areaLabel={areaLabel}
+          onDuty={onDuty}
+          onLogout={() => setLogoutOpen(true)}
+        />
+      )}
+      <SheetModal
+        visible={logoutOpen}
+        title="Log out of rider mode?"
+        subtitle="Customer mode needs a fresh login."
+        onClose={() => setLogoutOpen(false)}
+        footer={
+          <View style={styles.modalFoot}>
+            <Button title="Cancel" variant="secondary" onPress={() => setLogoutOpen(false)} />
+            <Button title="Log out" variant="danger" onPress={handleLogout} />
+          </View>
+        }
+      >
+        <Text style={styles.muted}>Use your rider login again any time to go back on duty.</Text>
+      </SheetModal>
+    </Screen>
+  );
+}
+
+// --- Dashboard ---------------------------------------------------------------
+
+type Stats = { totalEarned: number; deliveries: number; days: { key: string; label: string; value: number }[] };
+
+function DashboardView({
+  name,
+  initial,
+  areaLabel,
+  requestCount,
+  activeCount,
+  onDuty,
+  toggling,
+  onToggleDuty,
+  stats,
+  onBell,
+  onViewRequests,
+}: {
+  name: string;
+  initial: string;
+  areaLabel: string;
+  requestCount: number;
+  activeCount: number;
+  onDuty: boolean;
+  toggling: boolean;
+  onToggleDuty: (next: boolean) => void;
+  stats: Stats;
+  onBell: () => void;
+  onViewRequests: () => void;
+}) {
+  return (
+    <View style={styles.tabBody}>
+      <View style={styles.greetRow}>
+        <View style={styles.avatar}>
+          <Text style={styles.avatarText}>{initial}</Text>
+        </View>
+        <View style={styles.greetText}>
+          <Text style={styles.greetHi}>Welcome back,</Text>
+          <Text style={styles.greetName} numberOfLines={1}>
+            {name}
+          </Text>
+        </View>
+        <IconButton
+          icon="bell"
+          label={requestCount > 0 ? `${requestCount} new requests` : 'No new requests'}
+          onPress={onBell}
+          tone="soft"
+          badge={requestCount}
+        />
       </View>
 
-      <Card>
-        <View style={styles.areaRow}>
-          <AppIcon name="pin" size={20} color={colors.primary} />
-          <View style={styles.areaText}>
-            <Text style={styles.areaLabel}>Operating area</Text>
-            <Text style={styles.areaValue}>{areaLabel}</Text>
+      <View style={styles.statRow}>
+        <View style={styles.statCard}>
+          <View style={styles.statTop}>
+            <Text style={styles.statCaption}>Earnings</Text>
+            <AppIcon name="earnings" size={18} color={colors.success} />
           </View>
+          <Text style={styles.statValue}>{peso(stats.totalEarned)}</Text>
+          <Text style={styles.statCaption}>delivery fees paid out</Text>
         </View>
-      </Card>
+        <View style={styles.statCard}>
+          <View style={styles.statTop}>
+            <Text style={styles.statCaption}>Deliveries</Text>
+            <AppIcon name="rider" size={18} color={colors.accent} />
+          </View>
+          <Text style={styles.statValue}>{stats.deliveries}</Text>
+          <Text style={styles.statCaption}>{activeCount} active now</Text>
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <SectionHeader title="Weekly earnings" subtitle="Delivery fees · last 7 days" />
+        <Card>
+          <WeeklyBars days={stats.days} />
+        </Card>
+      </View>
 
       <Card>
         <View style={styles.dutyRow}>
@@ -300,22 +482,15 @@ export default function RiderHomeScreen() {
             <Text style={styles.dutyLabel}>{onDuty ? 'On duty — accepting pabili' : 'Off duty'}</Text>
             <Text style={styles.dutyHint}>
               {onDuty
-                ? 'Matchmaking and dispatch arrive in Milestone 4.'
+                ? `Visible in ${areaLabel}.`
                 : 'Flip the switch when you are ready to work.'}
             </Text>
           </View>
           <Switch
             value={onDuty}
-            onValueChange={(v) => void Alert.alert(
-              v ? 'Go on duty' : 'Go off duty',
-              v
-                ? 'You will be visible to incoming pabili requests once dispatch is live.'
-                : 'You will stop receiving pabili requests.',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                { text: v ? 'Go on duty' : 'Go off duty', onPress: () => void toggleDuty(v) },
-              ],
-            )}
+            onValueChange={(v) => {
+              if (v !== onDuty) void onToggleDuty(v);
+            }}
             disabled={toggling}
             trackColor={{ false: colors.border, true: colors.primarySoft }}
             thumbColor={onDuty ? colors.primary : colors.faint}
@@ -323,157 +498,419 @@ export default function RiderHomeScreen() {
         </View>
       </Card>
 
-      {/* Active deliveries */}
-      <View style={styles.section}>
-        <SectionHeader title="My active pabili" subtitle={mine.length ? `${mine.length} in progress` : undefined} />
-        {mine.length === 0 ? (
-          <Text style={styles.muted}>Nothing claimed yet. Accept a request below to start earning.</Text>
-        ) : (
-          mine.map((o) => {
-            const next = NEXT_STEP[o.status];
-            const items = mineItems[o.id] ?? [];
-            return (
-              <Card key={o.id}>
-                <View style={styles.orderHead}>
-                  <View style={styles.orderHeadText}>
-                    <Text style={styles.orderNo}>{o.order_number}</Text>
-                    <Text style={styles.orderMeta} numberOfLines={2}>
-                      {TOWN_LABELS[o.town]} · {o.dropoff_address}
-                    </Text>
-                  </View>
-                  <Badge label={o.status.replace(/_/g, ' ')} status="transit" />
-                </View>
-                {items.map((it) => (
-                  <Text key={it.id} style={styles.itemLine} numberOfLines={1}>
-                    {it.quantity}× {it.name}
-                    {it.store ? ` (${it.store})` : ''}
-                  </Text>
-                ))}
-                <Text style={styles.contact} numberOfLines={1}>
-                  Customer: {o.dropoff_notes || '—'}
-                </Text>
-                {o.dropoff_lat != null && o.dropoff_lng != null ? (
-                  <Text style={styles.gpsLine}>Customer GPS pinned ✓ — keep your GPS on</Text>
-                ) : null}
-                {items.length > 4 ? <Text style={styles.muted}>+{items.length - 4} more</Text> : null}
-                <Text style={styles.feeLine}>
-                  Delivery fee {peso(Number(o.total_delivery_fee ?? 0))} · COD
-                  {distanceTo(o.dropoff_lat, o.dropoff_lng)
-                    ? ` · ${distanceTo(o.dropoff_lat, o.dropoff_lng)} away`
-                    : ''}
-                </Text>
-                {next ? (
-                  <Button
-                    title={next.label}
-                    loading={working === o.id}
-                    onPress={() => void advance(o)}
-                  />
-                ) : null}
-              </Card>
-            );
-          })
-        )}
-      </View>
+      {requestCount > 0 ? (
+        <Card style={styles.offerCta}>
+          <View style={styles.offerCtaText}>
+            <Text style={styles.offerCtaTitle}>
+              {requestCount} new request{requestCount === 1 ? '' : 's'}
+            </Text>
+            <Text style={styles.offerCtaBody}>First to accept wins — check them now.</Text>
+          </View>
+          <Button title="View" onPress={onViewRequests} />
+        </Card>
+      ) : null}
+    </View>
+  );
+}
 
-      {/* Incoming requests */}
-      <View style={styles.section}>
-        <SectionHeader
-          title="Incoming pabili"
-          subtitle={incoming.length ? 'First to accept wins' : undefined}
+function WeeklyBars({ days }: { days: { key: string; label: string; value: number }[] }) {
+  const max = Math.max(1, ...days.map((d) => d.value));
+  const peak = days.reduce((best, d) => (d.value > best.value ? d : best), days[0]!);
+  if (peak.value === 0) {
+    return <Text style={styles.muted}>No deliveries yet this week — completed payouts show up here.</Text>;
+  }
+  return (
+    <View style={styles.barsRow}>
+      {days.map((d) => {
+        const hot = d.value === peak.value && d.value > 0;
+        return (
+          <View key={d.key} style={styles.barCol}>
+            <Text style={[styles.barValue, hot && styles.barValueHot]} numberOfLines={1}>
+              {d.value > 0 ? `₱${Math.round(d.value)}` : ''}
+            </Text>
+            <View style={styles.barTrack}>
+              <View
+                style={[
+                  styles.barFill,
+                  { height: `${Math.max(6, Math.round((d.value / max) * 100))}%` },
+                  hot && styles.barFillHot,
+                ]}
+              />
+            </View>
+            <Text style={styles.barDay}>{d.label}</Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+// --- Requests ----------------------------------------------------------------
+
+function RequestsView({
+  incoming,
+  working,
+  distanceTo,
+  onRespond,
+}: {
+  incoming: IncomingOffer[];
+  working: string | null;
+  distanceTo: (lat: number | null, lng: number | null) => string | null;
+  onRespond: (offer: IncomingOffer, decision: 'accepted' | 'declined') => void;
+}) {
+  return (
+    <View style={styles.tabBody}>
+      <View style={styles.greetRow}>
+        <View style={styles.greetText}>
+          <Text style={styles.screenTitle}>Requests</Text>
+          <Text style={styles.muted}>
+            {incoming.length ? 'First to accept wins' : 'Stay on duty — offers appear here live.'}
+          </Text>
+        </View>
+        {incoming.length ? <Badge label={`${incoming.length} new`} status="pending" /> : null}
+      </View>
+      {incoming.length === 0 ? (
+        <EmptyState
+          title="No incoming requests"
+          message="Stay on duty with GPS on — customer lists in your area appear here live."
+          icon="pabili"
         />
-        {incoming.length === 0 ? (
-          <EmptyState
-            title="No incoming requests"
-            message="Stay on duty with GPS on — customer lists in your area appear here live."
-            icon="pabili"
-          />
-        ) : (
-          incoming.map((offer) => (
-            <Card key={offer.request.id} style={styles.incomingCard}>
-              <View style={styles.orderHead}>
-                <View style={styles.orderHeadText}>
-                  <Text style={styles.orderNo}>{offer.order.order_number}</Text>
-                  <Text style={styles.orderMeta} numberOfLines={2}>
-                    {TOWN_LABELS[offer.order.town]} · {offer.order.dropoff_address}
-                  </Text>
-                </View>
-                <Badge label={`${offer.items.length} items`} status="pending" />
+      ) : (
+        incoming.map((offer) => (
+          <Card key={offer.request.id} style={styles.incomingCard}>
+            <View style={styles.orderHead}>
+              <View style={styles.orderHeadText}>
+                <Text style={styles.orderNo}>#{offer.order.order_number}</Text>
+                <Text style={styles.orderMeta} numberOfLines={2}>
+                  {TOWN_LABELS[offer.order.town]} · {offer.order.dropoff_address}
+                </Text>
               </View>
-              {offer.order.store_name ? (
-                <Text style={styles.storeLine} numberOfLines={1}>
-                  Buy at: {offer.order.store_name}
-                </Text>
-              ) : null}
-              {offer.items.slice(0, 4).map((it) => (
-                <Text key={it.id} style={styles.itemLine} numberOfLines={1}>
-                  {it.quantity}× {it.name}
-                </Text>
-              ))}
-              {offer.items.length > 4 ? <Text style={styles.muted}>+{offer.items.length - 4} more</Text> : null}
-                <Text style={styles.feeLine}>
-                  Delivery fee {peso(Number(offer.order.total_delivery_fee ?? 0))} · COD
-                  {distanceTo(offer.order.dropoff_lat, offer.order.dropoff_lng)
-                    ? ` · ${distanceTo(offer.order.dropoff_lat, offer.order.dropoff_lng)} away`
-                    : ''}
-                </Text>
-              <View style={styles.decisionRow}>
-                <View style={styles.decisionFlex}>
-                  <Button
-                    title="Accept"
-                    loading={working === offer.order.id}
-                    onPress={() => void respond(offer, 'accepted')}
-                  />
-                </View>
+              <Badge label={`${offer.items.length} items`} status="pending" />
+            </View>
+            {offer.order.store_name ? (
+              <Text style={styles.storeLine} numberOfLines={1}>
+                Buy at: {offer.order.store_name}
+              </Text>
+            ) : null}
+            {offer.items.slice(0, 4).map((it) => (
+              <Text key={it.id} style={styles.itemLine} numberOfLines={1}>
+                {it.quantity}× {it.name}
+              </Text>
+            ))}
+            {offer.items.length > 4 ? <Text style={styles.muted}>+{offer.items.length - 4} more</Text> : null}
+            <Text style={styles.feeLine}>
+              {peso(Number(offer.order.total_delivery_fee ?? 0))} fee · COD
+              {distanceTo(offer.order.dropoff_lat, offer.order.dropoff_lng)
+                ? ` · ${distanceTo(offer.order.dropoff_lat, offer.order.dropoff_lng)} away`
+                : ''}
+            </Text>
+            <View style={styles.decisionRow}>
+              <View style={styles.decisionFlex}>
                 <Button
-                  title="Decline"
-                  variant="secondary"
-                  disabled={working === offer.order.id}
-                  onPress={() => void respond(offer, 'declined')}
+                  title="Accept"
+                  loading={working === offer.order.id}
+                  onPress={() => onRespond(offer, 'accepted')}
                 />
               </View>
+              <Button
+                title="Decline"
+                variant="secondary"
+                disabled={working === offer.order.id}
+                onPress={() => onRespond(offer, 'declined')}
+              />
+            </View>
+          </Card>
+        ))
+      )}
+    </View>
+  );
+}
+
+// --- Deliveries ---------------------------------------------------------------
+
+function DeliveriesView({
+  mine,
+  mineItems,
+  history,
+  working,
+  distanceTo,
+  onAdvance,
+}: {
+  mine: PabiliOrder[];
+  mineItems: Record<string, PabiliItem[]>;
+  history: DoneOrder[];
+  working: string | null;
+  distanceTo: (lat: number | null, lng: number | null) => string | null;
+  onAdvance: (order: PabiliOrder) => void;
+}) {
+  return (
+    <View style={styles.tabBody}>
+      <View style={styles.greetRow}>
+        <View style={styles.greetText}>
+          <Text style={styles.screenTitle}>Deliveries</Text>
+          <Text style={styles.muted}>
+            {mine.length ? `${mine.length} in progress` : 'Nothing claimed yet.'}
+          </Text>
+        </View>
+      </View>
+      {mine.length === 0 ? (
+        <Text style={styles.muted}>Accept a request to start earning.</Text>
+      ) : (
+        mine.map((o) => {
+          const next = NEXT_STEP[o.status];
+          const items = mineItems[o.id] ?? [];
+          return (
+            <Card key={o.id}>
+              <View style={styles.orderHead}>
+                <View style={styles.orderHeadText}>
+                  <Text style={styles.orderNo}>#{o.order_number}</Text>
+                  <Text style={styles.orderMeta} numberOfLines={2}>
+                    {TOWN_LABELS[o.town]} · {o.dropoff_address}
+                  </Text>
+                </View>
+                <Badge label={o.status.replace(/_/g, ' ')} status="transit" />
+              </View>
+              {items.map((it) => (
+                <Text key={it.id} style={styles.itemLine} numberOfLines={1}>
+                  {it.quantity}× {it.name}
+                  {it.store ? ` (${it.store})` : ''}
+                </Text>
+              ))}
+              <Text style={styles.contact} numberOfLines={1}>
+                Customer: {o.dropoff_notes || '—'}
+              </Text>
+              {o.dropoff_lat != null && o.dropoff_lng != null ? (
+                <Text style={styles.gpsLine}>Customer GPS pinned ✓ — keep your GPS on</Text>
+              ) : null}
+              <Text style={styles.feeLine}>
+                {peso(Number(o.total_delivery_fee ?? 0))} fee · COD
+                {distanceTo(o.dropoff_lat, o.dropoff_lng)
+                  ? ` · ${distanceTo(o.dropoff_lat, o.dropoff_lng)} away`
+                  : ''}
+              </Text>
+              {next ? (
+                <Button
+                  title={next.label}
+                  loading={working === o.id}
+                  onPress={() => onAdvance(o)}
+                />
+              ) : null}
             </Card>
+          );
+        })
+      )}
+      <View style={styles.section}>
+        <SectionHeader title="Completed" subtitle={history.length ? `${history.length} delivered` : undefined} />
+        {history.length === 0 ? (
+          <Text style={styles.muted}>Finished deliveries show up here.</Text>
+        ) : (
+          history.slice(0, 20).map((o) => (
+            <View key={o.id} style={styles.historyRow}>
+              <View style={styles.historyText}>
+                <Text style={styles.historyNo}>#{o.order_number}</Text>
+                <Text style={styles.muted}>{new Date(o.created_at).toLocaleDateString()}</Text>
+              </View>
+              <Text style={styles.historyFee}>+{peso(Number(o.total_delivery_fee ?? 0))}</Text>
+            </View>
           ))
         )}
       </View>
+    </View>
+  );
+}
 
-      <Card>
-        <View style={styles.earningsRow}>
-          <AppIcon name="wallet" size={28} color={colors.success} />
-          <Text style={typography.heading}>Today's earnings</Text>
+// --- Earnings -----------------------------------------------------------------
+
+function EarningsView({ stats, history }: { stats: Stats; history: DoneOrder[] }) {
+  const avg = stats.deliveries > 0 ? stats.totalEarned / stats.deliveries : 0;
+  return (
+    <View style={styles.tabBody}>
+      <View style={styles.greetRow}>
+        <View style={styles.greetText}>
+          <Text style={styles.screenTitle}>Earnings</Text>
+          <Text style={styles.muted}>Delivery fees from completed orders.</Text>
         </View>
-        <Text style={styles.earnings}>₱0.00</Text>
-        <Text style={styles.cardBody}>
-          Trip tracking and payouts land in Milestone 5.
+      </View>
+      <Card style={styles.earnHero}>
+        <View style={styles.earnTop}>
+          <AppIcon name="wallet" size={28} color={colors.onPrimary} />
+          <Text style={styles.earnCaption}>Total earned</Text>
+        </View>
+        <Text style={styles.earnTotal}>{peso(stats.totalEarned)}</Text>
+        <Text style={styles.earnCaption}>
+          {stats.deliveries} deliver{stats.deliveries === 1 ? 'y' : 'ies'} · avg {peso(avg)} each
         </Text>
       </Card>
+      <View style={styles.section}>
+        <SectionHeader title="This week" />
+        <Card>
+          <WeeklyBars days={stats.days} />
+        </Card>
+      </View>
+      <View style={styles.section}>
+        <SectionHeader title="Payout history" />
+        {history.length === 0 ? (
+          <Text style={styles.muted}>Completed payouts list here with their fees.</Text>
+        ) : (
+          history.map((o) => (
+            <View key={o.id} style={styles.historyRow}>
+              <View style={styles.historyText}>
+                <Text style={styles.historyNo}>#{o.order_number}</Text>
+                <Text style={styles.muted}>{new Date(o.created_at).toLocaleString()}</Text>
+              </View>
+              <Text style={styles.historyFee}>+{peso(Number(o.total_delivery_fee ?? 0))}</Text>
+            </View>
+          ))
+        )}
+      </View>
+    </View>
+  );
+}
 
-      <Button
-        title="Switch to shopping"
-        variant="secondary"
-        onPress={() => backToShopping(navigation)}
-      />
-      <Button
-        title="Log out"
-        variant="ghost"
-        onPress={() => void Alert.alert('Log out', 'Are you sure?', [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Log out', style: 'destructive', onPress: () => void handleLogout() },
-        ])}
-      />
-      {statusRow == null ? (
-        <Text style={styles.meta}>No duty status on record yet.</Text>
-      ) : null}
-    </Screen>
+// --- Settings -----------------------------------------------------------------
+
+function SettingsView({
+  name,
+  initial,
+  areaLabel,
+  onDuty,
+  onLogout,
+}: {
+  name: string;
+  initial: string;
+  areaLabel: string;
+  onDuty: boolean;
+  onLogout: () => void;
+}) {
+  return (
+    <View style={styles.tabBody}>
+      <View style={styles.greetRow}>
+        <View style={styles.greetText}>
+          <Text style={styles.screenTitle}>Settings</Text>
+        </View>
+      </View>
+      <Card>
+        <View style={styles.profileRow}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{initial}</Text>
+          </View>
+          <View style={styles.greetText}>
+            <Text style={styles.profileName} numberOfLines={1}>
+              {name}
+            </Text>
+            <Text style={styles.muted} numberOfLines={1}>
+              {areaLabel}
+            </Text>
+          </View>
+          <Badge label={onDuty ? 'On duty' : 'Off duty'} status={onDuty ? 'delivered' : 'neutral'} />
+        </View>
+      </Card>
+      <Card>
+        <View style={styles.settingRow}>
+          <AppIcon name="pin" size={20} color={colors.primary} />
+          <View style={styles.greetText}>
+            <Text style={styles.settingTitle}>Operating area</Text>
+            <Text style={styles.muted}>{areaLabel}</Text>
+          </View>
+        </View>
+      </Card>
+      <Button title="Log out of rider mode" variant="secondary" onPress={onLogout} />
+      <Text style={styles.meta}>Customer mode needs a fresh login after logout.</Text>
+    </View>
+  );
+}
+
+// --- Bottom nav ---------------------------------------------------------------
+
+function RiderTabBar({
+  tab,
+  onChange,
+  requestCount,
+}: {
+  tab: RiderTab;
+  onChange: (tab: RiderTab) => void;
+  requestCount: number;
+}) {
+  return (
+    <View style={[styles.bar, shadows.sticky]}>
+      {TABS.map((t) => {
+        const active = tab === t.value;
+        const badge = t.value === 'requests' ? requestCount : 0;
+        return (
+          <Pressable
+            key={t.value}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: active }}
+            accessibilityLabel={t.label}
+            onPress={() => onChange(t.value)}
+            style={({ pressed }) => [styles.tabItem, pressed && styles.pressed]}
+          >
+            <View style={styles.iconWrap}>
+              <AppIcon name={t.icon} size={22} color={active ? colors.primary : colors.faint} />
+              {badge > 0 ? (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{badge > 9 ? '9+' : badge}</Text>
+                </View>
+              ) : null}
+            </View>
+            <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{t.label}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  header: { gap: spacing.xs },
-  subtitle: { ...typography.label },
-  areaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  areaText: { flex: 1, gap: 2 },
-  areaLabel: { ...typography.caption },
-  areaValue: { ...typography.subhead, fontWeight: '700' },
+  tabBody: { gap: spacing.cardGap },
+
+  greetRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  greetText: { flex: 1, gap: 1 },
+  greetHi: { ...typography.caption },
+  greetName: { ...typography.title, fontSize: 21 },
+  screenTitle: { ...typography.title, fontSize: 23 },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: { ...typography.heading, color: colors.primaryDeep },
+
+  statRow: { flexDirection: 'row', gap: spacing.sm },
+  statCard: {
+    flex: 1,
+    gap: 2,
+    padding: spacing.base,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.hairline,
+  },
+  statTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  statValue: { ...typography.display, fontSize: 24 },
+  statCaption: { ...typography.caption },
+
+  section: { gap: spacing.md },
+
+  barsRow: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.xs, minHeight: 150 },
+  barCol: { flex: 1, alignItems: 'center', gap: 4 },
+  barValue: { ...typography.micro, fontSize: 10, color: colors.primaryDeep, height: 14 },
+  barValueHot: { color: colors.accentDark, fontWeight: '800' },
+  barTrack: {
+    width: '70%',
+    height: 110,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surfaceSunken,
+    justifyContent: 'flex-end',
+    overflow: 'hidden',
+  },
+  barFill: { width: '100%', backgroundColor: colors.primary, borderRadius: radius.sm },
+  barFillHot: { backgroundColor: colors.accent },
+  barDay: { ...typography.micro, fontSize: 10 },
+
   dutyRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -483,13 +920,18 @@ const styles = StyleSheet.create({
   dutyText: { flex: 1, gap: spacing.xs, alignItems: 'flex-start' },
   dutyLabel: { ...typography.subhead, fontSize: 17, fontWeight: '700' },
   dutyHint: { ...typography.caption },
-  earningsRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  earnings: { ...typography.display, color: colors.success },
-  cardBody: { ...typography.caption },
-  meta: { ...typography.caption, textAlign: 'center' },
-  muted: { ...typography.caption, color: colors.muted },
 
-  section: { gap: spacing.md },
+  offerCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    borderColor: colors.primary,
+    borderWidth: 1.5,
+  },
+  offerCtaText: { flex: 1, gap: 1 },
+  offerCtaTitle: { ...typography.subhead, fontWeight: '700' },
+  offerCtaBody: { ...typography.caption },
+
   incomingCard: { borderColor: colors.primary, borderWidth: 1.5 },
   decisionRow: { flexDirection: 'row', gap: spacing.sm },
   decisionFlex: { flex: 1 },
@@ -502,4 +944,62 @@ const styles = StyleSheet.create({
   gpsLine: { ...typography.caption, color: colors.success, fontWeight: '600' },
   contact: { ...typography.caption, fontWeight: '600' },
   feeLine: { ...typography.caption, color: colors.primaryDeep, fontWeight: '600' },
+
+  historyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.base,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.hairline,
+  },
+  historyText: { flex: 1, gap: 1 },
+  historyNo: { ...typography.label, fontWeight: '700' },
+  historyFee: { ...typography.price, fontSize: 15, color: colors.successDark },
+
+  earnHero: { backgroundColor: colors.primaryDeep, borderWidth: 0, gap: spacing.xs },
+  earnTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  earnCaption: { ...typography.caption, color: colors.onPrimary, opacity: 0.8 },
+  earnTotal: { ...typography.display, fontSize: 36, color: colors.onPrimary },
+
+  profileRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  profileName: { ...typography.subhead, fontWeight: '700', fontSize: 16 },
+  settingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  settingTitle: { ...typography.label, fontWeight: '700' },
+
+  muted: { ...typography.caption, color: colors.muted },
+  meta: { ...typography.caption, textAlign: 'center' },
+
+  bar: {
+    flexDirection: 'row',
+    paddingHorizontal: spacing.sm,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.sm,
+    backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.hairline,
+  },
+  tabItem: { flex: 1, alignItems: 'center', gap: 2, paddingVertical: 2 },
+  iconWrap: { position: 'relative' },
+  tabLabel: { ...typography.micro, fontSize: 10.5, fontWeight: '600', color: colors.faint },
+  tabLabelActive: { color: colors.primary },
+  badge: {
+    position: 'absolute',
+    top: -6,
+    right: -10,
+    minWidth: 17,
+    height: 17,
+    borderRadius: 9,
+    backgroundColor: colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  badgeText: { ...typography.micro, fontSize: 10, color: colors.onPrimary },
+  modalFoot: { flexDirection: 'row', gap: spacing.sm },
+  pressed: { opacity: 0.7 },
 });

@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { isAllTowns, resolveOptedTowns, shouldFilterTowns, TOWN_LABELS } from '@isla/shared';
-import { useAuth, type Database } from '@isla/supabase';
+import { signOut, useAuth, type Database } from '@isla/supabase';
 import {
   AppIcon,
   Badge,
+  Button,
   Card,
   IconButton,
   Screen,
   SectionHeader,
+  SheetModal,
   Skeleton,
   colors,
   radius,
@@ -44,6 +46,11 @@ const ACTIVE_STATUSES: ActiveStatus[] = [
   'in_transit',
 ];
 
+/** Merchant-wait means placed — no merchant counter yet, the rider shops. */
+const ACTIVE_LABEL: Partial<Record<ActiveStatus, string>> = {
+  awaiting_merchant: 'order placed',
+};
+
 export default function HomeScreen({}: Props) {
   const navigation = useNavigation<RootNavProp>();
   const { client, profile } = useAuth();
@@ -52,6 +59,7 @@ export default function HomeScreen({}: Props) {
   const [merchants, setMerchants] = useState<Merchant[]>([]);
   const [loadingStores, setLoadingStores] = useState(true);
   const [activeOrder, setActiveOrder] = useState<OrderRow | null>(null);
+  const [riderExitOpen, setRiderExitOpen] = useState(false);
 
   const firstName = profile?.full_name?.split(' ')[0] || 'there';
   // Show the opt-in set, not just the delivery town ("All municipalities" when
@@ -112,6 +120,16 @@ export default function HomeScreen({}: Props) {
 
   const goShop = () => navigation.navigate('Shop');
 
+  const logoutToRiderMode = () => {
+    setRiderExitOpen(false);
+    // Park on Shop (the guest home) before the shells swap. Sign-out
+    // finishes in the background so a slow network never traps the modal.
+    navigation.navigate('Shop');
+    void signOut(client).catch(() => {
+      showToast({ message: 'Could not sign out. Please try again.', type: 'error' });
+    });
+  };
+
   return (
     <Screen>
       {/* Greeting */}
@@ -158,14 +176,20 @@ export default function HomeScreen({}: Props) {
         </Card>
       </Pressable>
 
-      {/* Jollibee shortcut — opens the pabili form preloaded */}
+      {/* Jollibee shortcut — opens the Jollibee menu */}
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Order Jollibee"
-        onPress={() => navigation.navigate('PabiliCreate', { comboId: 'jollibee' })}
+        accessibilityLabel="Order Jollibee, open menu"
+        onPress={() => navigation.navigate('JollibeeMenu')}
         style={({ pressed }) => [pressed && styles.pressed]}
       >
         <View style={styles.jollibeeTile}>
+          <Image
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            source={require('../../assets/jollibee.png')}
+            style={styles.jollibeeLogo}
+            accessibilityLabel="Jollibee logo"
+          />
           <View style={styles.jollibeeText}>
             <Text style={styles.jollibeeTitle}>Jollibee</Text>
             <Text style={styles.jollibeeSub} numberOfLines={1}>
@@ -206,7 +230,7 @@ export default function HomeScreen({}: Props) {
       {activeOrder ? (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`Active order, ${activeOrder.status.replace(/_/g, ' ')}`}
+          accessibilityLabel={`Active order, ${ACTIVE_LABEL[activeOrder.status] ?? activeOrder.status.replace(/_/g, ' ')}`}
           onPress={() => navigation.navigate('Orders')}
           style={({ pressed }) => [pressed && styles.pressed]}
         >
@@ -217,7 +241,8 @@ export default function HomeScreen({}: Props) {
             <View style={styles.activeText}>
               <Text style={styles.activeTitle}>Order in progress</Text>
               <Text style={styles.activeBody}>
-                {activeOrder.status.replace(/_/g, ' ')} · {peso(Number(activeOrder.grand_total ?? 0))}
+                {ACTIVE_LABEL[activeOrder.status] ?? activeOrder.status.replace(/_/g, ' ')} ·{' '}
+                {peso(Number(activeOrder.grand_total ?? 0))}
               </Text>
             </View>
             <AppIcon name="chevronRight" size={18} color={colors.primaryDeep} />
@@ -291,11 +316,11 @@ export default function HomeScreen({}: Props) {
         )}
       </View>
 
-      {/* Rider CTA */}
+      {/* Rider CTA — rider mode is a separate shell, so this logs out first */}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Become a rider"
-        onPress={() => navigation.navigate('Rider')}
+        onPress={() => setRiderExitOpen(true)}
         style={({ pressed }) => [pressed && styles.pressed]}
       >
         <Card style={styles.riderCard} variant="flat">
@@ -304,11 +329,25 @@ export default function HomeScreen({}: Props) {
           </View>
           <View style={styles.riderText}>
             <Text style={styles.riderTitle}>Drive & earn</Text>
-            <Text style={styles.riderBody}>Rider mode is on the same account. Apply once, go online anytime.</Text>
+            <Text style={styles.riderBody}>Log out, then log in as a rider to apply and go online.</Text>
           </View>
           <Badge label="Earn" status="accent" />
         </Card>
       </Pressable>
+      <SheetModal
+        visible={riderExitOpen}
+        title="Switch to rider mode?"
+        subtitle="Rider mode is separate — log out first, then log in as a rider."
+        onClose={() => setRiderExitOpen(false)}
+        footer={
+          <View style={styles.modalFoot}>
+            <Button title="Cancel" variant="secondary" onPress={() => setRiderExitOpen(false)} />
+            <Button title="Log out" variant="danger" onPress={logoutToRiderMode} />
+          </View>
+        }
+      >
+        <></>
+      </SheetModal>
     </Screen>
   );
 }
@@ -423,6 +462,12 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     backgroundColor: '#D8232A',
   },
+  jollibeeLogo: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#FFFFFF',
+  },
   jollibeeText: { flex: 1, gap: 1 },
   jollibeeTitle: { color: '#FFFFFF', fontSize: 20, fontWeight: '800' },
   jollibeeSub: { color: 'rgba(255,255,255,0.85)', fontSize: 12.5 },
@@ -436,6 +481,8 @@ const styles = StyleSheet.create({
   riderText: { flex: 1, gap: 2 },
   riderTitle: { ...typography.subhead, fontWeight: '700' },
   riderBody: { ...typography.caption },
+
+  modalFoot: { flexDirection: 'row', gap: spacing.sm },
 
   pressed: { opacity: 0.7 },
 });

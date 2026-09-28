@@ -110,5 +110,18 @@ export async function verifyPhoneOtp(
 }
 
 export async function signOut(client: Supabase): Promise<void> {
-  await client.auth.signOut();
+  // The revoke call can hang (offline / unreachable backend) — never let it
+  // block logout UX. Cap it, then clear the local session regardless.
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error('Sign-out timed out')), 8000);
+  });
+  try {
+    await Promise.race([client.auth.signOut(), timeout]);
+  } catch {
+    // Session already expired, timed out, or offline — still clear local state.
+    await client.auth.signOut({ scope: 'local' }).catch(() => undefined);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }

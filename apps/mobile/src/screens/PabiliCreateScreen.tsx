@@ -12,7 +12,7 @@ import {
   Button,
   Card,
   Screen,
-  ScreenHeader,
+  SheetModal,
   colors,
   radius,
   spacing,
@@ -40,24 +40,31 @@ export default function PabiliCreateScreen({ route }: Props) {
   const navigation = useNavigation<RootNavProp>();
   const { client, profile } = useAuth();
   const { showToast } = useToast();
-  // Deep-link entry (e.g. the Jollibee tile on Home) preloads a combo.
-  const preset = PABILI_COMBOS.find((c) => c.id === route.params?.comboId);
+  // Deep-link entry (e.g. the Jollibee tile on Home) preloads a combo,
+  // or a custom item list (e.g. picked from the Jollibee menu).
+  const routeParams = route.params;
+  const preset = PABILI_COMBOS.find((c) => c.id === routeParams?.comboId);
+  const presetItems = routeParams?.items?.length
+    ? routeParams.items
+    : preset
+      ? preset.items
+      : null;
+  const presetStore = routeParams?.store ?? preset?.store;
   const [rows, setRows] = useState<ListRow[]>(() =>
-    preset ? preset.items.map((i) => ({ ...i })) : [{ ...EMPTY_ROW }],
+    presetItems ? presetItems.map((i) => ({ ...i })) : [{ ...EMPTY_ROW }],
   );
   const [name, setName] = useState(profile?.full_name ?? '');
   const [phone, setPhone] = useState(profile?.phone ?? '');
   const [town, setTown] = useState<Town | null>(profile?.home_town ?? null);
   const [address, setAddress] = useState(profile?.address ?? '');
   const [storePick, setStorePick] = useState<string | null>(() =>
-    preset?.store && PRESET_STORES.includes(preset.store) ? preset.store : null,
+    presetStore && PRESET_STORES.includes(presetStore) ? presetStore : null,
   );
   const [customStore, setCustomStore] = useState(() =>
-    preset?.store && !PRESET_STORES.includes(preset.store) ? preset.store : '',
+    presetStore && !PRESET_STORES.includes(presetStore) ? presetStore : '',
   );
-  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
-  const [locating, setLocating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [gpsPrompt, setGpsPrompt] = useState(false);
   const [finding, setFinding] = useState<{
     orderId: string;
     orderNumber: string;
@@ -264,25 +271,8 @@ export default function PabiliCreateScreen({ route }: Props) {
     showToast({ message: `${combo.label} added — edit qty as needed.`, type: 'success' });
   };
 
-  const attachGps = async () => {
-    setLocating(true);
-    try {
-      const perm = await Location.requestForegroundPermissionsAsync();
-      if (!perm.granted) {
-        showToast({ message: 'Location blocked — riders will use your written address.', type: 'error' });
-        return;
-      }
-      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-      showToast({ message: 'GPS pinned — rider will navigate to you.', type: 'success' });
-    } catch {
-      showToast({ message: 'Could not read your location.', type: 'error' });
-    } finally {
-      setLocating(false);
-    }
-  };
-
-  const handleSubmit = async () => {
+  /** Validated — now ask for GPS before sending (other apps do the same). */
+  const handleSubmit = () => {
     if (named.length === 0) {
       showToast({ message: 'Type at least one item you need.', type: 'error' });
       return;
@@ -295,11 +285,36 @@ export default function PabiliCreateScreen({ route }: Props) {
       showToast({ message: 'Add your town and delivery address.', type: 'error' });
       return;
     }
+    setGpsPrompt(true);
+  };
+
+  const doSubmit = async (useGps: boolean) => {
+    setGpsPrompt(false);
     const { data: userData } = await client.auth.getUser();
     const uid = userData.user?.id;
     if (!uid) {
       showToast({ message: 'Session expired. Please log in again.', type: 'error' });
       return;
+    }
+    // Re-checked here (already validated before the GPS prompt) for types.
+    if (!town || !address.trim()) {
+      showToast({ message: 'Add your town and delivery address.', type: 'error' });
+      return;
+    }
+    // Best effort: without GPS the rider falls back to the written address.
+    let gps: { lat: number; lng: number } | null = null;
+    if (useGps) {
+      try {
+        const perm = await Location.requestForegroundPermissionsAsync();
+        if (perm.granted) {
+          const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          gps = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        } else {
+          showToast({ message: 'Location blocked — riders will use your written address.', type: 'error' });
+        }
+      } catch {
+        showToast({ message: 'Could not read your location — using your written address.', type: 'error' });
+      }
     }
     setSubmitting(true);
     try {
@@ -310,8 +325,8 @@ export default function PabiliCreateScreen({ route }: Props) {
           merchant_id: null,
           town,
           dropoff_address: address.trim(),
-          dropoff_lat: coords?.lat ?? null,
-          dropoff_lng: coords?.lng ?? null,
+          dropoff_lat: gps?.lat ?? null,
+          dropoff_lng: gps?.lng ?? null,
           dropoff_notes: `${name.trim()} · ${phone.trim()}`,
           fulfillment_mode: 'rider_pabili',
           status: 'pending_dispatch',
@@ -363,7 +378,6 @@ export default function PabiliCreateScreen({ route }: Props) {
   return (
     <>
     <Screen footer={<BottomNav />} footerHeight={BOTTOM_NAV_HEIGHT}>
-      <ScreenHeader title="" onBack={() => navigation.goBack()} />
       <AuthHeader
         icon="pabili"
         accent
@@ -494,17 +508,6 @@ export default function PabiliCreateScreen({ route }: Props) {
         <Text style={styles.fieldLabel}>Town</Text>
         <SingleTownPicker variant="field" value={town} onChange={setTown} />
         <TextField label="Address" placeholder="Street / barangay / landmark" value={address} onChangeText={setAddress} />
-        <Button
-          title={coords ? 'GPS pinned ✓ — tap to re-pin' : 'Use my GPS location'}
-          variant="secondary"
-          loading={locating}
-          onPress={() => void attachGps()}
-        />
-        {coords ? (
-          <Text style={styles.gpsHint}>
-            {coords.lat.toFixed(5)}, {coords.lng.toFixed(5)} — rider navigates here. Keep GPS on.
-          </Text>
-        ) : null}
       </Card>
 
       <Card style={styles.summaryCard}>
@@ -515,9 +518,29 @@ export default function PabiliCreateScreen({ route }: Props) {
         <Text style={styles.finePrint}>
           You pay the rider in cash: item costs + {peso(fee)} delivery. Keep GPS on so the rider finds you fast.
         </Text>
-        <Button title="Find a rider" onPress={() => void handleSubmit()} loading={submitting} />
+        <Button title="Find a rider" onPress={handleSubmit} loading={submitting} />
       </Card>
     </Screen>
+
+    <SheetModal
+      visible={gpsPrompt}
+      title="Turn on GPS?"
+      subtitle="Precise location helps your rider find you fast."
+      onClose={() => setGpsPrompt(false)}
+      footer={
+        <View style={styles.gpsActions}>
+          <View style={styles.gpsFlex}>
+            <Button title="Turn on GPS" loading={submitting} onPress={() => void doSubmit(true)} />
+          </View>
+          <Button title="Skip" variant="secondary" disabled={submitting} onPress={() => void doSubmit(false)} />
+        </View>
+      }
+    >
+      <Text style={styles.gpsBody}>
+        We&apos;ll pin your exact drop-off next to your written address. You can still order with just the address —
+        GPS only makes the handoff faster.
+      </Text>
+    </SheetModal>
     {finding ? (
       <View style={styles.findOverlay}>
         {finding.offered > 0 && finding.phase === 'searching' ? (
@@ -650,7 +673,9 @@ const styles = StyleSheet.create({
   qtyWrap: { width: 72 },
   remove: { paddingTop: spacing.lg },
   fieldLabel: { ...typography.label, fontSize: 13, fontWeight: '600' },
-  gpsHint: { ...typography.caption, color: colors.success, fontWeight: '600' },
+  gpsActions: { flexDirection: 'row', gap: spacing.sm },
+  gpsFlex: { flex: 1 },
+  gpsBody: { ...typography.body },
   summaryCard: { borderColor: colors.primary, borderWidth: 1.5 },
   feeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   feeLabel: { ...typography.subhead },

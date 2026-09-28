@@ -22,7 +22,6 @@ import {
 } from '@isla/ui';
 import { TextField } from '../ui/TextField';
 import { TownPicker } from '../ui/TownPicker';
-import { BottomNav, BOTTOM_NAV_HEIGHT } from '../components/BottomNav';
 
 type RiderApplicationRow = Database['public']['Tables']['rider_applications']['Row'];
 
@@ -364,7 +363,7 @@ export default function RiderApplicationScreen({ onSubmitted }: Props) {
   };
 
   return (
-    <Screen footer={<BottomNav />} footerHeight={BOTTOM_NAV_HEIGHT}>
+    <Screen>
       <AuthHeader
         icon="rider"
         accent

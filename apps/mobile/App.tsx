@@ -10,6 +10,7 @@ import { AppIcon, colors, radius, spacing, typography } from '@isla/ui';
 import { supabase } from './src/lib/supabase';
 import { ToastProvider } from './src/ui/Toast';
 import { CartProvider } from './src/marketplace/cart';
+import { AuthModeProvider, useAuthMode } from './src/lib/authMode';
 import { consumeCheckoutReturn } from './src/lib/checkoutReturn';
 import type { RootStackParamList, TabParamList } from './src/navigation/types';
 import AuthHomeScreen from './src/screens/auth/AuthHomeScreen';
@@ -23,6 +24,7 @@ import StoreScreen from './src/screens/StoreScreen';
 import CartScreen from './src/screens/CartScreen';
 import CheckoutScreen from './src/screens/CheckoutScreen';
 import PabiliCreateScreen from './src/screens/PabiliCreateScreen';
+import JollibeeMenuScreen from './src/screens/JollibeeMenuScreen';
 import OrdersScreen from './src/screens/OrdersScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
 import RiderGateScreen from './src/screens/RiderGateScreen';
@@ -113,9 +115,20 @@ function LoadingGate() {
 
 function Root() {
   const { session, loading, profile, profileLoading } = useAuth();
+  const { mode, loaded: modeLoaded } = useAuthMode();
 
-  if (loading || (session && profileLoading)) {
+  if (loading || !modeLoaded || (session && profileLoading)) {
     return <LoadingGate />;
+  }
+
+  // Rider mode is a separate shell: no customer tabs, no onboarding.
+  // Switching back to customer always goes through logout.
+  if (session && mode === 'rider') {
+    return (
+      <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
+        <Stack.Screen name="Rider" component={RiderGateScreen} />
+      </Stack.Navigator>
+    );
   }
 
   // A guest who tapped "log in to checkout" lands straight on Checkout.
@@ -141,6 +154,7 @@ function Root() {
       <Stack.Screen name="Cart" component={CartScreen} />
       <Stack.Screen name="Checkout" component={CheckoutScreen} />
       <Stack.Screen name="PabiliCreate" component={PabiliCreateScreen} />
+      <Stack.Screen name="JollibeeMenu" component={JollibeeMenuScreen} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} />
       <Stack.Screen name="Rider" component={RiderGateScreen} />
       <Stack.Screen name="Onboarding" component={OnboardingScreen} />
@@ -164,11 +178,13 @@ export default function App() {
     <SafeAreaProvider>
       <ToastProvider>
         <AuthProvider client={supabase}>
-          <CartProvider>
-            <NavigationContainer theme={navigationTheme}>
-              <Root />
-            </NavigationContainer>
-          </CartProvider>
+          <AuthModeProvider>
+            <CartProvider>
+              <NavigationContainer theme={navigationTheme}>
+                <Root />
+              </NavigationContainer>
+            </CartProvider>
+          </AuthModeProvider>
         </AuthProvider>
       </ToastProvider>
     </SafeAreaProvider>

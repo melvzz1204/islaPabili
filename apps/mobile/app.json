@@ -17,9 +17,9 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#065F59"
       },
-        "permissions": [
-          "android.permission.RECORD_AUDIO"
-        ]
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "name": "IslaPabili",
@@ -36,6 +36,15 @@
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#FFFFFF"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "enableProguardInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true
+          }
         }
       ]
     ],

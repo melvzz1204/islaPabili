@@ -21,6 +21,8 @@ import {
   useToast,
 } from '@isla/ui';
 import { TermsAcceptanceRow, TermsModal, type TermsDoc } from '../../components/TermsAndConditions';
+import { RolePicker } from '../../components/RolePicker';
+import { useAuthMode } from '../../lib/authMode';
 import type { RootNavProp } from '../../navigation/types';
 
 type UsernameStatus = 'idle' | 'checking' | 'available' | 'taken';
@@ -48,6 +50,7 @@ export default function RegisterScreen() {
   const { client } = useAuth();
   const { showToast } = useToast();
   const navigation = useNavigation<RootNavProp>();
+  const { mode, setMode } = useAuthMode();
   const [fullName, setFullName] = useState('');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
@@ -176,6 +179,8 @@ export default function RegisterScreen() {
           <View style={{ flex: 1 }} />
         </View>
       </View>
+
+      <RolePicker value={mode} onChange={setMode} />
 
       <Card>
         <View style={styles.cardHead}>

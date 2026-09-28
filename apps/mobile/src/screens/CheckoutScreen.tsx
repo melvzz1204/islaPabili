@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, Easing, Image, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { type Town } from '@isla/shared';
+import { TOWN_LABELS, type Town } from '@isla/shared';
 import { useAuth, type Database } from '@isla/supabase';
 import {
   AppIcon,
@@ -19,7 +19,6 @@ import {
   spacing,
   typography,
   useToast,
-  type AppIconName,
 } from '@isla/ui';
 import { mockDeliveryFee, peso } from '../marketplace/data';
 import { useCart } from '../marketplace/cart';
@@ -30,7 +29,6 @@ import { goToTab, type RootNavProp, type RootStackScreen } from '../navigation/t
 
 type Props = RootStackScreen<'Checkout'>;
 type PayMethod = 'cod' | 'gcash' | 'maya';
-type Fulfillment = 'merchant_delivery' | 'merchant_pickup';
 
 type DbPayment = Database['public']['Enums']['payment_method'];
 
@@ -42,10 +40,44 @@ const PAY_LABELS: Record<PayMethod, string> = {
 
 const PAY_DB: Record<PayMethod, DbPayment> = { cod: 'cod', gcash: 'ewallet', maya: 'ewallet' };
 
-const FULFILLMENT_OPTIONS: { value: Fulfillment; label: string; icon: AppIconName }[] = [
-  { value: 'merchant_delivery', label: 'Rider delivery', icon: 'rider' },
-  { value: 'merchant_pickup', label: 'Self pickup', icon: 'storefront' },
-];
+// Self pickup is paused until stores can handle counter handoffs —
+// rider delivery is the only live fulfillment mode.
+const FULFILLMENT_MODE = 'merchant_delivery' as const;
+
+type PlacedOrder = { id: string; orderNumber: string };
+
+type SummaryLine = { name: string; qty: number; price: number };
+
+/** Frozen at placement (the cart is cleared) so the confirmation can itemize. */
+type OrderSummary = {
+  lines: SummaryLine[];
+  itemCount: number;
+  subtotal: number;
+  fee: number;
+  total: number;
+  distanceKm: number;
+  payLabel: string;
+  name: string;
+  phone: string;
+  town: Town;
+  townLabel: string;
+  address: string;
+};
+
+type FindingRider = {
+  name: string;
+  phone: string;
+  avatarUrl: string | null;
+  years: number | null;
+  licensed: boolean;
+};
+
+type Finding = {
+  orderIds: string[];
+  town: string;
+  phase: 'searching' | 'found';
+  rider?: FindingRider | null;
+};
 
 export default function CheckoutScreen({}: Props) {
   const navigation = useNavigation<RootNavProp>();
@@ -57,19 +89,149 @@ export default function CheckoutScreen({}: Props) {
   const [address, setAddress] = useState(profile?.address ?? '');
   const [town, setTown] = useState<Town | null>(profile?.home_town ?? null);
   const [pay, setPay] = useState<PayMethod>('cod');
-  const [fulfillment, setFulfillment] = useState<Fulfillment>('merchant_delivery');
   const [placing, setPlacing] = useState(false);
-  const [placedNumbers, setPlacedNumbers] = useState<string[] | null>(null);
+  const [placed, setPlaced] = useState<PlacedOrder[] | null>(null);
+  const [summary, setSummary] = useState<OrderSummary | null>(null);
+  const [finding, setFinding] = useState<Finding | null>(null);
+  const [dutyCount, setDutyCount] = useState<number | null>(null);
+  const pulse = useRef(new Animated.Value(0)).current;
 
-  const { distanceKm, fee: fullFee } = useMemo(() => mockDeliveryFee(), []);
-  const fee = fulfillment === 'merchant_delivery' ? fullFee : 0;
+  const { distanceKm, fee } = useMemo(() => mockDeliveryFee(), []);
   const total = subtotal + fee;
   const goShop = () => goToTab(navigation, 'Shop');
   const goOrders = () => goToTab(navigation, 'Orders');
+  const uid = session?.user?.id ?? null;
+
+  /** Open the find-a-rider moment on demand from the order summary. */
+  const startFinding = () => {
+    if (!placed || !summary) return;
+    setDutyCount(null);
+    setFinding({ orderIds: placed.map((p) => p.id), town: summary.town, phase: 'searching' });
+  };
+
+  // Radar pulse while looking for a rider (same moment as the pabili flow).
+  useEffect(() => {
+    if (!finding || finding.phase !== 'searching') return;
+    let alive = true;
+    pulse.setValue(0);
+    const tick = () => {
+      Animated.timing(pulse, {
+        toValue: 1,
+        duration: 1800,
+        easing: Easing.linear,
+        useNativeDriver: false,
+      }).start(({ finished }) => {
+        if (finished && alive) {
+          pulse.setValue(0);
+          tick();
+        }
+      });
+    };
+    tick();
+    return () => {
+      alive = false;
+    };
+  }, [finding, pulse]);
+
+  /** Load the assigned rider's public card (profile + application + photo). */
+  const showRiderCard = useCallback(
+    async (orderId: string, riderId: string) => {
+      const [{ data: profile }, { data: application }] = await Promise.all([
+        client.from('profiles').select('full_name, phone, avatar_url').eq('id', riderId).maybeSingle(),
+        client
+          .from('rider_applications')
+          .select('rider_photo_url, driving_experience_years, status')
+          .eq('rider_id', riderId)
+          .maybeSingle(),
+      ]);
+      let avatarUrl: string | null = profile?.avatar_url ?? null;
+      const photoPath = (application?.rider_photo_url ?? '').replace(/^onboarding-docs\//, '');
+      if (!avatarUrl && photoPath) {
+        const { data: signed } = await client.storage
+          .from('onboarding-docs')
+          .createSignedUrl(photoPath, 3600);
+        avatarUrl = signed?.signedUrl ?? null;
+      }
+      setFinding((prev) =>
+        prev && prev.orderIds.includes(orderId)
+          ? {
+              ...prev,
+              phase: 'found',
+              rider: {
+                name: profile?.full_name?.trim() || 'Your rider',
+                phone: profile?.phone?.trim() || '',
+                avatarUrl,
+                years: application?.driving_experience_years ?? null,
+                licensed: application?.status === 'approved',
+              },
+            }
+          : prev,
+      );
+    },
+    [client],
+  );
+
+  const showRiderCardRef = useRef(showRiderCard);
+  useEffect(() => {
+    showRiderCardRef.current = showRiderCard;
+  }, [showRiderCard]);
+
+  // Watch our own orders — when a rider is assigned, pull the rider card.
+  const findingPhase = finding?.phase;
+  useEffect(() => {
+    if (!finding || findingPhase !== 'searching' || !uid) return;
+    const channel = client
+      .channel(`checkout-finding-${uid}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'orders', filter: `customer_id=eq.${uid}` },
+        (payload) => {
+          const row = payload.new as { id?: string; status?: string; rider_id?: string };
+          if (
+            row?.id &&
+            finding.orderIds.includes(row.id) &&
+            row.status === 'rider_assigned' &&
+            row.rider_id
+          ) {
+            void showRiderCardRef.current(row.id, row.rider_id);
+          }
+        },
+      )
+      .subscribe();
+    return () => {
+      void client.removeChannel(channel);
+    };
+  }, [client, uid, finding, findingPhase]);
+
+  /** Live on-duty headcount covering this town, while the radar is up. */
+  useEffect(() => {
+    if (!finding || findingPhase !== 'searching') return;
+    let alive = true;
+    const town = finding.town;
+    const loadDuty = async () => {
+      const { count } = await client
+        .from('rider_status')
+        .select('rider_id', { count: 'exact', head: true })
+        .eq('on_duty', true)
+        .contains('operating_towns', [town]);
+      if (alive) setDutyCount(count ?? 0);
+    };
+    void loadDuty();
+    const channel = client
+      .channel(`checkout-duty-${town}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'rider_status' }, () => {
+        void loadDuty();
+      })
+      .subscribe();
+    return () => {
+      alive = false;
+      void client.removeChannel(channel);
+    };
+  }, [client, finding, findingPhase]);
 
   // --- States ---------------------------------------------------------------
 
-  if (count === 0 && !placedNumbers) {
+  if (count === 0 && !placed) {
     return (
       <Screen footer={<BottomNav />} footerHeight={BOTTOM_NAV_HEIGHT}>
         <ScreenHeader title="Checkout" onBack={() => navigation.goBack()} />
@@ -83,31 +245,101 @@ export default function CheckoutScreen({}: Props) {
     );
   }
 
-  if (placedNumbers) {
+  if (placed && summary) {
     return (
-      <Screen footer={<BottomNav />} footerHeight={BOTTOM_NAV_HEIGHT}>
-        <View style={styles.confirmWrap}>
-          <View style={styles.confirmMark}>
-            <AppIcon name="check" size={38} color={colors.onPrimary} />
+      <>
+        <Screen footer={<BottomNav />} footerHeight={BOTTOM_NAV_HEIGHT}>
+          <ScreenHeader title="Order confirmed" onBack={goShop} />
+          <View style={styles.confirmWrap}>
+            <View style={styles.confirmMark}>
+              <AppIcon name="check" size={38} color={colors.onPrimary} />
+            </View>
+            <Text style={styles.confirmTitle}>Order placed!</Text>
+            <Text style={styles.confirmBody}>
+              A rider will shop for your items and deliver them to you. Tap below when
+              you&apos;re ready and we&apos;ll track the handoff live.
+            </Text>
+            <View style={styles.numberRow}>
+              {placed.map((p) => (
+                <Badge key={p.id} label={p.orderNumber} status="transit" />
+              ))}
+            </View>
           </View>
-          <Text style={styles.confirmTitle}>Order sent to the store</Text>
-          <Text style={styles.confirmBody}>
-            {fulfillment === 'merchant_pickup'
-              ? 'The store will notify you when it is ready. Show your order number at the counter.'
-              : 'The store will prepare your order and a rider will deliver it to your door.'}
-          </Text>
-          <View style={styles.numberRow}>
-            {placedNumbers.map((n) => (
-              <Badge key={n} label={n} status="transit" />
-            ))}
+
+          {/* Receipt */}
+          <View style={styles.section}>
+            <SectionHeader title={`Order summary (${summary.itemCount})`} />
+            <Card variant="flat" style={styles.formCard}>
+              {summary.lines.map((l) => (
+                <View key={`${l.name}-${l.price}`} style={styles.row}>
+                  <Text style={styles.lineName} numberOfLines={1}>
+                    {l.qty}× {l.name}
+                  </Text>
+                  <Text style={styles.value}>{peso(l.price * l.qty)}</Text>
+                </View>
+              ))}
+              <View style={styles.divider} />
+              <View style={styles.row}>
+                <Text style={styles.muted}>Subtotal</Text>
+                <Text style={styles.value}>{peso(summary.subtotal)}</Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.muted}>Delivery fee ({summary.distanceKm.toFixed(1)} km)</Text>
+                <Text style={styles.value}>{peso(summary.fee)}</Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.totalLabel}>Total</Text>
+                <Text style={styles.total}>{peso(summary.total)}</Text>
+              </View>
+            </Card>
           </View>
-          <Button
-            title="Track my orders"
-            onPress={goOrders}
+
+          {/* Payment */}
+          <View style={styles.section}>
+            <SectionHeader title="Payment" />
+            <Card variant="flat" style={styles.formCard}>
+              <View style={styles.row}>
+                <Text style={styles.lineName}>{summary.payLabel}</Text>
+                <Badge label={peso(summary.total)} status="pending" />
+              </View>
+              <Text style={styles.muted}>
+                {summary.payLabel === PAY_LABELS.cod
+                  ? `Prepare ${peso(summary.total)} in cash for the rider — items plus delivery.`
+                  : 'Simulated e-wallet charge — no real money moves in this build.'}
+              </Text>
+            </Card>
+          </View>
+
+          {/* Delivery */}
+          <View style={styles.section}>
+            <SectionHeader title="Deliver to" />
+            <Card variant="flat" style={styles.formCard}>
+              <Text style={styles.lineName}>
+                {summary.name} · {summary.phone}
+              </Text>
+              <Text style={styles.muted}>
+                {summary.townLabel} — {summary.address}
+              </Text>
+            </Card>
+          </View>
+
+          <View style={styles.confirmActions}>
+            <Button title="Find a rider now" onPress={startFinding} />
+            <Button title="Track my orders" variant="secondary" onPress={goOrders} />
+            <Button title="Continue shopping" variant="ghost" onPress={goShop} />
+          </View>
+        </Screen>
+        {finding ? (
+          <FindingOverlay
+            finding={finding}
+            orderNumbers={placed.map((p) => p.orderNumber)}
+            dutyCount={dutyCount}
+            pulse={pulse}
+            onTrack={goOrders}
+            onDismiss={() => setFinding(null)}
           />
-          <Button title="Back to shopping" variant="secondary" onPress={goShop} />
-        </View>
-      </Screen>
+        ) : null}
+      </>
     );
   }
 
@@ -174,7 +406,7 @@ export default function CheckoutScreen({}: Props) {
         groups.set(l.merchantId, g);
       }
       const feeShare = groups.size > 0 ? fee / groups.size : 0;
-      const numbers: string[] = [];
+      const numbers: PlacedOrder[] = [];
       for (const [merchantId, items] of groups) {
         const itemsTotal = items.reduce((n, l) => n + l.price * l.qty, 0);
         const { data: order, error: orderError } = await client
@@ -185,7 +417,7 @@ export default function CheckoutScreen({}: Props) {
             town,
             dropoff_address: address.trim(),
             dropoff_notes: `${name.trim()} · ${phone.trim()}`,
-            fulfillment_mode: fulfillment,
+            fulfillment_mode: FULFILLMENT_MODE,
             status: 'awaiting_merchant',
             payment_method: PAY_DB[pay],
             est_items_total: itemsTotal,
@@ -204,11 +436,26 @@ export default function CheckoutScreen({}: Props) {
           })),
         );
         if (itemsError) throw itemsError;
-        numbers.push(order.order_number);
+        numbers.push({ id: order.id, orderNumber: order.order_number });
       }
       clear();
-      setPlacedNumbers(numbers);
-      showToast({ message: 'Order placed! The store has been notified.', type: 'success' });
+      setPlaced(numbers);
+      // Freeze the receipt: the cart is empty from here on.
+      setSummary({
+        lines: lines.map((l) => ({ name: l.name, qty: l.qty, price: l.price })),
+        itemCount: count,
+        subtotal,
+        fee,
+        total,
+        distanceKm,
+        payLabel: PAY_LABELS[pay],
+        name: name.trim(),
+        phone: phone.trim(),
+        town,
+        townLabel: TOWN_LABELS[town] ?? town,
+        address: address.trim(),
+      });
+      showToast({ message: 'Order placed! Review your summary below.', type: 'success' });
     } catch (err) {
       showToast({
         message: err instanceof Error ? err.message : 'Could not place your order.',
@@ -245,41 +492,29 @@ export default function CheckoutScreen({}: Props) {
     >
       <ScreenHeader title="Checkout" onBack={() => navigation.goBack()} />
 
-      {/* Fulfillment */}
+      {/* Fulfillment — rider delivery only; self pickup is paused for now */}
       <View style={styles.section}>
         <SectionHeader title="How do you want it?" />
         <View style={styles.fulfillGrid}>
-          {FULFILLMENT_OPTIONS.map((opt) => {
-            const active = fulfillment === opt.value;
-            return (
-              <Pressable
-                key={opt.value}
-                accessibilityRole="radio"
-                accessibilityState={{ checked: active }}
-                accessibilityLabel={opt.label}
-                onPress={() => setFulfillment(opt.value)}
-                style={({ pressed }) => [
-                  styles.fulfillCard,
-                  active && styles.fulfillCardActive,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <AppIcon name={opt.icon} size={20} color={active ? colors.primaryDeep : colors.muted} />
-                <Text style={[styles.fulfillLabel, active && styles.fulfillLabelActive]}>
-                  {opt.label}
-                </Text>
-                <Text style={styles.fulfillHint}>
-                  {opt.value === 'merchant_delivery' ? peso(fullFee) : 'Free'}
-                </Text>
-              </Pressable>
-            );
-          })}
+          <View style={[styles.fulfillCard, styles.fulfillCardActive]}>
+            <AppIcon name="rider" size={20} color={colors.primaryDeep} />
+            <Text style={[styles.fulfillLabel, styles.fulfillLabelActive]}>Rider delivery</Text>
+            <Text style={styles.fulfillHint}>{peso(fee)}</Text>
+          </View>
+          <View
+            style={[styles.fulfillCard, styles.fulfillCardDisabled]}
+            accessibilityLabel="Self pickup, coming soon"
+          >
+            <AppIcon name="storefront" size={20} color={colors.faint} />
+            <Text style={styles.fulfillLabelDisabled}>Self pickup</Text>
+            <Badge label="Soon" status="neutral" />
+          </View>
         </View>
       </View>
 
       {/* Details */}
       <View style={styles.section}>
-        <SectionHeader title={fulfillment === 'merchant_pickup' ? 'Pickup details' : 'Delivery details'} />
+        <SectionHeader title="Delivery details" />
         <Card variant="flat" style={styles.formCard}>
           <TextField
             label="Recipient name"
@@ -295,21 +530,17 @@ export default function CheckoutScreen({}: Props) {
             value={phone}
             onChangeText={setPhone}
           />
-          {fulfillment === 'merchant_delivery' ? (
-            <>
-              <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>Town</Text>
-                <SingleTownPicker variant="field" value={town} onChange={setTown} />
-              </View>
-              <TextField
-                label="Address"
-                placeholder="Street / barangay / landmark"
-                value={address}
-                onChangeText={setAddress}
-                multiline
-              />
-            </>
-          ) : null}
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Town</Text>
+            <SingleTownPicker variant="field" value={town} onChange={setTown} />
+          </View>
+          <TextField
+            label="Address"
+            placeholder="Street / barangay / landmark"
+            value={address}
+            onChangeText={setAddress}
+            multiline
+          />
         </Card>
       </View>
 
@@ -347,11 +578,7 @@ export default function CheckoutScreen({}: Props) {
             <Text style={styles.value}>{peso(subtotal)}</Text>
           </View>
           <View style={styles.row}>
-            <Text style={styles.muted}>
-              {fulfillment === 'merchant_delivery'
-                ? `Delivery fee (${distanceKm.toFixed(1)} km)`
-                : 'Pickup (no delivery fee)'}
-            </Text>
+            <Text style={styles.muted}>Delivery fee ({distanceKm.toFixed(1)} km)</Text>
             <Text style={styles.value}>{peso(fee)}</Text>
           </View>
           <View style={styles.row}>
@@ -382,6 +609,8 @@ const styles = StyleSheet.create({
   fulfillLabel: { ...typography.label, color: colors.text },
   fulfillLabelActive: { color: colors.primaryDeep },
   fulfillHint: { ...typography.caption },
+  fulfillCardDisabled: { opacity: 0.45, backgroundColor: colors.surfaceSunken },
+  fulfillLabelDisabled: { ...typography.label, color: colors.faint },
 
   fieldGroup: { gap: spacing.xs },
   fieldLabel: { ...typography.label },
@@ -418,6 +647,7 @@ const styles = StyleSheet.create({
   confirmTitle: { ...typography.display, fontSize: 24, textAlign: 'center' },
   confirmBody: { ...typography.body, color: colors.muted, textAlign: 'center' },
   numberRow: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap', justifyContent: 'center' },
+  confirmActions: { gap: spacing.sm },
 
   footer: { flexDirection: 'row', alignItems: 'center', gap: spacing.base },
   footerStack: { gap: spacing.sm },
@@ -427,4 +657,144 @@ const styles = StyleSheet.create({
   footerBtn: { minWidth: 160 },
 
   pressed: { opacity: 0.7 },
+
+  findOverlay: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: colors.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.lg,
+    padding: spacing.xl,
+  },
+  rings: { width: 250, height: 250, alignItems: 'center', justifyContent: 'center' },
+  ring: { position: 'absolute', borderWidth: 2, borderColor: colors.primary },
+  findMedallion: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  riderAvatar: { width: 112, height: 112, borderRadius: 56 },
+  riderInitials: { ...typography.display, fontSize: 34, color: colors.onPrimary },
+  riderBadges: { flexDirection: 'row', gap: spacing.sm },
+  findTitle: { ...typography.display, fontSize: 26, color: colors.onPrimary, textAlign: 'center' },
+  findSub: { ...typography.body, color: colors.onPrimary, opacity: 0.85, textAlign: 'center' },
+  findOrder: {
+    ...typography.subhead,
+    fontWeight: '700',
+    color: colors.primary,
+    backgroundColor: colors.onPrimary,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.xs,
+    overflow: 'hidden',
+  },
+  findActions: { gap: spacing.sm, alignSelf: 'stretch' },
 });
+
+/** Full-screen find-a-rider moment after placing a store order (mirrors pabili). */
+function FindingOverlay({
+  finding,
+  orderNumbers,
+  dutyCount,
+  pulse,
+  onTrack,
+  onDismiss,
+}: {
+  finding: Finding;
+  orderNumbers: string[];
+  dutyCount: number | null;
+  pulse: Animated.Value;
+  onTrack: () => void;
+  onDismiss: () => void;
+}) {
+  const label = orderNumbers.join(' · ');
+  if (finding.phase === 'found' && finding.rider) {
+    const rider = finding.rider;
+    return (
+      <View style={styles.findOverlay}>
+        {rider.avatarUrl ? (
+          <Image source={{ uri: rider.avatarUrl }} style={styles.riderAvatar} />
+        ) : (
+          <View style={styles.findMedallion}>
+            <Text style={styles.riderInitials}>
+              {rider.name
+                .split(' ')
+                .filter(Boolean)
+                .slice(0, 2)
+                .map((w) => w[0])
+                .join('')
+                .toUpperCase() || '?'}
+            </Text>
+          </View>
+        )}
+        <Text style={styles.findTitle}>{rider.name}</Text>
+        <View style={styles.riderBadges}>
+          {rider.licensed ? <Badge label="Licensed ✓" status="delivered" /> : null}
+          {rider.years != null ? <Badge label={`${rider.years}y exp`} status="pending" /> : null}
+        </View>
+        {rider.phone ? <Text style={styles.findSub}>{rider.phone}</Text> : null}
+        <Text style={styles.findOrder}>{label} · on the way</Text>
+        <View style={styles.findActions}>
+          <Button title="Track my order" onPress={onTrack} />
+        </View>
+      </View>
+    );
+  }
+  if (dutyCount === 0) {
+    return (
+      <View style={styles.findOverlay}>
+        <View style={styles.findMedallion}>
+          <AppIcon name="rider" size={44} color={colors.onPrimary} />
+        </View>
+        <Text style={styles.findTitle}>No riders on duty</Text>
+        <Text style={styles.findSub}>
+          Your order is saved. We&apos;ll notify you as soon as a rider in {finding.town} accepts
+          it.
+        </Text>
+        <Text style={styles.findOrder}>{label}</Text>
+        <View style={styles.findActions}>
+          <Button title="Track my orders" onPress={onTrack} />
+          <Button title="Keep shopping" variant="secondary" onPress={onDismiss} />
+        </View>
+      </View>
+    );
+  }
+  return (
+    <View style={styles.findOverlay}>
+      <View style={styles.rings}>
+        {[150, 200, 250].map((size) => (
+          <Animated.View
+            key={size}
+            style={[
+              styles.ring,
+              {
+                width: size,
+                height: size,
+                borderRadius: size / 2,
+                opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.7, 0] }),
+                transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) }],
+              },
+            ]}
+          />
+        ))}
+        <View style={styles.findMedallion}>
+          <AppIcon name="rider" size={44} color={colors.onPrimary} />
+        </View>
+      </View>
+      <Text style={styles.findTitle}>Finding a rider…</Text>
+      <Text style={styles.findSub}>
+        {dutyCount == null
+          ? `Notifying riders in ${finding.town} — first to accept shops for you.`
+          : `${dutyCount} rider${dutyCount === 1 ? '' : 's'} on duty in ${finding.town} — first to accept shops and delivers.`}
+      </Text>
+      <Text style={styles.findOrder}>{label}</Text>
+      <View style={styles.findActions}>
+        <Button title="Track my orders" onPress={onTrack} />
+        <Button title="Keep shopping" variant="secondary" onPress={onDismiss} />
+      </View>
+    </View>
+  );
+}
