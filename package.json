@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "IslaPabili - Marinduque on-demand pabili & delivery platform (MVP v1.0)",
+  "main": "apps/mobile/index.ts",
   "workspaces": [
     "apps/*",
     "packages/*"
