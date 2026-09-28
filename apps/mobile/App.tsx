@@ -1,7 +1,7 @@
 import { NavigationContainer, DarkTheme, type Theme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { isNoTowns, resolveOptedTowns } from '@isla/shared';
@@ -115,7 +115,19 @@ function LoadingGate() {
 
 function Root() {
   const { session, loading, profile, profileLoading } = useAuth();
-  const { mode, loaded: modeLoaded } = useAuthMode();
+  const { mode, loaded: modeLoaded, loggedOut, setLoggedOut } = useAuthMode();
+  const wasSession = useRef(false);
+
+  // A rider logout parks on the sign-in page (not guest home) so logging
+  // back in is one tap. Any fresh login clears the flag.
+  useEffect(() => {
+    if (wasSession.current && !session && mode === 'rider') {
+      setLoggedOut(true);
+    } else if (session) {
+      setLoggedOut(false);
+    }
+    wasSession.current = !!session;
+  }, [session, mode, setLoggedOut]);
 
   if (loading || !modeLoaded || (session && profileLoading)) {
     return <LoadingGate />;
@@ -127,6 +139,19 @@ function Root() {
     return (
       <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
         <Stack.Screen name="Rider" component={RiderGateScreen} />
+      </Stack.Navigator>
+    );
+  }
+
+  // Just logged out from rider mode → sign-in landing so logging back
+  // in is one tap.
+  if (!session && loggedOut) {
+    return (
+      <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
+        <Stack.Screen name="AuthHome" component={AuthHomeScreen} />
+        <Stack.Screen name="Login" component={LoginScreen} />
+        <Stack.Screen name="Register" component={RegisterScreen} />
+        <Stack.Screen name="Phone" component={PhoneScreen} />
       </Stack.Navigator>
     );
   }

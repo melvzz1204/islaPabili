@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 /**
@@ -17,6 +17,9 @@ type AuthModeValue = {
   mode: AuthMode;
   setMode: (mode: AuthMode) => void;
   loaded: boolean;
+  /** True right after a rider logout — Root parks on the sign-in page. */
+  loggedOut: boolean;
+  setLoggedOut: (value: boolean) => void;
 };
 
 const AuthModeContext = createContext<AuthModeValue | null>(null);
@@ -24,6 +27,7 @@ const AuthModeContext = createContext<AuthModeValue | null>(null);
 export function AuthModeProvider({ children }: PropsWithChildren) {
   const [mode, setModeState] = useState<AuthMode>('customer');
   const [loaded, setLoaded] = useState(false);
+  const [loggedOut, setLoggedOutState] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -41,6 +45,10 @@ export function AuthModeProvider({ children }: PropsWithChildren) {
     };
   }, []);
 
+  const setLoggedOut = useCallback((value: boolean) => {
+    setLoggedOutState(value);
+  }, []);
+
   const value = useMemo<AuthModeValue>(
     () => ({
       mode,
@@ -49,8 +57,10 @@ export function AuthModeProvider({ children }: PropsWithChildren) {
         void AsyncStorage.setItem(STORAGE_KEY, next).catch(() => undefined);
       },
       loaded,
+      loggedOut,
+      setLoggedOut,
     }),
-    [mode, loaded],
+    [mode, loaded, loggedOut, setLoggedOut],
   );
 
   return <AuthModeContext.Provider value={value}>{children}</AuthModeContext.Provider>;
