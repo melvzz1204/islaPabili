@@ -14,6 +14,7 @@ export type Rating = Database['public']['Tables']['ratings']['Row'];
 export type Voucher = Database['public']['Tables']['vouchers']['Row'];
 export type Fare = Database['public']['Tables']['fare_config']['Row'];
 export type OrderItem = Database['public']['Tables']['order_items']['Row'];
+export type AppRelease = Database['public']['Tables']['app_releases']['Row'];
 export type OrderMessage = Database['public']['Tables']['order_messages']['Row'];
 
 export type AdminData = {
@@ -30,12 +31,13 @@ export type AdminData = {
   fares: Fare[];
   orderItems: OrderItem[];
   orderMessages: OrderMessage[];
+  releases: AppRelease[];
 };
 
 const EMPTY: AdminData = {
   orders: [], profiles: [], merchants: [], products: [], riderApps: [],
   riderStatus: [], transactions: [], wallets: [], ratings: [], vouchers: [],
-  fares: [], orderItems: [], orderMessages: [],
+  fares: [], orderItems: [], orderMessages: [], releases: [],
 };
 
 export function useAdminData() {
@@ -49,7 +51,7 @@ export function useAdminData() {
     try {
       const [
         orders, profiles, merchants, products, riderApps, riderStatus,
-        transactions, wallets, ratings, vouchers, fares, orderItems, orderMessages,
+        transactions, wallets, ratings, vouchers, fares, orderItems, orderMessages, releases,
       ] = await Promise.all([
         supabase.from('orders').select('*').order('created_at', { ascending: false }).limit(600),
         supabase.from('profiles').select('*').order('created_at', { ascending: false }).limit(1000),
@@ -64,8 +66,9 @@ export function useAdminData() {
         supabase.from('fare_config').select('*').order('created_at', { ascending: false }).limit(20),
         supabase.from('order_items').select('*').order('created_at', { ascending: false }).limit(1500),
         supabase.from('order_messages').select('*').order('created_at', { ascending: false }).limit(1000),
+        supabase.from('app_releases').select('*').order('build_number', { ascending: false }).limit(20),
       ]);
-      const firstErr = [orders, profiles, merchants, products, riderApps, riderStatus, transactions, wallets, ratings, vouchers, fares, orderItems, orderMessages]
+      const firstErr = [orders, profiles, merchants, products, riderApps, riderStatus, transactions, wallets, ratings, vouchers, fares, orderItems, orderMessages, releases]
         .find((r) => r.error)?.error;
       if (firstErr) throw new Error(firstErr.message);
       setData({
@@ -82,6 +85,7 @@ export function useAdminData() {
         fares: fares.data ?? [],
         orderItems: orderItems.data ?? [],
         orderMessages: (orderMessages.data ?? []) as AdminData['orderMessages'],
+        releases: (releases.data ?? []) as AdminData['releases'],
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load admin data.');

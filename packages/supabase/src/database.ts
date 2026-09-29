@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_releases: {
+        Row: {
+          apk_url: string | null
+          build_number: number
+          created_at: string
+          id: string
+          is_active: boolean
+          min_build: number
+          notes: string
+          platform: string
+          version: string
+        }
+        Insert: {
+          apk_url?: string | null
+          build_number: number
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          min_build?: number
+          notes?: string
+          platform?: string
+          version?: string
+        }
+        Update: {
+          apk_url?: string | null
+          build_number?: number
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          min_build?: number
+          notes?: string
+          platform?: string
+          version?: string
+        }
+        Relationships: []
+      }
       fare_config: {
         Row: {
           base_fare: number

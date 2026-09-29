@@ -11,6 +11,13 @@ export function Settings({ data, reload }: { data: AdminData; reload: () => void
   const [perKm, setPerKm] = useState('');
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [relVersion, setRelVersion] = useState('');
+  const [relBuild, setRelBuild] = useState('');
+  const [relMin, setRelMin] = useState('');
+  const [relUrl, setRelUrl] = useState('');
+  const [relNotes, setRelNotes] = useState('');
+  const [relMsg, setRelMsg] = useState<string | null>(null);
+  const [relBusy, setRelBusy] = useState(false);
 
   const save = async () => {
     setBusy(true); setMsg(null);
@@ -24,6 +31,38 @@ export function Settings({ data, reload }: { data: AdminData; reload: () => void
     setBusy(false);
     setMsg(error ? error.message : 'Fare updated. New checkouts quote from this config.');
     if (!error) { setBase(''); setPerKm(''); reload(); }
+  };
+
+  const latestRelease = data.releases[0] ?? null;
+
+  const publishRelease = async () => {
+    const build = Number(relBuild);
+    if (!relVersion.trim() || !Number.isFinite(build) || build <= 0) {
+      setRelMsg('Version and a positive build number are required.');
+      return;
+    }
+    if (!relUrl.trim()) {
+      setRelMsg('A download URL (APK link from the EAS build page) is required.');
+      return;
+    }
+    setRelBusy(true); setRelMsg(null);
+    const { error: offError } = await supabase
+      .from('app_releases')
+      .update({ is_active: false })
+      .eq('platform', 'android')
+      .eq('is_active', true);
+    const { error } = offError ? { error: offError } : await supabase.from('app_releases').insert({
+      platform: 'android',
+      version: relVersion.trim(),
+      build_number: build,
+      notes: relNotes.trim(),
+      apk_url: relUrl.trim(),
+      min_build: relMin ? Number(relMin) : 0,
+      is_active: true,
+    });
+    setRelBusy(false);
+    setRelMsg(error ? error.message : `Release v${relVersion.trim()} (build ${build}) published — apps on older builds will prompt.`);
+    if (!error) { setRelVersion(''); setRelBuild(''); setRelMin(''); setRelUrl(''); setRelNotes(''); reload(); }
   };
 
   return (
@@ -62,6 +101,32 @@ export function Settings({ data, reload }: { data: AdminData; reload: () => void
           <p className="muted">Destructive actions are intentionally absent — pause instead of delete so the audit trail stays intact.</p>
         </Card>
       </div>
+      <Card title="App releases" subtitle="Publish a build to prompt users with What's new + download">
+        <div className="detail-grid">
+          <Detail label="Live release" value={latestRelease ? `v${latestRelease.version} · build ${latestRelease.build_number}` : '—'} />
+          <Detail label="Min build" value={latestRelease ? String(latestRelease.min_build) : '—'} />
+          <Detail label="Published" value={latestRelease ? new Date(latestRelease.created_at).toLocaleString('en-PH') : '—'} />
+          <Detail label="Releases" value={num(data.releases.length)} />
+        </div>
+        <div className="form-row">
+          <Field label="Version"><input className="input" value={relVersion} onChange={(e) => setRelVersion(e.target.value)} placeholder="0.2.0" /></Field>
+          <Field label="Build number"><input className="input" type="number" value={relBuild} onChange={(e) => setRelBuild(e.target.value)} placeholder="2" /></Field>
+          <Field label="Min build (force)"><input className="input" type="number" value={relMin} onChange={(e) => setRelMin(e.target.value)} placeholder="0 = optional" /></Field>
+          <Field label="APK download URL"><input className="input" value={relUrl} onChange={(e) => setRelUrl(e.target.value)} placeholder="https://expo.dev/artifacts/…" /></Field>
+        </div>
+        <Field label="What's new (one per line)"><textarea className="input" rows={3} value={relNotes} onChange={(e) => setRelNotes(e.target.value)} placeholder={'Faster rider tracking\nNew chat design'} /></Field>
+        <button type="button" className="btn btn-primary" disabled={relBusy} onClick={() => void publishRelease()}>{relBusy ? 'Publishing…' : 'Publish release'}</button>
+        {relMsg ? <p className="notice">{relMsg}</p> : null}
+        {data.releases.length > 0 ? (
+          <ul className="attention">
+            {data.releases.slice(0, 5).map((r) => (
+              <li key={r.id}>
+                <span><strong>v{r.version} · build {r.build_number}</strong><small>{r.is_active ? 'live' : 'retired'} · min {r.min_build} · {new Date(r.created_at).toLocaleString('en-PH')}</small></span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </Card>
     </div>
   );
 }

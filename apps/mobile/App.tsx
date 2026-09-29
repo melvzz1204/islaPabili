@@ -30,6 +30,7 @@ import OrdersScreen from './src/screens/OrdersScreen';
 import MessagesScreen from './src/screens/MessagesScreen';
 import ChatScreen from './src/screens/ChatScreen';
 import TrackScreen from './src/screens/TrackScreen';
+import { UpdatePrompt } from './src/components/UpdatePrompt';
 import NotificationsScreen from './src/screens/NotificationsScreen';
 import RiderGateScreen from './src/screens/RiderGateScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
@@ -223,6 +224,7 @@ export default function App() {
             <CartProvider>
               <NavigationContainer theme={navigationTheme}>
                 <Root />
+                <UpdatePrompt />
               </NavigationContainer>
             </CartProvider>
           </AuthModeProvider>
