@@ -12,6 +12,8 @@ coverage/
 .env.*
 !.env.example
 **/token.*
+google-services.json
+GoogleService-Info.plist
 
 # Tooling
 .turbo/
