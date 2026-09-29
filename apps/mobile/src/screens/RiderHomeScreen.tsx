@@ -35,6 +35,7 @@ import {
   sirenVibrate,
   stopVibration,
 } from '../lib/notify';
+import { invokePush } from '../lib/push';
 import { OrderMap, MARINDUQUE_CENTER, type LatLng } from '../maps/OrderMap';
 import { useRiderBroadcast } from '../maps/useRiderBroadcast';
 import { SoundSettingsForm } from '../components/SoundSettings';
@@ -334,6 +335,8 @@ export default function RiderHomeScreen() {
       message: next.to === 'completed' ? 'Delivered. Salamat!' : 'Status updated — customer notified.',
       type: 'success',
     });
+    // Wake the customer when their app is killed/backgrounded.
+    void invokePush(client, order.id, 'status');
     await Promise.all([loadMine(), loadHistory()]);
   };
 
@@ -1000,6 +1003,8 @@ function RiderMessagesView({
       showToast({ message: error.message, type: 'error' });
       return;
     }
+    // Wake the customer when their app is killed/backgrounded.
+    void invokePush(client, openId, 'message');
     await loadThread(openId);
     await refresh();
   };

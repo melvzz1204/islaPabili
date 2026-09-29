@@ -23,6 +23,7 @@ import {
 } from '@isla/ui';
 import { canChat, setOpenOrderId, type MessageRow } from '../messaging/chat';
 import { ChatComposer, ChatThread } from '../messaging/ChatThread';
+import { invokePush } from '../lib/push';
 import type { RootNavProp, RootStackScreen } from '../navigation/types';
 import { BottomNav, BOTTOM_NAV_HEIGHT } from '../components/BottomNav';
 
@@ -133,6 +134,8 @@ export default function ChatScreen({ route }: Props) {
       showToast({ message: error.message, type: 'error' });
       return;
     }
+    // Wake the other side when their app is killed/backgrounded.
+    void invokePush(client, orderId, 'message');
     await loadMessages();
   };
 

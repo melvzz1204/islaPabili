@@ -5,6 +5,7 @@ import * as Location from 'expo-location';
 import { TOWN_CENTERS, fareBreakdownLabel, fareConfigFromDefaults, type FareConfig, type Town } from '@isla/shared';
 import { useAuth } from '@isla/supabase';
 import { callRpc } from '../lib/rpc';
+import { invokePush } from '../lib/push';
 import { flatFallbackQuote, loadFareConfig, quoteTrip } from '../marketplace/fare';
 import {
   AppIcon,
@@ -233,6 +234,8 @@ export default function PabiliCreateScreen({ route }: Props) {
       type: (offered ?? 0) > 0 ? 'success' : 'error',
     });
     setFinding({ ...finding, offered: offered ?? 0, phase: 'searching' });
+    // Wake on-duty riders whose apps are killed/backgrounded.
+    if ((offered ?? 0) > 0) void invokePush(client, finding.orderId, 'pabili');
   };
 
   const cancelFinding = async () => {
@@ -379,6 +382,8 @@ export default function PabiliCreateScreen({ route }: Props) {
       });
       if (rpcError) throw rpcError;
       setSubmitting(false);
+      // Wake on-duty riders whose apps are killed/backgrounded.
+      if ((offered ?? 0) > 0) void invokePush(client, order.id, 'pabili');
       // Hand off to the full-screen finding moment. It stays until the
       // customer stops it or a rider accepts (realtime handoff above).
       setFinding({

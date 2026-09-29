@@ -12,6 +12,7 @@ import { ToastProvider } from './src/ui/Toast';
 import { CartProvider } from './src/marketplace/cart';
 import { AuthModeProvider, useAuthMode } from './src/lib/authMode';
 import { consumeCheckoutReturn } from './src/lib/checkoutReturn';
+import { registerPushToken } from './src/lib/push';
 import { useConversations, useIncomingMessageAlerts } from './src/messaging/chat';
 import { useOrderUpdateAlerts } from './src/lib/orderAlerts';
 import { initNotifications } from './src/lib/notify';
@@ -134,9 +135,18 @@ function LoadingGate() {
 }
 
 function Root() {
-  const { session, loading, profile, profileLoading } = useAuth();
+  const { client, session, loading, profile, profileLoading } = useAuth();
   const { mode, loaded: modeLoaded, loggedOut, setLoggedOut } = useAuthMode();
   const wasSession = useRef(false);
+  const pushRegistered = useRef<string | null>(null);
+
+  // Register this device for server-side wake-up pushes, once per sign-in.
+  useEffect(() => {
+    const uid = session?.user?.id ?? null;
+    if (!uid || pushRegistered.current === uid) return;
+    pushRegistered.current = uid;
+    void registerPushToken(client, uid);
+  }, [client, session]);
 
   // A rider logout parks on the sign-in page (not guest home) so logging
   // back in is one tap. Any fresh login clears the flag.

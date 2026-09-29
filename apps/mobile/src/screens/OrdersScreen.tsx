@@ -22,6 +22,7 @@ import {
 } from '@isla/ui';
 import { peso } from '../marketplace/data';
 import { callRpc } from '../lib/rpc';
+import { invokePush } from '../lib/push';
 import type { RootNavProp, TabScreen } from '../navigation/types';
 
 type Props = TabScreen<'Orders'>;
@@ -169,6 +170,7 @@ export default function OrdersScreen({}: Props) {
           : 'No riders on duty right now. Please retry again later.',
       type: (offered ?? 0) > 0 ? 'success' : 'error',
     });
+    if ((offered ?? 0) > 0) void invokePush(client, order.id, 'pabili');
     await load();
   };
 
