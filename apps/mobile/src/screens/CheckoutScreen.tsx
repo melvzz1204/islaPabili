@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Image, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { TOWN_LABELS, type Town } from '@isla/shared';
+import * as Location from 'expo-location';
+import { TOWN_CENTERS, fareBreakdownLabel, fareConfigFromDefaults, type FareConfig, TOWN_LABELS, type Town } from '@isla/shared';
 import { useAuth, type Database } from '@isla/supabase';
 import {
   AppIcon,
@@ -20,7 +21,8 @@ import {
   typography,
   useToast,
 } from '@isla/ui';
-import { mockDeliveryFee, peso } from '../marketplace/data';
+import { peso } from '../marketplace/data';
+import { loadFareConfig, quoteTrip, type Gps } from '../marketplace/fare';
 import { useCart } from '../marketplace/cart';
 import { requestCheckoutReturn } from '../lib/checkoutReturn';
 import { SingleTownPicker } from '../ui/TownPicker';
@@ -56,6 +58,7 @@ type OrderSummary = {
   fee: number;
   total: number;
   distanceKm: number;
+  feeEstimated: boolean;
   payLabel: string;
   name: string;
   phone: string;
@@ -94,10 +97,83 @@ export default function CheckoutScreen({}: Props) {
   const [summary, setSummary] = useState<OrderSummary | null>(null);
   const [finding, setFinding] = useState<Finding | null>(null);
   const [dutyCount, setDutyCount] = useState<number | null>(null);
+  const [fareConfig, setFareConfig] = useState<FareConfig>(() => fareConfigFromDefaults());
+  const [gps, setGps] = useState<Gps | null>(null);
+  const [pinning, setPinning] = useState(false);
+  const [merchantGps, setMerchantGps] = useState<Record<string, Gps | null>>({});
   const pulse = useRef(new Animated.Value(0)).current;
 
-  const { distanceKm, fee } = useMemo(() => mockDeliveryFee(), []);
+  // Live pricing rules from the admin console.
+  useEffect(() => {
+    void loadFareConfig(client).then(setFareConfig);
+  }, [client]);
+
+  // Store GPS per merchant so each store quotes its own real distance.
+  useEffect(() => {
+    const ids = [...new Set(lines.map((l) => l.merchantId).filter(Boolean))];
+    if (ids.length === 0) return;
+    let active = true;
+    void (async () => {
+      const { data } = await client.from('merchants').select('id, lat, lng').in('id', ids);
+      if (!active) return;
+      const map: Record<string, Gps | null> = {};
+      for (const row of (data ?? []) as { id: string; lat: number | null; lng: number | null }[]) {
+        map[row.id] = row.lat != null && row.lng != null ? { lat: row.lat, lng: row.lng } : null;
+      }
+      setMerchantGps(map);
+    })();
+    return () => {
+      active = false;
+    };
+  }, [client, lines]);
+
+  /** Per-store quotes: store GPS → customer GPS pin (or town centers). */
+  const groupQuotes = useMemo(() => {
+    const groups = new Map<string, typeof lines>();
+    for (const l of lines) {
+      const g = groups.get(l.merchantId) ?? [];
+      g.push(l);
+      groups.set(l.merchantId, g);
+    }
+    return [...groups.entries()].map(([merchantId, items]) => {
+      const itemCount = items.reduce((n, l) => n + l.qty, 0);
+      const pickup = merchantGps[merchantId] ?? (town ? TOWN_CENTERS[town] : null);
+      const dropoff = gps ?? (town ? TOWN_CENTERS[town] : null);
+      if (!pickup || !dropoff) return { merchantId, items, quote: null as null | ReturnType<typeof quoteTrip> };
+      const estimated = !merchantGps[merchantId] || !gps;
+      return { merchantId, items, quote: quoteTrip({ pickup, dropoff, itemCount, config: fareConfig, estimated }) };
+    });
+  }, [lines, merchantGps, town, gps, fareConfig]);
+
+  const fee = useMemo(
+    () => groupQuotes.reduce((n, g) => n + (g.quote?.fee ?? 0), 0),
+    [groupQuotes],
+  );
+  const distanceKm = useMemo(
+    () => groupQuotes.reduce((n, g) => Math.max(n, g.quote?.distanceKm ?? 0), 0),
+    [groupQuotes],
+  );
+  const feeEstimated = groupQuotes.some((g) => !g.quote || g.quote.estimated);
   const total = subtotal + fee;
+
+  const pinLocation = async () => {
+    setPinning(true);
+    try {
+      const perm = await Location.requestForegroundPermissionsAsync();
+      if (!perm.granted) {
+        showToast({ message: 'Location blocked — quoting from your town center.', type: 'error' });
+        return;
+      }
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      setGps({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+      showToast({ message: 'Location pinned — delivery fee now uses real distance.', type: 'success' });
+    } catch {
+      showToast({ message: 'Could not read your location.', type: 'error' });
+    } finally {
+      setPinning(false);
+    }
+  };
+
   const goShop = () => goToTab(navigation, 'Shop');
   const goOrders = () => goToTab(navigation, 'Orders');
   const uid = session?.user?.id ?? null;
@@ -284,7 +360,9 @@ export default function CheckoutScreen({}: Props) {
                 <Text style={styles.value}>{peso(summary.subtotal)}</Text>
               </View>
               <View style={styles.row}>
-                <Text style={styles.muted}>Delivery fee ({summary.distanceKm.toFixed(1)} km)</Text>
+                <Text style={styles.muted}>
+                  Delivery fee ({summary.distanceKm.toFixed(1)} km{summary.feeEstimated ? ', est.' : ''})
+                </Text>
                 <Text style={styles.value}>{peso(summary.fee)}</Text>
               </View>
               <View style={styles.row}>
@@ -399,16 +477,10 @@ export default function CheckoutScreen({}: Props) {
     }
     setPlacing(true);
     try {
-      const groups = new Map<string, typeof lines>();
-      for (const l of lines) {
-        const g = groups.get(l.merchantId) ?? [];
-        g.push(l);
-        groups.set(l.merchantId, g);
-      }
-      const feeShare = groups.size > 0 ? fee / groups.size : 0;
       const numbers: PlacedOrder[] = [];
-      for (const [merchantId, items] of groups) {
+      for (const { merchantId, items, quote } of groupQuotes) {
         const itemsTotal = items.reduce((n, l) => n + l.price * l.qty, 0);
+        const groupFee = quote?.fee ?? 0;
         const { data: order, error: orderError } = await client
           .from('orders')
           .insert({
@@ -416,13 +488,20 @@ export default function CheckoutScreen({}: Props) {
             merchant_id: merchantId || null,
             town,
             dropoff_address: address.trim(),
+            dropoff_lat: gps?.lat ?? null,
+            dropoff_lng: gps?.lng ?? null,
             dropoff_notes: `${name.trim()} · ${phone.trim()}`,
             fulfillment_mode: FULFILLMENT_MODE,
             status: 'awaiting_merchant',
             payment_method: PAY_DB[pay],
             est_items_total: itemsTotal,
-            total_delivery_fee: Math.round(feeShare * 100) / 100,
-            grand_total: Math.round((itemsTotal + feeShare) * 100) / 100,
+            distance_km: quote ? Math.round(quote.distanceKm * 100) / 100 : undefined,
+            base_fare: quote?.baseFare,
+            per_km_rate: quote ? Number(fareConfig.per_km_rate) : undefined,
+            distance_fee: quote ? Math.round(quote.distanceFee * 100) / 100 : undefined,
+            volume_surcharge: quote?.volumeSurcharge ?? 0,
+            total_delivery_fee: Math.round(groupFee * 100) / 100,
+            grand_total: Math.round((itemsTotal + groupFee) * 100) / 100,
           })
           .select('id, order_number')
           .single();
@@ -448,6 +527,7 @@ export default function CheckoutScreen({}: Props) {
         fee,
         total,
         distanceKm,
+        feeEstimated,
         payLabel: PAY_LABELS[pay],
         name: name.trim(),
         phone: phone.trim(),
@@ -541,6 +621,17 @@ export default function CheckoutScreen({}: Props) {
             onChangeText={setAddress}
             multiline
           />
+          <Button
+            title={gps ? 'Location pinned ✓ — tap to re-pin' : 'Use my exact location'}
+            variant="secondary"
+            loading={pinning}
+            onPress={() => void pinLocation()}
+          />
+          <Text style={styles.muted}>
+            {gps
+              ? 'Fee uses the real store-to-you distance.'
+              : 'Without a pin we estimate from your town center — fee updates when you pin.'}
+          </Text>
         </Card>
       </View>
 
@@ -578,9 +669,18 @@ export default function CheckoutScreen({}: Props) {
             <Text style={styles.value}>{peso(subtotal)}</Text>
           </View>
           <View style={styles.row}>
-            <Text style={styles.muted}>Delivery fee ({distanceKm.toFixed(1)} km)</Text>
+            <Text style={styles.muted}>
+              Delivery fee ({distanceKm.toFixed(1)} km{feeEstimated ? ', est.' : ''})
+            </Text>
             <Text style={styles.value}>{peso(fee)}</Text>
           </View>
+          {groupQuotes.map((g) =>
+            g.quote && groupQuotes.length > 1 ? (
+              <View key={g.merchantId} style={styles.row}>
+                <Text style={styles.muted}>· {fareBreakdownLabel(g.quote, peso)}</Text>
+              </View>
+            ) : null,
+          )}
           <View style={styles.row}>
             <Text style={styles.totalLabel}>Total</Text>
             <Text style={styles.total}>{peso(total)}</Text>

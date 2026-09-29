@@ -2,9 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import * as Location from 'expo-location';
-import type { Town } from '@isla/shared';
+import { TOWN_CENTERS, fareBreakdownLabel, fareConfigFromDefaults, type FareConfig, type Town } from '@isla/shared';
 import { useAuth } from '@isla/supabase';
 import { callRpc } from '../lib/rpc';
+import { flatFallbackQuote, loadFareConfig, quoteTrip } from '../marketplace/fare';
 import {
   AppIcon,
   AuthHeader,
@@ -23,7 +24,7 @@ import { TextField } from '../ui/TextField';
 import { SingleTownPicker } from '../ui/TownPicker';
 import { BottomNav, BOTTOM_NAV_HEIGHT } from '../components/BottomNav';
 import { goToTab, type RootNavProp, type RootStackScreen } from '../navigation/types';
-import { mockDeliveryFee, peso } from '../marketplace/data';
+import { peso } from '../marketplace/data';
 import { PABILI_COMBOS, type PabiliCombo } from '../marketplace/pabiliCombos';
 
 type Props = RootStackScreen<'PabiliCreate'>;
@@ -70,6 +71,9 @@ export default function PabiliCreateScreen({ route }: Props) {
     orderNumber: string;
     offered: number;
     town: string;
+    fee: number;
+    distanceKm: number;
+    feeDetail: string;
     phase: 'searching' | 'stopped' | 'found';
     rider?: {
       name: string;
@@ -80,7 +84,13 @@ export default function PabiliCreateScreen({ route }: Props) {
     } | null;
   } | null>(null);
   const [working, setWorking] = useState(false);
+  const [fareConfig, setFareConfig] = useState<FareConfig>(() => fareConfigFromDefaults());
   const pulse = useRef(new Animated.Value(0)).current;
+
+  // Live pricing rules from the admin console (base + per-km + tiers).
+  useEffect(() => {
+    void loadFareConfig(client).then(setFareConfig);
+  }, [client]);
 
   // Radar pulse while actively searching. Self-restarting JS-driver loop:
   // keeps going indefinitely (Animated.loop can stall on web) and freezes
@@ -241,15 +251,17 @@ export default function PabiliCreateScreen({ route }: Props) {
     goToTab(navigation, 'Orders');
   };
 
-  const { fee } = mockDeliveryFee();
+  const named = rows.filter((r) => r.name.trim());
+  const itemCount = named.reduce((n, r) => n + Math.max(1, Number.parseInt(r.qty, 10) || 1), 0);
+  // Pre-GPS estimate: flat fallback distance with live pricing rules + load tiers.
+  const estimate = flatFallbackQuote(itemCount, fareConfig);
+  const fee = estimate.fee;
 
   const setRow = (index: number, patch: Partial<ListRow>) =>
     setRows((prev) => prev.map((r, i) => (i === index ? { ...r, ...patch } : r)));
 
   const removeRow = (index: number) =>
     setRows((prev) => (prev.length > 1 ? prev.filter((_, i) => i !== index) : prev));
-
-  const named = rows.filter((r) => r.name.trim());
   const storeName =
     storePick === CUSTOM_STORE ? customStore.trim() : (storePick ?? '').trim();
 
@@ -318,6 +330,13 @@ export default function PabiliCreateScreen({ route }: Props) {
     }
     setSubmitting(true);
     try {
+      // Final quote: town-center shop area → customer GPS when pinned,
+      // otherwise the flat estimate shown on the form. Snapshot every input
+      // so the receipt is auditable.
+      const finalQuote = gps
+        ? quoteTrip({ pickup: TOWN_CENTERS[town], dropoff: gps, itemCount, config: fareConfig, estimated: false })
+        : flatFallbackQuote(itemCount, fareConfig);
+      const finalFee = finalQuote.fee;
       const { data: order, error: orderError } = await client
         .from('orders')
         .insert({
@@ -334,8 +353,13 @@ export default function PabiliCreateScreen({ route }: Props) {
           store_name: storeName || null,
           payment_method: 'cod',
           est_items_total: 0,
-          total_delivery_fee: fee,
-          grand_total: fee,
+          distance_km: Math.round(finalQuote.distanceKm * 100) / 100,
+          base_fare: finalQuote.baseFare,
+          per_km_rate: Number(fareConfig.per_km_rate),
+          distance_fee: Math.round(finalQuote.distanceFee * 100) / 100,
+          volume_surcharge: finalQuote.volumeSurcharge,
+          total_delivery_fee: finalFee,
+          grand_total: finalFee,
         })
         .select('id, order_number')
         .single();
@@ -362,6 +386,9 @@ export default function PabiliCreateScreen({ route }: Props) {
         orderNumber: order.order_number,
         offered: offered ?? 0,
         town: town!,
+        fee: finalFee,
+        distanceKm: finalQuote.distanceKm,
+        feeDetail: fareBreakdownLabel(finalQuote, peso),
         phase: 'searching',
       });
       return;
@@ -515,6 +542,7 @@ export default function PabiliCreateScreen({ route }: Props) {
           <Text style={styles.feeLabel}>Delivery fee (est.)</Text>
           <Text style={styles.feeValue}>{peso(fee)}</Text>
         </View>
+        <Text style={styles.finePrint}>{fareBreakdownLabel(estimate, peso)} · final quote pins to your GPS</Text>
         <Text style={styles.finePrint}>
           You pay the rider in cash: item costs + {peso(fee)} delivery. Keep GPS on so the rider finds you fast.
         </Text>
@@ -571,7 +599,10 @@ export default function PabiliCreateScreen({ route }: Props) {
                 ? `Notifying riders in ${finding.town} — first to accept wins.`
                 : `${dutyCount} rider${dutyCount === 1 ? '' : 's'} on duty in ${finding.town} · ${finding.offered} notified — first to accept wins.`}
             </Text>
-            <Text style={styles.findOrder}>{finding.orderNumber}</Text>
+            <Text style={styles.findOrder}>
+              {finding.orderNumber} · {peso(finding.fee)} delivery ({finding.distanceKm.toFixed(1)} km)
+            </Text>
+            <Text style={styles.findFeeDetail}>{finding.feeDetail}</Text>
             <Button
               title="Stop finding"
               variant="danger"
@@ -715,5 +746,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
     overflow: 'hidden',
   },
+  findFeeDetail: { ...typography.caption, color: colors.onPrimary, opacity: 0.75, textAlign: 'center' },
   findActions: { gap: spacing.sm, alignSelf: 'stretch' },
 });

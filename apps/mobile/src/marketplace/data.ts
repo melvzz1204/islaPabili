@@ -1,4 +1,4 @@
-import { FARE_DEFAULTS, shouldFilterTowns, TOWN_LABELS, type Town } from '@isla/shared';
+import { shouldFilterTowns, TOWN_LABELS, type Town } from '@isla/shared';
 import type { Database, Supabase } from '@isla/supabase';
 
 /** Live catalog types (Supabase) for the public guest marketplace. */
@@ -131,13 +131,6 @@ export function searchProducts(products: Product[], query: string): Product[] {
   const q = query.trim().toLowerCase();
   if (!q) return products;
   return products.filter((p) => `${p.name} ${p.description}`.toLowerCase().includes(q));
-}
-
-/** Simulated delivery fee using shared fare defaults + mock distance. */
-export function mockDeliveryFee(): { distanceKm: number; fee: number } {
-  const distanceKm = 3.2;
-  const extra = Math.max(0, distanceKm - FARE_DEFAULTS.baseKm);
-  return { distanceKm, fee: Math.round(FARE_DEFAULTS.baseFare + extra * FARE_DEFAULTS.perKmRate) };
 }
 
 export const peso = (n: number) =>
