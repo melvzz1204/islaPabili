@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Dimensions, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Dimensions, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { isAllTowns, isNoTowns, resolveOptedTowns, TOWN_LABELS, type Town } from '@isla/shared';
@@ -28,8 +28,16 @@ import {
 import { peso } from '../marketplace/data';
 import { canChat, setOpenOrderId, useConversations, useIncomingMessageAlerts, type MessageRow } from '../messaging/chat';
 import { ChatComposer, ChatEmptyState, ChatThread } from '../messaging/ChatThread';
+import {
+  CHANNEL_ORDERS,
+  getSoundSettings,
+  notifyLocal,
+  sirenVibrate,
+  stopVibration,
+} from '../lib/notify';
 import { OrderMap, MARINDUQUE_CENTER, type LatLng } from '../maps/OrderMap';
 import { useRiderBroadcast } from '../maps/useRiderBroadcast';
+import { SoundSettingsForm } from '../components/SoundSettings';
 
 type RiderStatusRow = Database['public']['Tables']['rider_status']['Row'];
 type PabiliOrder = Database['public']['Tables']['orders']['Row'];
@@ -77,6 +85,9 @@ export default function RiderHomeScreen() {
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [mapOrderId, setMapOrderId] = useState<string | null>(null);
   const [msgOrderId, setMsgOrderId] = useState<string | null>(null);
+  // Full-screen incoming-request takeover (request id, null = none showing).
+  const [overlayId, setOverlayId] = useState<string | null>(null);
+  const sirenFor = useRef<string | null>(null);
 
   // Live GPS broadcast while holding an active delivery — this is what the
   // customer watches on the Track screen.
@@ -185,6 +196,35 @@ export default function RiderHomeScreen() {
   useEffect(() => {
     void refreshStatus();
   }, [refreshStatus]);
+
+  // Incoming-request siren: the newest unseen offer takes over the screen
+  // with sound + insistent vibration, wherever the rider is in the app.
+  useEffect(() => {
+    const newest = incoming[0];
+    if (!newest || sirenFor.current === newest.request.id) return;
+    sirenFor.current = newest.request.id;
+    setOverlayId(newest.request.id);
+    void (async () => {
+      const prefs = await getSoundSettings();
+      if (prefs.sounds && prefs.riderRequest) {
+        if (prefs.vibrate) sirenVibrate();
+        await notifyLocal({
+          channel: CHANNEL_ORDERS,
+          title: `New pabili · #${newest.order.order_number}`,
+          body: `${TOWN_LABELS[newest.order.town]} · ${newest.items.length} items · ${peso(Number(newest.order.total_delivery_fee ?? 0))} fee — first to accept wins.`,
+          data: { orderId: newest.order.id, kind: 'pabili' },
+        });
+      }
+    })();
+  }, [incoming]);
+
+  // The takeover clears the moment its offer leaves the inbox.
+  useEffect(() => {
+    if (overlayId && !incoming.some((o) => o.request.id === overlayId)) {
+      setOverlayId(null);
+      stopVibration();
+    }
+  }, [incoming, overlayId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -358,6 +398,12 @@ export default function RiderHomeScreen() {
     setTab(t);
   };
 
+  const overlayOffer = overlayId ? (incoming.find((o) => o.request.id === overlayId) ?? null) : null;
+  const dismissOverlay = () => {
+    stopVibration();
+    setOverlayId(null);
+  };
+
   return (
     <Screen footer={<RiderTabBar tab={tab} onChange={changeTab} requestCount={incoming.length} />} footerHeight={RIDER_BAR_HEIGHT}>
       {mapOrderId ? (
@@ -428,12 +474,105 @@ export default function RiderHomeScreen() {
       >
         <Text style={styles.muted}>Use your rider login again any time to go back on duty.</Text>
       </SheetModal>
+      {overlayOffer ? (
+        <IncomingOverlay
+          offer={overlayOffer}
+          working={working === overlayOffer.order.id}
+          onAccept={() => {
+            stopVibration();
+            void respond(overlayOffer, 'accepted');
+          }}
+          onDecline={() => {
+            stopVibration();
+            void respond(overlayOffer, 'declined');
+          }}
+          onViewAll={() => {
+            dismissOverlay();
+            changeTab('requests');
+          }}
+        />
+      ) : null}
     </Screen>
   );
 }
 
-// --- Dashboard ---------------------------------------------------------------
+// --- Incoming takeover (full-screen accept / decline) --------------------------
 
+function IncomingOverlay({
+  offer,
+  working,
+  onAccept,
+  onDecline,
+  onViewAll,
+}: {
+  offer: IncomingOffer;
+  working: boolean;
+  onAccept: () => void;
+  onDecline: () => void;
+  onViewAll: () => void;
+}) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const remainMs = Math.max(0, +new Date(offer.request.expires_at) - now);
+  const mm = Math.floor(remainMs / 60000);
+  const ss = Math.floor((remainMs % 60000) / 1000);
+  const urgent = remainMs < 60_000;
+
+  return (
+    <Modal visible transparent animationType="fade" statusBarTranslucent onRequestClose={onViewAll}>
+      <View style={styles.takeover}>
+        <View style={styles.takeCard}>
+          <View style={styles.takeEyebrow}>
+            <View style={styles.takePulse} />
+            <Text style={styles.takeEyebrowText}>INCOMING PABILI · FIRST TO ACCEPT WINS</Text>
+          </View>
+          <Text style={styles.takeOrder}>#{offer.order.order_number}</Text>
+          <Text style={styles.takeAddr} numberOfLines={2}>
+            {TOWN_LABELS[offer.order.town]} · {offer.order.dropoff_address}
+          </Text>
+          {offer.order.store_name ? (
+            <Text style={styles.takeStore} numberOfLines={1}>
+              Buy at: {offer.order.store_name}
+            </Text>
+          ) : null}
+          <View style={styles.takeItems}>
+            {offer.items.slice(0, 4).map((it) => (
+              <Text key={it.id} style={styles.takeItem} numberOfLines={1}>
+                {it.quantity}× {it.name}
+              </Text>
+            ))}
+            {offer.items.length > 4 ? (
+              <Text style={styles.muted}>+{offer.items.length - 4} more</Text>
+            ) : null}
+          </View>
+          <View style={styles.takeFeeRow}>
+            <Text style={styles.takeFee}>{peso(Number(offer.order.total_delivery_fee ?? 0))}</Text>
+            <View style={[styles.takeTimer, urgent && styles.takeTimerUrgent]}>
+              <AppIcon name="timer" size={15} color={urgent ? colors.onPrimary : colors.warnDark} />
+              <Text style={[styles.takeTimerText, urgent && styles.takeTimerTextUrgent]}>
+                {mm}:{String(ss).padStart(2, '0')}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.takeActions}>
+            <View style={styles.takeFlex}>
+              <Button title="Accept" loading={working} onPress={onAccept} />
+            </View>
+            <Button title="Decline" variant="secondary" disabled={working} onPress={onDecline} />
+          </View>
+          <Pressable accessibilityRole="button" accessibilityLabel="View all requests" onPress={onViewAll}>
+            <Text style={styles.takeViewAll}>View all requests</Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+// --- Dashboard ---------------------------------------------------------------
 type Stats = { totalEarned: number; deliveries: number; days: { key: string; label: string; value: number }[] };
 
 function DashboardView({
@@ -1185,6 +1324,10 @@ function SettingsView({
           </View>
         </View>
       </Card>
+      <View style={styles.section}>
+        <SectionHeader title="Sounds & alerts" />
+        <SoundSettingsForm role="rider" />
+      </View>
       <Button title="Log out of rider mode" variant="secondary" onPress={onLogout} />
       <Text style={styles.meta}>Customer mode needs a fresh login after logout.</Text>
     </View>
@@ -1476,4 +1619,25 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   dropTitle: { ...typography.subhead, fontWeight: '700' },
+
+  // Incoming takeover
+  takeover: { flex: 1, backgroundColor: 'rgba(4, 32, 30, 0.97)', alignItems: 'center', justifyContent: 'center', padding: spacing.base },
+  takeCard: { width: '100%', maxWidth: 400, backgroundColor: colors.surface, borderRadius: radius.xl, padding: spacing.xl, gap: spacing.md, ...shadows.sheet },
+  takeEyebrow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs },
+  takePulse: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.accent },
+  takeEyebrowText: { ...typography.micro, color: colors.accentDark, fontWeight: '800', letterSpacing: 1 },
+  takeOrder: { ...typography.display, fontSize: 32, textAlign: 'center' },
+  takeAddr: { ...typography.body, textAlign: 'center' },
+  takeStore: { ...typography.subhead, fontWeight: '600', color: colors.primaryDeep, textAlign: 'center' },
+  takeItems: { gap: 2, backgroundColor: colors.surfaceSunken, borderRadius: radius.md, padding: spacing.md },
+  takeItem: { ...typography.body },
+  takeFeeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  takeFee: { ...typography.display, fontSize: 30, color: colors.successDark },
+  takeTimer: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.warnSoft, borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
+  takeTimerUrgent: { backgroundColor: colors.danger },
+  takeTimerText: { ...typography.label, fontWeight: '800', color: colors.warnDark },
+  takeTimerTextUrgent: { color: colors.onPrimary },
+  takeActions: { flexDirection: 'row', gap: spacing.sm },
+  takeFlex: { flex: 1 },
+  takeViewAll: { ...typography.label, color: colors.muted, fontWeight: '700', textAlign: 'center', padding: spacing.xs },
 });

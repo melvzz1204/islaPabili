@@ -13,6 +13,8 @@ import { CartProvider } from './src/marketplace/cart';
 import { AuthModeProvider, useAuthMode } from './src/lib/authMode';
 import { consumeCheckoutReturn } from './src/lib/checkoutReturn';
 import { useConversations, useIncomingMessageAlerts } from './src/messaging/chat';
+import { useOrderUpdateAlerts } from './src/lib/orderAlerts';
+import { initNotifications } from './src/lib/notify';
 import type { RootStackParamList, TabParamList } from './src/navigation/types';
 import AuthHomeScreen from './src/screens/auth/AuthHomeScreen';
 import LoginScreen from './src/screens/auth/LoginScreen';
@@ -30,6 +32,7 @@ import OrdersScreen from './src/screens/OrdersScreen';
 import MessagesScreen from './src/screens/MessagesScreen';
 import ChatScreen from './src/screens/ChatScreen';
 import TrackScreen from './src/screens/TrackScreen';
+import SettingsScreen from './src/screens/SettingsScreen';
 import { UpdatePrompt } from './src/components/UpdatePrompt';
 import NotificationsScreen from './src/screens/NotificationsScreen';
 import RiderGateScreen from './src/screens/RiderGateScreen';
@@ -87,6 +90,8 @@ function MainTabs({ guest }: { guest: boolean }) {
   const { conversations } = useConversations('customer');
   // Live banner for incoming rider messages, anywhere in the customer shell.
   useIncomingMessageAlerts('customer');
+  // Toast + tray + sound for every order status notification.
+  useOrderUpdateAlerts();
   const unread = guest ? 0 : conversations.filter((c) => c.unread).length;
   if (guest) {
     return (
@@ -198,6 +203,7 @@ function Root() {
       <Stack.Screen name="Notifications" component={NotificationsScreen} />
       <Stack.Screen name="Chat" component={ChatScreen} />
       <Stack.Screen name="Track" component={TrackScreen} />
+      <Stack.Screen name="Settings" component={SettingsScreen} />
       <Stack.Screen name="Rider" component={RiderGateScreen} />
       <Stack.Screen name="Onboarding" component={OnboardingScreen} />
       <Stack.Screen name="AuthHome" component={AuthHomeScreen} />
@@ -215,6 +221,10 @@ export default function App() {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
       document.title = 'IslaPabili';
     }
+  }, []);
+  // Notification channels + foreground banner/sound, once per launch.
+  useEffect(() => {
+    void initNotifications();
   }, []);
   return (
     <SafeAreaProvider>

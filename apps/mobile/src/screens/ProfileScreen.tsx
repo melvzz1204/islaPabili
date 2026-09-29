@@ -26,7 +26,8 @@ import {
   type AppIconName,
 } from '@isla/ui';
 import { TownPicker } from '../ui/TownPicker';
-import type { TabScreen } from '../navigation/types';
+import type { RootNavProp, TabScreen } from '../navigation/types';
+import { useNavigation } from '@react-navigation/native';
 
 type Props = TabScreen<'Profile'>;
 
@@ -39,6 +40,7 @@ const ACCOUNT_LINKS: { label: string; detail: string; icon: AppIconName }[] = [
 
 export default function ProfileScreen({ navigation }: Props) {
   const { client, session, profile, refreshProfile } = useAuth();
+  const rootNav = useNavigation<RootNavProp>();
   const { showToast } = useToast();
   const [confirmSignOut, setConfirmSignOut] = useState(false);
   const [riderExitOpen, setRiderExitOpen] = useState(false);
@@ -165,6 +167,18 @@ export default function ProfileScreen({ navigation }: Props) {
               onPress={() => showToast({ message: `${link.label} is coming soon.`, type: 'info' })}
             />
           ))}
+        </Card>
+      </View>
+
+      <View style={styles.section}>
+        <SectionHeader title="Notifications" />
+        <Card variant="flat" style={styles.listCard} padded={false}>
+          <ListRow
+            icon="bell"
+            title="Sounds & alerts"
+            subtitle="Chat, order updates, vibration"
+            onPress={() => rootNav.navigate('Settings')}
+          />
         </Card>
       </View>
 

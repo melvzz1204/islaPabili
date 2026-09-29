@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth, type Database } from '@isla/supabase';
 import { useToast } from '@isla/ui';
+import { CHANNEL_CHAT, blip, getSoundSettings, notifyLocal } from '../lib/notify';
 
 export type OrderRow = Database['public']['Tables']['orders']['Row'];
 export type MessageRow = Database['public']['Tables']['order_messages']['Row'];
@@ -159,6 +160,16 @@ export function useIncomingMessageAlerts(role: 'customer' | 'rider') {
           const name = (person as { full_name?: string } | null)?.full_name?.trim() || 'New message';
           const snippet = row.body.length > 80 ? `${row.body.slice(0, 80)}…` : row.body;
           showToast({ message: `${name} · #${o.order_number}: ${snippet}`, type: 'success', duration: 4200 });
+          const prefs = await getSoundSettings();
+          if (prefs.sounds && prefs.chat) {
+            if (prefs.vibrate) blip();
+            await notifyLocal({
+              channel: CHANNEL_CHAT,
+              title: `${name} · #${o.order_number}`,
+              body: snippet,
+              data: { orderId: row.order_id, kind: 'message' },
+            });
+          }
         })();
       })
       .subscribe();

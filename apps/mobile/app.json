@@ -32,6 +32,13 @@
       "expo-image-picker",
       "expo-web-browser",
       [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#065F59"
+        }
+      ],
+      [
         "expo-location",
         {
           "locationAlwaysAndWhenInUsePermission": "IslaPabili uses your location to track deliveries live.",
