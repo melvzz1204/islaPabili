@@ -234,6 +234,19 @@ select.input { width: auto; }
 .profile-id { flex: 1; min-width: 0; }
 .profile-id strong { display: block; font-size: 15px; }
 .profile-id small { color: var(--mut); font-size: 11px; }
+.confirm-row { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+.confirm-row .input { max-width: 180px; }
+
+/* ---------- conversation thread ---------- */
+.conv { display: flex; flex-direction: column; gap: 10px; }
+.conv-msg { background: #f6fbfa; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; max-width: 85%; align-self: flex-start; }
+.conv-msg.conv-rider { background: #fff7ed; align-self: flex-end; }
+.conv-meta { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.conv-meta small { color: var(--mut); margin-left: auto; font-size: 11px; }
+.conv-role { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; border-radius: 999px; padding: 2px 8px; }
+.conv-role.customer { background: #e6f6f4; color: #0b7c72; }
+.conv-role.rider { background: #ffedd5; color: #9a3412; }
+.conv-body { margin: 6px 0 0; font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
 
 /* ---------- overlay / auth / misc ---------- */
 .overlay { position: fixed; inset: 0; background: rgba(11, 36, 36, 0.5); backdrop-filter: blur(3px); display: flex; align-items: flex-end; justify-content: center; z-index: 60; }

@@ -5,6 +5,7 @@ import { merchantById, profileById } from '../lib/adminData';
 import { peso } from '../lib/currency';
 import { formatDateTime } from '../lib/format';
 import { Badge, Card, Detail, Empty, Modal, SearchInput, Segmented, Skeleton, statusTone } from '../components/ui';
+import { ConversationThread } from '../components/conversation';
 import type { Order } from '../lib/adminData';
 
 const STATUSES = ['all', 'live', 'pending_dispatch', 'awaiting_merchant', 'preparing', 'ready', 'in_transit', 'completed', 'cancelled'] as const;
@@ -18,8 +19,9 @@ export function Orders({ data, loading }: { data: AdminData; loading: boolean })
 
   const counts = useMemo(() => {
     const live = data.orders.filter((o) => !['completed', 'cancelled', 'failed'].includes(o.status)).length;
-    return { all: data.orders.length, live };
-  }, [data.orders]);
+    const withChat = new Set(data.orderMessages.map((m) => m.order_id)).size;
+    return { all: data.orders.length, live, withChat };
+  }, [data.orders, data.orderMessages]);
 
   const visible = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -44,7 +46,7 @@ export function Orders({ data, loading }: { data: AdminData; loading: boolean })
         <div>
           <p className="eyebrow">Operations · order book</p>
           <h1 className="hero-title">Orders</h1>
-          <p className="hero-sub">{counts.live} live · {counts.all} total in the last 600. Click any row for the full trail.</p>
+          <p className="hero-sub">{counts.live} live · {counts.all} total in the last 600 · {counts.withChat} with chat. Click any row for the full trail.</p>
         </div>
         <SearchInput value={q} onChange={setQ} placeholder="Search order no., customer, address…" />
       </div>
@@ -75,6 +77,7 @@ export function Orders({ data, loading }: { data: AdminData; loading: boolean })
                 {visible.slice(0, 80).map((o) => {
                   const c = profileById(data.profiles, o.customer_id);
                   const m = merchantById(data.merchants, o.merchant_id);
+                  const chatCount = data.orderMessages.filter((msg) => msg.order_id === o.id).length;
                   return (
                     <tr key={o.id} className="rowlink" onClick={() => setSelected(o)}>
                       <td><strong>{o.order_number}</strong><small>{formatDateTime(o.created_at)} · {TOWN_LABELS[o.town as keyof typeof TOWN_LABELS] ?? o.town}</small></td>
@@ -82,7 +85,7 @@ export function Orders({ data, loading }: { data: AdminData; loading: boolean })
                       <td>{o.is_custom_list ? 'Custom pabili' : (m?.name ?? '—')}<small>{o.payment_method.toUpperCase()} · {o.fulfillment_mode.replaceAll('_', ' ')}</small></td>
                       <td><strong>{peso(o.grand_total)}</strong><small>fee {peso(o.total_delivery_fee)}</small></td>
                       <td><Badge tone={statusTone(o.status)}>{o.status.replaceAll('_', ' ')}</Badge></td>
-                      <td><span className="go">→</span></td>
+                      <td><span className="go">{chatCount > 0 ? `💬${chatCount} →` : '→'}</span></td>
                     </tr>
                   );
                 })}
@@ -107,6 +110,7 @@ export function OrderDetail({ data, order }: { data: AdminData; order: Order }) 
   const rider = profileById(data.profiles, order.rider_id);
   const merchant = merchantById(data.merchants, order.merchant_id);
   const items = data.orderItems.filter((i) => i.order_id === order.id);
+  const messageCount = data.orderMessages.filter((m) => m.order_id === order.id).length;
   return (
     <div className="stack">
       <div className="detail-grid">
@@ -134,6 +138,10 @@ export function OrderDetail({ data, order }: { data: AdminData; order: Order }) 
             ))}
           </ul>
         )}
+      </div>
+      <div className="panel-soft">
+        <h4>Conversation ({messageCount})</h4>
+        <ConversationThread data={data} orderId={order.id} />
       </div>
       <div className="timeline">
         {[

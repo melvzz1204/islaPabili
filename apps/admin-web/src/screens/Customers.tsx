@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { TOWN_LABELS } from '@isla/shared';
 import type { AdminData, Profile } from '../lib/adminData';
 import { profileById } from '../lib/adminData';
@@ -12,7 +12,12 @@ export function Customers({ data, loading, reload }: { data: AdminData; loading:
   const [q, setQ] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [adminId, setAdminId] = useState<string | null>(null);
   const selected = data.profiles.find((p) => p.id === selectedId && p.role === 'customer') ?? null;
+
+  useEffect(() => {
+    void supabase.auth.getUser().then(({ data }) => setAdminId(data.user?.id ?? null));
+  }, []);
 
   const rows = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -30,6 +35,15 @@ export function Customers({ data, loading, reload }: { data: AdminData; loading:
     setBusy(id);
     await supabase.from('profiles').update({ is_active: next }).eq('id', id);
     setBusy(null);
+    reload();
+  };
+
+  const remove = async (id: string) => {
+    setBusy(id);
+    const { error } = await supabase.from('profiles').delete().eq('id', id);
+    setBusy(null);
+    if (error) throw new Error(error.message);
+    setSelectedId(null);
     reload();
   };
 
@@ -88,9 +102,11 @@ export function Customers({ data, loading, reload }: { data: AdminData; loading:
             customer={selected}
             data={data}
             busy={busy === selected.id}
+            isSelf={adminId === selected.id}
             onToggle={() => void toggle(selected.id, !selected.is_active).then(() => {
               if (!selected.is_active) setSelectedId(null);
             })}
+            onDelete={() => remove(selected.id)}
           />
         </Modal>
       ) : null}
@@ -102,12 +118,16 @@ function CustomerFile({
   customer,
   data,
   busy,
+  isSelf,
   onToggle,
+  onDelete,
 }: {
   customer: Profile;
   data: AdminData;
   busy: boolean;
+  isSelf: boolean;
   onToggle: () => void;
+  onDelete: () => Promise<void>;
 }) {
   const orders = useMemo(
     () => data.orders.filter((o) => o.customer_id === customer.id),
@@ -117,6 +137,11 @@ function CustomerFile({
     () => data.ratings.filter((r) => r.customer_id === customer.id),
     [data.ratings, customer.id],
   );
+  const orderIds = useMemo(() => new Set(orders.map((o) => o.id)), [orders]);
+  const messages = useMemo(
+    () => data.orderMessages.filter((m) => orderIds.has(m.order_id)).slice(0, 10),
+    [data.orderMessages, orderIds],
+  );
   const done = orders.filter((o) => o.status === 'completed').length;
   const cancelled = orders.filter((o) => o.status === 'cancelled' || o.status === 'failed').length;
   const active = orders.filter((o) =>
@@ -124,6 +149,9 @@ function CustomerFile({
   ).length;
   const rating = avgRating(ratings);
   const initial = (customer.full_name || customer.username || '?').charAt(0).toUpperCase();
+  const [confirming, setConfirming] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   return (
     <div className="stack">
@@ -185,8 +213,32 @@ function CustomerFile({
         )}
       </Card>
 
-      <Card title="Ratings given" subtitle="Reviews this customer left for riders">
-        {ratings.length === 0 ? (
+      <Card title="Recent messages" subtitle="Rider–customer chat across this account's orders">
+        {messages.length === 0 ? (
+          <Empty icon="💬" title="No messages yet" body="Chat threads appear here once a rider is assigned." />
+        ) : (
+          <ul className="attention">
+            {messages.map((m) => {
+              const sender = profileById(data.profiles, m.sender_id);
+              const order = data.orders.find((o) => o.id === m.order_id);
+              const isRider = sender?.role === 'rider';
+              return (
+                <li key={m.id}>
+                  <span className="stars">{isRider ? '🛵' : '👤'}</span>
+                  <span>
+                    <strong>{sender?.full_name || sender?.username || '—'} <small>· {isRider ? 'Rider' : 'Customer'}</small></strong>
+                    <small>{m.body.length > 140 ? `${m.body.slice(0, 140)}…` : m.body}</small>
+                    <small>{order ? `#${order.order_number} · ` : ''}{formatDateTime(m.created_at)}</small>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        <p className="muted">Full threads live under each order — open Orders and select a row with 💬.</p>
+      </Card>
+
+      <Card title="Ratings given" subtitle="Reviews this customer left for riders">        {ratings.length === 0 ? (
           <Empty icon="★" title="No reviews yet" body="Ratings appear here after completed deliveries." />
         ) : (
           <ul className="attention">
@@ -204,6 +256,44 @@ function CustomerFile({
               );
             })}
           </ul>
+        )}
+      </Card>
+
+      <Card title="Danger zone" subtitle="Irreversible account removal">
+        {isSelf ? (
+          <p className="muted">You cannot delete your own admin account.</p>
+        ) : !confirming ? (
+          <>
+            <p className="muted">Permanently deletes this profile plus all of its orders, ratings and history. Their login will stop working. Blocking is reversible — deletion is not.</p>
+            <button type="button" className="btn btn-danger btn-sm" onClick={() => { setConfirming(true); setConfirmText(''); setDeleteError(null); }}>
+              Delete account…
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="muted">Type <strong>DELETE</strong> to permanently remove <strong>{customer.full_name || customer.username || 'this account'}</strong> ({num(orders.length)} orders, {num(ratings.length)} ratings).</p>
+            <div className="confirm-row">
+              <input
+                className="input"
+                value={confirmText}
+                onChange={(e) => setConfirmText(e.target.value)}
+                placeholder="DELETE"
+                autoComplete="off"
+              />
+              <button
+                type="button"
+                className="btn btn-danger btn-sm"
+                disabled={busy || confirmText.trim() !== 'DELETE'}
+                onClick={() => void onDelete().catch((e) => setDeleteError(e instanceof Error ? e.message : 'Delete failed.'))}
+              >
+                {busy ? 'Deleting…' : 'Confirm delete'}
+              </button>
+              <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={() => setConfirming(false)}>
+                Cancel
+              </button>
+            </div>
+            {deleteError ? <p className="banner-error" role="alert">{deleteError}</p> : null}
+          </>
         )}
       </Card>
     </div>
