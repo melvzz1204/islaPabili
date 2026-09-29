@@ -27,6 +27,8 @@ export const colors = {
   surface: '#FFFFFF',
   surfaceSunken: '#F1F3F6',
   surfaceMuted: '#F9FAFB',
+  // Warm chat canvas — message thread backdrop.
+  chatCanvas: '#E9E3D7',
 
   // Text
   text: '#0B1220',

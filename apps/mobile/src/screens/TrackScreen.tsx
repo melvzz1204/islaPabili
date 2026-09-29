@@ -1,37 +1,33 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Linking, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth, type Database } from '@isla/supabase';
-import {
-  AppIcon,
-  Card,
-  EmptyState,
-  Screen,
-  ScreenHeader,
-  colors,
-  radius,
-  spacing,
-  typography,
-  useToast,
-} from '@isla/ui';
-import { OrderMap, MARINDUQUE_CENTER, type LatLng } from '../maps/OrderMap';
+import { AppIcon, EmptyState, colors, radius, shadows, spacing, typography, useToast } from '@isla/ui';
+import { OrderMap, MARINDUQUE_CENTER, type LatLng, type MapActions } from '../maps/OrderMap';
 import { formatDistance, haversineKm } from '../lib/geo';
 import type { RootNavProp, RootStackScreen } from '../navigation/types';
-import { BottomNav, BOTTOM_NAV_HEIGHT } from '../components/BottomNav';
 
 type OrderRow = Database['public']['Tables']['orders']['Row'];
 type RiderStatus = Database['public']['Tables']['rider_status']['Row'];
 type Props = RootStackScreen<'Track'>;
 
+/**
+ * Full-screen live tracking: the map fills the entire display with a
+ * floating back/order pill on top, the search bar below it, and a rider
+ * bottom sheet (message · call · fit) over the map.
+ */
 export default function TrackScreen({ route }: Props) {
   const { orderId } = route.params;
   const navigation = useNavigation<RootNavProp>();
+  const insets = useSafeAreaInsets();
   const { client } = useAuth();
   const { showToast } = useToast();
   const [order, setOrder] = useState<OrderRow | null>(null);
   const [riderLive, setRiderLive] = useState<LatLng | null>(null);
   const [riderName, setRiderName] = useState('Your rider');
   const [riderPhone, setRiderPhone] = useState<string | null>(null);
+  const mapActions = useRef<MapActions | null>(null);
 
   const loadOrder = useCallback(async () => {
     const { data } = await client.from('orders').select('*').eq('id', orderId).maybeSingle();
@@ -98,65 +94,196 @@ export default function TrackScreen({ route }: Props) {
     void Linking.openURL(`tel:${riderPhone}`);
   };
 
-  return (
-    <Screen scroll={false} footer={<BottomNav />} footerHeight={BOTTOM_NAV_HEIGHT} contentStyle={styles.fill}>
-      <ScreenHeader
-        title={order ? `Tracking #${order.order_number}` : 'Tracking'}
-        subtitle={order ? order.status.replace(/_/g, ' ') : undefined}
-        onBack={() => navigation.goBack()}
-      />
-      {!order ? (
-        <EmptyState title="Loading order…" message="Fetching the latest delivery position." icon="route" />
-      ) : !order.rider_id ? (
+  if (!order || !order.rider_id) {
+    return (
+      <View style={[styles.fill, styles.center, { paddingTop: insets.top }]}>
+        <View style={styles.topOverlay}>
+          <BackFab onBack={() => navigation.goBack()} />
+        </View>
         <EmptyState
-          title="No rider yet"
-          message="Live tracking starts as soon as a rider accepts your order."
-          icon="rider"
+          title={!order ? 'Loading order…' : 'No rider yet'}
+          message={
+            !order
+              ? 'Fetching the latest delivery position.'
+              : 'Live tracking starts as soon as a rider accepts your order.'
+          }
+          icon="route"
         />
-      ) : (
-        <>
-          <Card variant="tinted" style={styles.statusCard}>
-            <View style={styles.riderIcon}>
-              <AppIcon name="rider" size={22} color={colors.primaryDeep} />
-            </View>
-            <View style={styles.statusText}>
-              <Text style={styles.riderName} numberOfLines={1}>
-                {riderName}
-              </Text>
-              <Text style={styles.statusSub} numberOfLines={1}>
-                {distance ? `${distance} away · ` : ''}{order.status.replace(/_/g, ' ')}
-              </Text>
-            </View>
-          </Card>
-          <View style={styles.mapBox}>
-            <OrderMap
-              self={dropoff ?? MARINDUQUE_CENTER}
-              selfLabel="Drop-off"
-              other={riderLive}
-              otherLabel={riderName}
-              onMessagePress={() => navigation.navigate('Chat', { orderId })}
-              onCallPress={callRider}
-            />
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.fill}>
+      <OrderMap
+        self={dropoff ?? MARINDUQUE_CENTER}
+        selfLabel="Drop-off"
+        other={riderLive}
+        otherLabel={riderName}
+        showToolbar={false}
+        searchTop={insets.top + 68}
+        actionsRef={mapActions}
+      />
+
+      {/* Floating top: back + order pill */}
+      <View style={[styles.topOverlay, { top: insets.top + 10 }]}>
+        <BackFab onBack={() => navigation.goBack()} />
+        <View style={styles.orderPill}>
+          <View style={styles.liveDot} />
+          <Text style={styles.orderPillText} numberOfLines={1}>
+            #{order.order_number} · {order.status.replace(/_/g, ' ')}
+          </Text>
+        </View>
+      </View>
+
+      {/* Rider bottom sheet */}
+      <View style={[styles.sheet, { bottom: insets.bottom + 14 }]}>
+        <View style={styles.riderRow}>
+          <View style={styles.riderAvatar}>
+            <Text style={styles.riderInitial}>{riderName.charAt(0).toUpperCase()}</Text>
           </View>
-        </>
-      )}
-    </Screen>
+          <View style={styles.riderText}>
+            <Text style={styles.riderName} numberOfLines={1}>
+              {riderName}
+            </Text>
+            <Text style={styles.riderSub} numberOfLines={1}>
+              {distance ? `${distance} away · ` : ''}{order.status.replace(/_/g, ' ')}
+            </Text>
+          </View>
+          <View style={styles.etaPill}>
+            <AppIcon name="rider" size={15} color={colors.primaryDeep} />
+            <Text style={styles.etaText}>{distance ?? '…'}</Text>
+          </View>
+        </View>
+        <View style={styles.actionRow}>
+          <SheetAction label="Message" icon="message" primary onPress={() => navigation.navigate('Chat', { orderId })} />
+          <SheetAction label="Call" icon="call" onPress={callRider} />
+          <SheetAction label="Fit map" icon="route" onPress={() => mapActions.current?.fit()} />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function BackFab({ onBack }: { onBack: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Back"
+      onPress={onBack}
+      hitSlop={8}
+      style={({ pressed }) => [styles.backFab, pressed && styles.pressed]}
+    >
+      <AppIcon name="back" size={20} color={colors.text} />
+    </Pressable>
+  );
+}
+
+function SheetAction({
+  label,
+  icon,
+  primary,
+  onPress,
+}: {
+  label: string;
+  icon: 'message' | 'call' | 'route';
+  primary?: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      style={({ pressed }) => [styles.action, primary && styles.actionPrimary, pressed && styles.pressed]}
+    >
+      <AppIcon name={icon} size={18} color={primary ? colors.onPrimary : colors.primaryDeep} />
+      <Text style={[styles.actionLabel, primary && styles.actionLabelPrimary]}>{label}</Text>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  fill: { flex: 1 },
-  statusCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md },
-  riderIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.md,
+  fill: { flex: 1, backgroundColor: '#e8f0ec' },
+  center: { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg },
+
+  topOverlay: {
+    position: 'absolute',
+    left: spacing.base,
+    right: spacing.base,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  backFab: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
+    ...shadows.raised,
   },
-  statusText: { flex: 1, gap: 1 },
+  orderPill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.surface,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.base,
+    height: 46,
+    ...shadows.raised,
+  },
+  liveDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: colors.success },
+  orderPillText: { ...typography.label, fontWeight: '700', textTransform: 'capitalize', flex: 1 },
+
+  sheet: {
+    position: 'absolute',
+    left: spacing.base,
+    right: spacing.base,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    padding: spacing.base,
+    gap: spacing.md,
+    ...shadows.sheet,
+  },
+  riderRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  riderAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: colors.primaryDeep,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  riderInitial: { ...typography.heading, color: colors.onPrimary },
+  riderText: { flex: 1, gap: 1 },
   riderName: { ...typography.subhead, fontWeight: '700' },
-  statusSub: { ...typography.caption, textTransform: 'capitalize' },
-  mapBox: { flex: 1, borderRadius: radius.lg, overflow: 'hidden' },
+  riderSub: { ...typography.caption, textTransform: 'capitalize' },
+  etaPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.primaryTint,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+  },
+  etaText: { ...typography.micro, color: colors.primaryDeep, fontWeight: '800' },
+  actionRow: { flexDirection: 'row', gap: spacing.sm },
+  action: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.surfaceSunken,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.md,
+  },
+  actionPrimary: { backgroundColor: colors.primaryDeep },
+  actionLabel: { ...typography.label, fontWeight: '700', color: colors.primaryDeep },
+  actionLabelPrimary: { color: colors.onPrimary },
+  pressed: { opacity: 0.7 },
 });

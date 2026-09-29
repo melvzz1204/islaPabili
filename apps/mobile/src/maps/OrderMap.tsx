@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import * as Location from 'expo-location';
@@ -11,6 +11,9 @@ export type { LatLng };
 /** Boac town plaza — sensible default view over Marinduque. */
 export const MARINDUQUE_CENTER: LatLng = { lat: 13.4485, lng: 121.8397 };
 
+/** Imperative camera controls for embedding screens (bottom sheets, etc.). */
+export type MapActions = { fit: () => void; locate: () => void };
+
 type Props = {
   self: LatLng | null;
   other: LatLng | null;
@@ -18,6 +21,12 @@ type Props = {
   otherLabel?: string;
   initialCenter?: LatLng;
   showSearch?: boolean;
+  /** Offset the floating search bar (e.g. below a screen overlay header). */
+  searchTop?: number;
+  /** Hide the built-in toolbar when the host renders its own actions. */
+  showToolbar?: boolean;
+  /** Host access to fit/locate without the built-in toolbar. */
+  actionsRef?: MutableRefObject<MapActions | null>;
   onMessagePress?: () => void;
   onCallPress?: () => void;
 };
@@ -34,6 +43,9 @@ export function OrderMap({
   otherLabel = 'Rider',
   initialCenter,
   showSearch = true,
+  searchTop,
+  showToolbar = true,
+  actionsRef,
   onMessagePress,
   onCallPress,
 }: Props) {
@@ -104,6 +116,8 @@ export function OrderMap({
     setQuery(r.display_name.split(',').slice(0, 2).join(','));
   };
 
+  const fitAll = () => run('window.IslaMap.fitAll();true;');
+
   const locateMe = async () => {
     setLocating(true);
     try {
@@ -117,6 +131,10 @@ export function OrderMap({
       setLocating(false);
     }
   };
+
+  useEffect(() => {
+    if (actionsRef) actionsRef.current = { fit: fitAll, locate: () => void locateMe() };
+  }, []);
 
   return (
     <View style={styles.wrap}>
@@ -137,7 +155,7 @@ export function OrderMap({
       />
 
       {showSearch ? (
-        <View style={styles.searchFloat}>
+        <View style={[styles.searchFloat, searchTop != null && { top: searchTop }]}>
           <View style={styles.searchBar}>
             <AppIcon name="search" size={18} color={colors.faint} />
             <TextInput
@@ -184,19 +202,21 @@ export function OrderMap({
         </View>
       ) : null}
 
-      <View style={styles.toolbarFloat} pointerEvents="box-none">
-        <View style={styles.toolbar}>
-          <ToolButton
-            label={locating ? 'Locating…' : 'Locate me'}
-            icon="locate"
-            onPress={() => void locateMe()}
-          />
-          <ToolButton label="Fit both" icon="route" onPress={() => run('window.IslaMap.fitAll();true;')} />
-          <ToolButton label="Map style" icon="layers" onPress={() => run('window.IslaMap.toggleLayer();true;')} />
-          {onMessagePress ? <ToolButton label="Message" icon="message" onPress={onMessagePress} /> : null}
-          {onCallPress ? <ToolButton label="Call" icon="call" onPress={onCallPress} /> : null}
+      {showToolbar ? (
+        <View style={styles.toolbarFloat} pointerEvents="box-none">
+          <View style={styles.toolbar}>
+            <ToolButton
+              label={locating ? 'Locating…' : 'Locate me'}
+              icon="locate"
+              onPress={() => void locateMe()}
+            />
+            <ToolButton label="Fit both" icon="route" onPress={fitAll} />
+            <ToolButton label="Map style" icon="layers" onPress={() => run('window.IslaMap.toggleLayer();true;')} />
+            {onMessagePress ? <ToolButton label="Message" icon="message" onPress={onMessagePress} /> : null}
+            {onCallPress ? <ToolButton label="Call" icon="call" onPress={onCallPress} /> : null}
+          </View>
         </View>
-      </View>
+      ) : null}
     </View>
   );
 }

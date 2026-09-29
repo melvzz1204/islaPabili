@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { Dimensions, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { isAllTowns, isNoTowns, resolveOptedTowns, TOWN_LABELS, type Town } from '@isla/shared';
@@ -1355,5 +1355,9 @@ const styles = StyleSheet.create({
   msgName: { ...typography.subhead, fontWeight: '700' },
   msgUnread: { color: colors.text, fontWeight: '700' },
   unreadDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: colors.primary },
-  mapBox: { height: 440, borderRadius: radius.lg, overflow: 'hidden' },
+  mapBox: {
+    height: Math.max(480, Math.round(Dimensions.get('window').height * 0.62)),
+    borderRadius: radius.lg,
+    overflow: 'hidden',
+  },
 });
