@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Dimensions, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { Dimensions, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { isAllTowns, isNoTowns, resolveOptedTowns, TOWN_LABELS, type Town } from '@isla/shared';
@@ -26,7 +26,8 @@ import {
   type AppIconName,
 } from '@isla/ui';
 import { peso } from '../marketplace/data';
-import { canChat, useConversations, type MessageRow } from '../messaging/chat';
+import { canChat, setOpenOrderId, useConversations, useIncomingMessageAlerts, type MessageRow } from '../messaging/chat';
+import { ChatComposer, ChatEmptyState, ChatThread } from '../messaging/ChatThread';
 import { OrderMap, MARINDUQUE_CENTER, type LatLng } from '../maps/OrderMap';
 import { useRiderBroadcast } from '../maps/useRiderBroadcast';
 
@@ -75,10 +76,13 @@ export default function RiderHomeScreen() {
   const [working, setWorking] = useState<string | null>(null);
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [mapOrderId, setMapOrderId] = useState<string | null>(null);
+  const [msgOrderId, setMsgOrderId] = useState<string | null>(null);
 
   // Live GPS broadcast while holding an active delivery — this is what the
   // customer watches on the Track screen.
   useRiderBroadcast(mine.length > 0);
+  // Live banner for incoming customer messages, anywhere in the rider shell.
+  useIncomingMessageAlerts('rider');
 
   // Prefer the recorded operating area; fall back to the customer's opted-in
   // towns so a rider who has not applied yet still shows something sensible.
@@ -347,12 +351,24 @@ export default function RiderHomeScreen() {
     return { totalEarned, deliveries: history.length, days };
   }, [history]);
 
+  // Switching tabs always leaves the full-screen map — otherwise the tap
+  // looks dead because the map keeps covering the tab content.
+  const changeTab = (t: RiderTab) => {
+    setMapOrderId(null);
+    setTab(t);
+  };
+
   return (
-    <Screen footer={<RiderTabBar tab={tab} onChange={setTab} requestCount={incoming.length} />} footerHeight={RIDER_BAR_HEIGHT}>
+    <Screen footer={<RiderTabBar tab={tab} onChange={changeTab} requestCount={incoming.length} />} footerHeight={RIDER_BAR_HEIGHT}>
       {mapOrderId ? (
         <RiderTrackView
           order={mine.find((o) => o.id === mapOrderId) ?? null}
           onBack={() => setMapOrderId(null)}
+          onMessage={(orderId) => {
+            setMapOrderId(null);
+            setMsgOrderId(orderId);
+            setTab('messages');
+          }}
         />
       ) : tab === 'dashboard' ? (
         <DashboardView
@@ -386,7 +402,7 @@ export default function RiderHomeScreen() {
           onOpenMap={(order) => setMapOrderId(order.id)}
         />
       ) : tab === 'messages' ? (
-        <RiderMessagesView />
+        <RiderMessagesView openId={msgOrderId} onOpenChange={setMsgOrderId} />
       ) : tab === 'earnings' ? (
         <EarningsView stats={stats} history={history} />
       ) : (
@@ -741,13 +757,17 @@ function DeliveriesView({
 
 // --- Messages (rider <-> customer per-order chat) -------------------------------
 
-function RiderMessagesView() {
+function RiderMessagesView({
+  openId,
+  onOpenChange,
+}: {
+  openId: string | null;
+  onOpenChange: (orderId: string | null) => void;
+}) {
   const { client, profile } = useAuth();
   const { showToast } = useToast();
-  const { conversations, refresh } = useConversations('rider');
-  const [openId, setOpenId] = useState<string | null>(null);
+  const { conversations, loading, refresh } = useConversations('rider');
   const [messages, setMessages] = useState<MessageRow[]>([]);
-  const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [customerNames, setCustomerNames] = useState<Record<string, string>>({});
 
@@ -756,6 +776,12 @@ function RiderMessagesView() {
       void refresh();
     }, [refresh]),
   );
+
+  // Mute the global message banner while a thread is open here.
+  useEffect(() => {
+    setOpenOrderId(openId);
+    return () => setOpenOrderId(null);
+  }, [openId]);
 
   useEffect(() => {
     const ids = [...new Set(conversations.map((c) => c.order.customer_id))];
@@ -817,8 +843,8 @@ function RiderMessagesView() {
     };
   }, [client, openId, chatInstanceId]);
 
-  const send = async () => {
-    const body = draft.trim();
+  const send = async (text: string) => {
+    const body = text.trim();
     if (!body || !profile || !openId || sending) return;
     if (open && !canChat(open.status)) {
       showToast({ message: 'This chat is closed — the order is no longer active.', type: 'info' });
@@ -835,67 +861,52 @@ function RiderMessagesView() {
       showToast({ message: error.message, type: 'error' });
       return;
     }
-    setDraft('');
     await loadThread(openId);
     await refresh();
   };
 
   if (open) {
+    const customer = customerNames[open.customer_id] ?? 'Customer';
     const chatOpen = canChat(open.status);
     return (
-      <View style={styles.tabBody}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Back to conversations"
-          onPress={() => setOpenId(null)}
-          style={({ pressed }) => [styles.backRow, pressed && styles.pressed]}
-        >
-          <AppIcon name="back" size={18} color={colors.primary} />
-          <Text style={styles.backText}>All messages</Text>
-        </Pressable>
-        <View style={styles.greetText}>
-          <Text style={styles.screenTitle}>#{open.order_number}</Text>
-          <Text style={styles.muted}>
-            {customerNames[open.customer_id] ?? 'Customer'} · {open.status.replace(/_/g, ' ')}
-          </Text>
-        </View>
-        <View style={styles.threadBox}>
-          {messages.length === 0 ? (
-            <Text style={styles.muted}>Say hello — coordinate pickup and drop-off here.</Text>
-          ) : (
-            messages.map((m) => {
-              const mine = m.sender_id === profile?.id;
-              return (
-                <View key={m.id} style={[styles.chatRow, mine ? styles.chatRowMine : styles.chatRowTheirs]}>
-                  <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
-                    <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{m.body}</Text>
-                  </View>
-                </View>
-              );
-            })
-          )}
-        </View>
-        {chatOpen ? (
-          <View style={styles.composer}>
-            <TextInput
-              value={draft}
-              onChangeText={setDraft}
-              placeholder="Write to customer…"
-              placeholderTextColor={colors.faint}
-              multiline
-              maxLength={2000}
-              style={styles.chatInput}
-            />
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Send message"
-              onPress={() => void send()}
-              disabled={!draft.trim() || sending}
-              style={[styles.sendBtn, (!draft.trim() || sending) && styles.sendDisabled]}
-            >
-              <AppIcon name="send" size={18} color={colors.onPrimary} />
-            </Pressable>
+      <View style={[styles.tabBody, styles.threadCanvas]}>
+        <View style={styles.threadHeader}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Back to conversations"
+            onPress={() => onOpenChange(null)}
+            hitSlop={8}
+            style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
+          >
+            <AppIcon name="back" size={20} color={colors.text} />
+          </Pressable>
+          <View style={styles.threadAvatar}>
+            <Text style={styles.threadAvatarText}>{customer.charAt(0).toUpperCase()}</Text>
+            {chatOpen ? <View style={[styles.presenceDot, styles.presenceOnline]} /> : null}
           </View>
+          <View style={styles.greetText}>
+            <Text style={styles.threadName} numberOfLines={1}>
+              {customer}
+            </Text>
+            <Text style={styles.muted} numberOfLines={1}>
+              #{open.order_number} · {open.status.replace(/_/g, ' ')}
+            </Text>
+          </View>
+        </View>
+        <ScrollView
+          style={styles.threadScroll}
+          contentContainerStyle={styles.threadContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {messages.length === 0 ? (
+            <ChatEmptyState orderNumber={open.order_number} />
+          ) : (
+            <ChatThread messages={messages} myId={profile?.id ?? ''} />
+          )}
+        </ScrollView>
+        {chatOpen ? (
+          <ChatComposer onSend={(body) => send(body)} sending={sending} placeholder="Write to customer…" />
         ) : (
           <Text style={styles.muted}>Chat closed — this order is {open.status.replace(/_/g, ' ')}.</Text>
         )}
@@ -909,43 +920,61 @@ function RiderMessagesView() {
         <View style={styles.greetText}>
           <Text style={styles.screenTitle}>Messages</Text>
           <Text style={styles.muted}>
-            {conversations.length ? 'Coordinate with your customers' : 'Accepted orders show up here for chat.'}
+            {loading
+              ? 'Loading…'
+              : conversations.length
+                ? `${conversations.length} conversation${conversations.length === 1 ? '' : 's'}`
+                : 'Accepted orders show up here for chat.'}
           </Text>
         </View>
       </View>
-      {conversations.length === 0 ? (
+      {conversations.length === 0 && !loading ? (
         <EmptyState
           title="No conversations yet"
           message="Accept a delivery to start chatting with the customer."
           icon="message"
         />
       ) : (
-        conversations.map(({ order, lastMessage, unread }) => (
-          <Pressable
-            key={order.id}
-            accessibilityRole="button"
-            accessibilityLabel={`Chat for order ${order.order_number}`}
-            onPress={() => setOpenId(order.id)}
-            style={({ pressed }) => [pressed && styles.pressed]}
-          >
-            <Card variant="flat" style={styles.msgCard}>
-              <View style={styles.msgAvatar}>
-                <AppIcon name="user" size={22} color={colors.primaryDeep} />
-              </View>
-              <View style={styles.greetText}>
-                <Text style={styles.msgName} numberOfLines={1}>
-                  {customerNames[order.customer_id] ?? 'Customer'} · #{order.order_number}
-                </Text>
-                <Text style={[styles.muted, unread && styles.msgUnread]} numberOfLines={1}>
-                  {lastMessage
-                    ? `${lastMessage.sender_id === profile?.id ? 'You: ' : ''}${lastMessage.body}`
-                    : 'Say hello to coordinate delivery.'}
-                </Text>
-              </View>
-              {unread ? <View style={styles.unreadDot} /> : null}
-            </Card>
-          </Pressable>
-        ))
+        conversations.map(({ order, lastMessage, unread }) => {
+          const customer = customerNames[order.customer_id] ?? 'Customer';
+          return (
+            <Pressable
+              key={order.id}
+              accessibilityRole="button"
+              accessibilityLabel={`Chat for order ${order.order_number}`}
+              onPress={() => onOpenChange(order.id)}
+              style={({ pressed }) => [pressed && styles.pressed]}
+            >
+              <Card variant={unread ? 'tinted' : 'flat'} style={styles.msgCard}>
+                <View style={styles.msgAvatar}>
+                  <Text style={styles.msgInitial}>{customer.charAt(0).toUpperCase()}</Text>
+                  {unread ? <View style={styles.msgDot} /> : null}
+                </View>
+                <View style={styles.greetText}>
+                  <View style={styles.msgTopRow}>
+                    <Text style={styles.msgName} numberOfLines={1}>
+                      {customer}
+                    </Text>
+                    {lastMessage ? (
+                      <Text style={styles.msgTime}>
+                        {new Date(lastMessage.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <Text style={styles.msgOrder} numberOfLines={1}>
+                    #{order.order_number} · {order.status.replace(/_/g, ' ')}
+                  </Text>
+                  <Text style={[styles.msgPreview, unread && styles.msgPreviewUnread]} numberOfLines={1}>
+                    {lastMessage
+                      ? `${lastMessage.sender_id === profile?.id ? 'You: ' : ''}${lastMessage.body}`
+                      : 'Say hello to coordinate delivery.'}
+                  </Text>
+                </View>
+                {order.status === 'completed' ? <Badge label="Done" status="delivered" /> : null}
+              </Card>
+            </Pressable>
+          );
+        })
       )}
     </View>
   );
@@ -953,7 +982,15 @@ function RiderMessagesView() {
 
 // --- Rider delivery map (rider sees customer drop-off + self) --------------------
 
-function RiderTrackView({ order, onBack }: { order: PabiliOrder | null; onBack: () => void }) {
+function RiderTrackView({
+  order,
+  onBack,
+  onMessage,
+}: {
+  order: PabiliOrder | null;
+  onBack: () => void;
+  onMessage: (orderId: string) => void;
+}) {
   const [self, setSelf] = useState<LatLng | null>(null);
 
   useEffect(() => {
@@ -984,15 +1021,17 @@ function RiderTrackView({ order, onBack }: { order: PabiliOrder | null; onBack: 
   if (!order) {
     return (
       <View style={styles.tabBody}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Back to deliveries"
-          onPress={onBack}
-          style={({ pressed }) => [styles.backRow, pressed && styles.pressed]}
-        >
-          <AppIcon name="back" size={18} color={colors.primary} />
-          <Text style={styles.backText}>Deliveries</Text>
-        </Pressable>
+        <View style={styles.mapHeader}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Back to deliveries"
+            onPress={onBack}
+            hitSlop={8}
+            style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
+          >
+            <AppIcon name="back" size={20} color={colors.text} />
+          </Pressable>
+        </View>
         <Text style={styles.muted}>That order is no longer active.</Text>
       </View>
     );
@@ -1005,20 +1044,22 @@ function RiderTrackView({ order, onBack }: { order: PabiliOrder | null; onBack: 
 
   return (
     <View style={styles.tabBody}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Back to deliveries"
-        onPress={onBack}
-        style={({ pressed }) => [styles.backRow, pressed && styles.pressed]}
-      >
-        <AppIcon name="back" size={18} color={colors.primary} />
-        <Text style={styles.backText}>Deliveries</Text>
-      </Pressable>
-      <View style={styles.greetText}>
-        <Text style={styles.screenTitle}>#{order.order_number}</Text>
-        <Text style={styles.muted} numberOfLines={2}>
-          {TOWN_LABELS[order.town]} · {order.dropoff_address}
-        </Text>
+      <View style={styles.mapHeader}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Back to deliveries"
+          onPress={onBack}
+          hitSlop={8}
+          style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
+        >
+          <AppIcon name="back" size={20} color={colors.text} />
+        </Pressable>
+        <View style={styles.orderChip}>
+          <View style={styles.liveDot} />
+          <Text style={styles.orderChipText} numberOfLines={1}>
+            #{order.order_number} · {order.status.replace(/_/g, ' ')}
+          </Text>
+        </View>
       </View>
       <View style={styles.mapBox}>
         <OrderMap
@@ -1029,9 +1070,22 @@ function RiderTrackView({ order, onBack }: { order: PabiliOrder | null; onBack: 
           initialCenter={dropoff ?? MARINDUQUE_CENTER}
         />
       </View>
-      {dropoff ? null : (
-        <Text style={styles.muted}>No customer GPS pinned — follow the written address above.</Text>
-      )}
+      <Card variant="tinted" style={styles.dropCard}>
+        <View style={styles.dropRow}>
+          <View style={styles.dropIcon}>
+            <AppIcon name="pin" size={20} color={colors.primaryDeep} />
+          </View>
+          <View style={styles.greetText}>
+            <Text style={styles.dropTitle} numberOfLines={1}>
+              {TOWN_LABELS[order.town]}
+            </Text>
+            <Text style={styles.muted} numberOfLines={2}>
+              {dropoff ? order.dropoff_address : 'No customer GPS pinned — follow this written address.'}
+            </Text>
+          </View>
+        </View>
+        <Button title="Message customer" variant="secondary" onPress={() => onMessage(order.id)} />
+      </Card>
     </View>
   );
 }
@@ -1322,42 +1376,104 @@ const styles = StyleSheet.create({
   modalFoot: { flexDirection: 'row', gap: spacing.sm },
   pressed: { opacity: 0.7 },
 
-  // Rider messages
-  backRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  backText: { ...typography.label, color: colors.primary, fontWeight: '700' },
-  threadBox: { gap: spacing.sm },
-  chatRow: { flexDirection: 'row' },
-  chatRowMine: { justifyContent: 'flex-end' },
-  chatRowTheirs: { justifyContent: 'flex-start' },
-  bubble: { maxWidth: '85%', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.lg },
-  bubbleMine: { backgroundColor: colors.primary, borderBottomRightRadius: radius.sm },
-  bubbleTheirs: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.hairline, borderBottomLeftRadius: radius.sm },
-  bubbleText: { ...typography.body, color: colors.text },
-  bubbleTextMine: { color: colors.onPrimary },
-  composer: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm },
-  chatInput: {
-    flex: 1,
-    minHeight: 46,
-    maxHeight: 110,
-    paddingHorizontal: spacing.base,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.lg,
+  // Rider messages (premium thread on warm canvas)
+  threadCanvas: { backgroundColor: colors.chatCanvas, borderRadius: radius.lg, padding: spacing.sm },
+  threadHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
     backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.hairline,
-    ...typography.body,
-    color: colors.text,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
   },
-  sendBtn: { width: 46, height: 46, borderRadius: 23, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
-  sendDisabled: { opacity: 0.45 },
-  msgCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  msgAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primaryTint, alignItems: 'center', justifyContent: 'center' },
-  msgName: { ...typography.subhead, fontWeight: '700' },
-  msgUnread: { color: colors.text, fontWeight: '700' },
-  unreadDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: colors.primary },
+  backBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.surfaceSunken,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  threadAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.primaryDeep,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  threadAvatarText: { ...typography.heading, color: colors.onPrimary },
+  presenceDot: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 13,
+    height: 13,
+    borderRadius: 7,
+    backgroundColor: colors.faint,
+    borderWidth: 2.5,
+    borderColor: colors.surface,
+  },
+  presenceOnline: { backgroundColor: colors.success },
+  threadName: { ...typography.subhead, fontWeight: '700' },
+  threadScroll: { minHeight: 280, maxHeight: 460 },
+  threadContent: { paddingBottom: spacing.sm, paddingTop: spacing.xs, flexGrow: 1 },
+  msgCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md },
+  msgAvatar: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: colors.primaryTint,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  msgInitial: { ...typography.subhead, fontWeight: '800', color: colors.primaryDeep },
+  msgDot: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: colors.primary,
+    borderWidth: 2,
+    borderColor: colors.surface,
+  },
+  msgTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+  msgName: { ...typography.subhead, fontWeight: '700', flex: 1 },
+  msgTime: { ...typography.micro, color: colors.faint },
+  msgOrder: { ...typography.micro, color: colors.faint, textTransform: 'uppercase' },
+  msgPreview: { ...typography.body, color: colors.muted },
+  msgPreviewUnread: { color: colors.text, fontWeight: '700' },
+  // Rider delivery map
+  mapHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  orderChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.surface,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.base,
+    height: 46,
+  },
+  orderChipText: { ...typography.label, fontWeight: '700', textTransform: 'capitalize', flex: 1 },
+  liveDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: colors.success },
   mapBox: {
     height: Math.max(480, Math.round(Dimensions.get('window').height * 0.62)),
     borderRadius: radius.lg,
     overflow: 'hidden',
   },
+  dropCard: { gap: spacing.md, padding: spacing.base },
+  dropRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  dropIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dropTitle: { ...typography.subhead, fontWeight: '700' },
 });

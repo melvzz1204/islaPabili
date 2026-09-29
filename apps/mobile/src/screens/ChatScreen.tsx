@@ -6,7 +6,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -22,28 +21,13 @@ import {
   typography,
   useToast,
 } from '@isla/ui';
-import { canChat, type MessageRow } from '../messaging/chat';
+import { canChat, setOpenOrderId, type MessageRow } from '../messaging/chat';
+import { ChatComposer, ChatThread } from '../messaging/ChatThread';
 import type { RootNavProp, RootStackScreen } from '../navigation/types';
 import { BottomNav, BOTTOM_NAV_HEIGHT } from '../components/BottomNav';
 
 type OrderRow = Database['public']['Tables']['orders']['Row'];
 type Props = RootStackScreen<'Chat'>;
-
-function dayLabel(iso: string): string {
-  const d = new Date(iso);
-  const today = new Date();
-  const yesterday = new Date();
-  yesterday.setDate(today.getDate() - 1);
-  const sameDay = (a: Date, b: Date) =>
-    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-  if (sameDay(d, today)) return 'Today';
-  if (sameDay(d, yesterday)) return 'Yesterday';
-  return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
-}
-
-function clock(iso: string): string {
-  return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-}
 
 export default function ChatScreen({ route }: Props) {
   const { orderId } = route.params;
@@ -55,7 +39,6 @@ export default function ChatScreen({ route }: Props) {
   const [otherInitial, setOtherInitial] = useState('C');
   const [presence, setPresence] = useState<string | null>(null);
   const [messages, setMessages] = useState<MessageRow[]>([]);
-  const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
@@ -101,6 +84,12 @@ export default function ChatScreen({ route }: Props) {
     void loadMessages();
   }, [loadOrder, loadMessages]);
 
+  // Mute the global message banner while this thread is on screen.
+  useEffect(() => {
+    setOpenOrderId(orderId);
+    return () => setOpenOrderId(null);
+  }, [orderId]);
+
   // Per-mount suffix: concurrent mounts must never share a realtime topic
   // (realtime-js throws on `.on()` after `.subscribe()` for the same topic).
   const instanceId = useMemo(() => Math.random().toString(36).slice(2, 9), []);
@@ -126,9 +115,9 @@ export default function ChatScreen({ route }: Props) {
     scrollRef.current?.scrollToEnd({ animated: true });
   }, [messages.length]);
 
-  const send = async () => {
-    const body = draft.trim();
-    if (!body || !profile || sending) return;
+  const send = async (body: string) => {
+    const text = body.trim();
+    if (!text || !profile || sending) return;
     if (order && !canChat(order.status)) {
       showToast({ message: 'This chat is closed — the order is no longer active.', type: 'info' });
       return;
@@ -137,14 +126,13 @@ export default function ChatScreen({ route }: Props) {
     const { error } = await client.from('order_messages').insert({
       order_id: orderId,
       sender_id: profile.id,
-      body: body.slice(0, 2000),
+      body: text.slice(0, 2000),
     });
     setSending(false);
     if (error) {
       showToast({ message: error.message, type: 'error' });
       return;
     }
-    setDraft('');
     await loadMessages();
   };
 
@@ -233,38 +221,12 @@ export default function ChatScreen({ route }: Props) {
               ) : null}
             </View>
           ) : (
-            <Thread messages={messages} myId={profile?.id ?? ''} />
+            <ChatThread messages={messages} myId={profile?.id ?? ''} />
           )}
         </ScrollView>
 
         {chatOpen ? (
-          <View style={styles.composer}>
-            <TextInput
-              value={draft}
-              onChangeText={setDraft}
-              placeholder="Write a message…"
-              placeholderTextColor={colors.faint}
-              multiline
-              maxLength={2000}
-              style={styles.input}
-              returnKeyType="send"
-              onSubmitEditing={() => void send()}
-            />
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Send message"
-              onPress={() => void send()}
-              disabled={!draft.trim() || sending}
-              style={({ pressed }) => [
-                styles.send,
-                !draft.trim() && styles.sendIdle,
-                sending && styles.sendDisabled,
-                pressed && styles.pressed,
-              ]}
-            >
-              <AppIcon name="send" size={19} color={colors.onPrimary} />
-            </Pressable>
-          </View>
+          <ChatComposer onSend={(body) => send(body)} sending={sending} />
         ) : (
           <View style={styles.closed}>
             <AppIcon name="lock" size={15} color={colors.muted} />
@@ -273,60 +235,6 @@ export default function ChatScreen({ route }: Props) {
         )}
       </KeyboardAvoidingView>
     </Screen>
-  );
-}
-
-/** Day dividers + grouped bubbles with tails, ticks and inline timestamps. */
-function Thread({ messages, myId }: { messages: MessageRow[]; myId: string }) {
-  let lastDay = '';
-  return (
-    <>
-      {messages.map((m, i) => {
-        const day = dayLabel(m.created_at);
-        const showDay = day !== lastDay;
-        lastDay = day;
-        const mine = m.sender_id === myId;
-        const prev = messages[i - 1];
-        const next = messages[i + 1];
-        const groupedPrev = !!prev && prev.sender_id === m.sender_id && +new Date(m.created_at) - +new Date(prev.created_at) < 5 * 60 * 1000;
-        const groupedNext = !!next && next.sender_id === m.sender_id && +new Date(next.created_at) - +new Date(m.created_at) < 5 * 60 * 1000;
-        return (
-          <View key={m.id}>
-            {showDay ? (
-              <View style={styles.dayRow}>
-                <View style={styles.dayPill}>
-                  <Text style={styles.dayText}>{day}</Text>
-                </View>
-              </View>
-            ) : null}
-            <View
-              style={[
-                styles.row,
-                mine ? styles.rowMine : styles.rowTheirs,
-                groupedPrev ? styles.rowGrouped : styles.rowFresh,
-              ]}
-            >
-              <View
-                style={[
-                  styles.bubble,
-                  mine ? styles.bubbleMine : styles.bubbleTheirs,
-                  mine && !groupedNext && styles.tailMine,
-                  !mine && !groupedNext && styles.tailTheirs,
-                ]}
-              >
-                <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{m.body}</Text>
-                {!groupedNext ? (
-                  <View style={styles.metaRow}>
-                    <Text style={[styles.bubbleTime, mine && styles.bubbleTimeMine]}>{clock(m.created_at)}</Text>
-                    {mine ? <AppIcon name="check" size={12} color="rgba(255,255,255,0.8)" /> : null}
-                  </View>
-                ) : null}
-              </View>
-            </View>
-          </View>
-        );
-      })}
-    </>
   );
 }
 
@@ -401,36 +309,6 @@ const styles = StyleSheet.create({
   // Thread
   thread: { flex: 1 },
   threadContent: { paddingBottom: spacing.sm, paddingTop: spacing.xs, flexGrow: 1 },
-  dayRow: { alignItems: 'center', marginVertical: spacing.sm },
-  dayPill: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 5,
-    ...shadows.card,
-  },
-  dayText: { ...typography.micro, color: colors.muted, fontWeight: '700' },
-  row: { flexDirection: 'row' },
-  rowMine: { justifyContent: 'flex-end' },
-  rowTheirs: { justifyContent: 'flex-start' },
-  rowFresh: { marginTop: spacing.sm },
-  rowGrouped: { marginTop: 3 },
-  bubble: {
-    maxWidth: '80%',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.lg,
-    gap: 3,
-  },
-  bubbleMine: { backgroundColor: colors.primaryDeep, ...shadows.card },
-  bubbleTheirs: { backgroundColor: colors.surface, ...shadows.card },
-  tailMine: { borderBottomRightRadius: radius.xs },
-  tailTheirs: { borderBottomLeftRadius: radius.xs },
-  bubbleText: { ...typography.body, color: colors.text },
-  bubbleTextMine: { color: colors.onPrimary },
-  metaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 3 },
-  bubbleTime: { ...typography.micro, fontSize: 10, color: colors.faint },
-  bubbleTimeMine: { color: 'rgba(255,255,255,0.75)' },
 
   // Empty thread
   emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.sm, padding: spacing.xl },
@@ -449,35 +327,6 @@ const styles = StyleSheet.create({
   emptyChipText: { ...typography.micro, color: colors.primaryDeep, fontWeight: '700' },
 
   // Composer
-  composer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: spacing.sm,
-    backgroundColor: colors.surface,
-    borderRadius: radius.xl,
-    padding: spacing.sm,
-    paddingLeft: spacing.base,
-    ...shadows.raised,
-  },
-  input: {
-    flex: 1,
-    minHeight: 40,
-    maxHeight: 110,
-    paddingVertical: spacing.xs,
-    ...typography.body,
-    color: colors.text,
-  },
-  send: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...shadows.card,
-  },
-  sendIdle: { backgroundColor: colors.primary },
-  sendDisabled: { opacity: 0.5 },
   closed: {
     flexDirection: 'row',
     alignItems: 'center',

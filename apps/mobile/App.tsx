@@ -12,7 +12,7 @@ import { ToastProvider } from './src/ui/Toast';
 import { CartProvider } from './src/marketplace/cart';
 import { AuthModeProvider, useAuthMode } from './src/lib/authMode';
 import { consumeCheckoutReturn } from './src/lib/checkoutReturn';
-import { useConversations } from './src/messaging/chat';
+import { useConversations, useIncomingMessageAlerts } from './src/messaging/chat';
 import type { RootStackParamList, TabParamList } from './src/navigation/types';
 import AuthHomeScreen from './src/screens/auth/AuthHomeScreen';
 import LoginScreen from './src/screens/auth/LoginScreen';
@@ -84,6 +84,8 @@ function TabBarIcon({
  */
 function MainTabs({ guest }: { guest: boolean }) {
   const { conversations } = useConversations('customer');
+  // Live banner for incoming rider messages, anywhere in the customer shell.
+  useIncomingMessageAlerts('customer');
   const unread = guest ? 0 : conversations.filter((c) => c.unread).length;
   if (guest) {
     return (

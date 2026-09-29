@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth, type Database } from '@isla/supabase';
+import { useToast } from '@isla/ui';
 
 export type OrderRow = Database['public']['Tables']['orders']['Row'];
 export type MessageRow = Database['public']['Tables']['order_messages']['Row'];
@@ -112,4 +113,57 @@ export function useConversations(role: 'customer' | 'rider') {
 export function useUnreadMessages(role: 'customer' | 'rider'): number {
   const { conversations } = useConversations(role);
   return conversations.filter((c) => c.unread).length;
+}
+
+// --- Live incoming-message banners --------------------------------------------
+
+/** Order thread currently on screen — banners stay quiet for it. */
+let openOrderId: string | null = null;
+
+export function setOpenOrderId(orderId: string | null) {
+  openOrderId = orderId;
+}
+
+/**
+ * Mount once per shell (customer tabs, rider home). Pops a toast banner
+ * whenever the other party writes in one of my orders — except the thread
+ * already open on screen, which updates live on its own.
+ */
+export function useIncomingMessageAlerts(role: 'customer' | 'rider') {
+  const { client, profile } = useAuth();
+  const { showToast } = useToast();
+  const instanceId = useMemo(() => Math.random().toString(36).slice(2, 9), []);
+
+  useEffect(() => {
+    if (!profile) return;
+    const channel = client
+      .channel(`message-alerts-${role}-${profile.id}-${instanceId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'order_messages' }, (payload) => {
+        const row = payload.new as MessageRow;
+        if (row.sender_id === profile.id || row.order_id === openOrderId) return;
+        void (async () => {
+          const { data } = await client
+            .from('orders')
+            .select('id, order_number, customer_id, rider_id')
+            .eq('id', row.order_id)
+            .maybeSingle();
+          const o = data as { order_number: string; customer_id: string; rider_id: string | null } | null;
+          if (!o) return;
+          const mine = role === 'customer' ? o.customer_id === profile.id : o.rider_id === profile.id;
+          if (!mine) return;
+          const { data: person } = await client
+            .from('profiles')
+            .select('full_name')
+            .eq('id', row.sender_id)
+            .maybeSingle();
+          const name = (person as { full_name?: string } | null)?.full_name?.trim() || 'New message';
+          const snippet = row.body.length > 80 ? `${row.body.slice(0, 80)}…` : row.body;
+          showToast({ message: `${name} · #${o.order_number}: ${snippet}`, type: 'success', duration: 4200 });
+        })();
+      })
+      .subscribe();
+    return () => {
+      void client.removeChannel(channel);
+    };
+  }, [client, profile, role, showToast, instanceId]);
 }
