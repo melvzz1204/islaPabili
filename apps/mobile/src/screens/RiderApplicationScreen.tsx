@@ -88,24 +88,24 @@ const readBytes = (uri: string): number | null => {
 };
 
 /**
- * Build the multipart body for a Supabase Storage upload. React Native's
- * FormData accepts a `{uri,name,type}` descriptor, but a browser's FormData
- * needs a real Blob — appending the descriptor there would silently upload the
- * string "[object Object]".
+ * Build the body for a Supabase Storage upload. A browser's FormData needs a
+ * real Blob — appending the descriptor there would silently upload the string
+ * "[object Object]". On native the opposite holds: storage-js documents that
+ * Blob/File/FormData uploads do not work on React Native, so raw bytes are
+ * sent instead (storage-js then sets the content-type header on the request).
  */
-const toUploadBody = async (pick: DocPick): Promise<FormData> => {
-  const form = new FormData();
+const toUploadBody = async (pick: DocPick): Promise<FormData | ArrayBuffer> => {
   if (Platform.OS === 'web') {
+    const form = new FormData();
     const blob = await (await fetch(pick.uri)).blob();
     form.append('file', blob, pick.name);
-  } else {
-    form.append('file', {
-      uri: pick.uri,
-      name: pick.name,
-      type: pick.mime,
-    } as unknown as Blob);
+    return form;
   }
-  return form;
+  const buffer = await new FileHandle(pick.uri).arrayBuffer();
+  if (buffer.byteLength === 0) {
+    throw new Error('That photo file looks empty. Please pick the photo again.');
+  }
+  return buffer;
 };
 
 /** Turn anything thrown into a sentence a rider can act on. */
