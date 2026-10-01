@@ -10,8 +10,17 @@ const mobile = require('./apps/mobile/app.json').expo;
 
 const withRootAssets = (plugins) =>
   (plugins ?? []).map((entry) => {
-    if (Array.isArray(entry) && entry[0] === 'expo-splash-screen') {
-      return [entry[0], { ...entry[1], image: './apps/mobile/assets/icon.png' }];
+    if (Array.isArray(entry) && entry[1] && typeof entry[1] === 'object') {
+      const props = { ...entry[1] };
+      // Rewrite mobile-relative asset paths to root-relative ones so EAS
+      // Build (which runs from the repo root) can find them. Covers
+      // expo-splash-screen (image) and expo-notifications (icon).
+      for (const key of ['image', 'icon', 'foregroundImage']) {
+        if (typeof props[key] === 'string' && props[key].startsWith('./assets/')) {
+          props[key] = props[key].replace('./assets/', './apps/mobile/assets/');
+        }
+      }
+      return [entry[0], props];
     }
     return entry;
   });
