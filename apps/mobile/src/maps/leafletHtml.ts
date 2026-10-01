@@ -3,7 +3,7 @@ export type LatLng = { lat: number; lng: number };
 /**
  * Standalone Leaflet page for the in-app map (rendered in a WebView).
  * Tiles: OpenStreetMap standard. RN drives markers through
- * `window.IslaMap.setPoints()` via injected JS — never rebuild the HTML,
+ * `window.IslaMap.setPoints()` via injected JS, never rebuild the HTML,
  * or the map state (zoom/pan) resets on every location tick.
  */
 export function buildMapHtml(center: LatLng, zoom = 12): string {

@@ -13,7 +13,7 @@ type Props = RootStackScreen<'Rider'>;
 
 /**
  * Rider shell gate: no application → apply; pending/rejected → status;
- * approved → rider dashboard. Standalone — customer tabs don't exist here,
+ * approved → rider dashboard. Standalone, customer tabs don't exist here,
  * so leaving the shell always means logging out.
  */
 export default function RiderGateScreen({}: Props) {
@@ -90,7 +90,7 @@ export default function RiderGateScreen({}: Props) {
         <RiderApplicationScreen
           onSubmitted={() => {
             showToast({
-              message: 'Application submitted — watch the notification bell for the review result.',
+              message: 'Application submitted, watch the notification bell for the review result.',
               type: 'success',
             });
             void loadApplication();

@@ -8,7 +8,7 @@ import { searchPlaces, type NominatimResult } from './geocode';
 
 export type { LatLng };
 
-/** Boac town plaza — sensible default view over Marinduque. */
+/** Boac town plaza, sensible default view over Marinduque. */
 export const MARINDUQUE_CENTER: LatLng = { lat: 13.4485, lng: 121.8397 };
 
 /** Imperative camera controls for embedding screens (bottom sheets, etc.). */
@@ -34,7 +34,7 @@ type Props = {
 /**
  * Reference layout: floating search bar on top, full-bleed Leaflet map,
  * floating toolbar pill at the bottom (locate · fit · layers · message · call).
- * Free OpenStreetMap tiles — no API key, works in Expo Go + web.
+ * Free OpenStreetMap tiles, no API key, works in Expo Go + web.
  */
 export function OrderMap({
   self,
@@ -59,7 +59,7 @@ export function OrderMap({
 
   const start = useMemo(
     () => self ?? other ?? initialCenter ?? MARINDUQUE_CENTER,
-    // Initial camera only — live ticks move pins, not the camera.
+    // Initial camera only, live ticks move pins, not the camera.
     [],
   );
   const html = useMemo(() => buildMapHtml(start), [start]);

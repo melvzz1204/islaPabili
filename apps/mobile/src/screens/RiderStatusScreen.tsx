@@ -13,7 +13,7 @@ type Props = {
 const STATUS_COPY = {
   pending: {
     title: 'Application under review',
-    body: 'An IslaPabili administrator is verifying your documents. This usually takes 1–2 business days. You will be able to go on duty once approved. Watch the notification bell — you will be notified here the moment it is decided.',
+    body: 'An IslaPabili administrator is verifying your documents. This usually takes 1 to 2 business days. You will be able to go on duty once approved. Watch the notification bell, you will be notified here the moment it is decided.',
   },
   rejected: {
     title: 'Application not approved',
@@ -31,7 +31,7 @@ export default function RiderStatusScreen({ application, onRefresh }: Props) {
   const areaLabel = isAllTowns(towns)
     ? 'All municipalities'
     : isNoTowns(towns)
-      ? '—'
+      ? 'Not set'
       : towns.map((t) => TOWN_LABELS[t]).join(', ');
 
   return (

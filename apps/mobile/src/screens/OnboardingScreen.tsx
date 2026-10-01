@@ -44,7 +44,7 @@ export default function OnboardingScreen() {
       return;
     }
     if (!profile) {
-      Alert.alert('Profile not loaded', 'Pull to retry — your profile is still loading.');
+      Alert.alert('Profile not loaded', 'Pull to retry, your profile is still loading.');
       await refreshProfile();
       return;
     }
@@ -79,7 +79,7 @@ export default function OnboardingScreen() {
 
       <Text style={styles.hint}>
         {homeTown
-          ? `Deliveries default to ${TOWN_LABELS[homeTown]} — you can change it at checkout.`
+          ? `Deliveries default to ${TOWN_LABELS[homeTown]}, you can change it at checkout.`
           : 'Your first pick becomes your default delivery town.'}
       </Text>
 

@@ -1,9 +1,10 @@
 import { NavigationContainer, DarkTheme, type Theme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { isNoTowns, resolveOptedTowns } from '@isla/shared';
 import { AuthProvider, useAuth } from '@isla/supabase';
 import { AppIcon, colors, radius, spacing, typography } from '@isla/ui';
@@ -22,6 +23,7 @@ import LoginScreen from './src/screens/auth/LoginScreen';
 import RegisterScreen from './src/screens/auth/RegisterScreen';
 import PhoneScreen from './src/screens/auth/PhoneScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
+import WelcomeOnboardingScreen, { WELCOME_SEEN_KEY } from './src/screens/WelcomeOnboardingScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import MarketScreen from './src/screens/MarketScreen';
 import StoreScreen from './src/screens/StoreScreen';
@@ -139,6 +141,22 @@ function Root() {
   const { mode, loaded: modeLoaded, loggedOut, setLoggedOut } = useAuthMode();
   const wasSession = useRef(false);
   const pushRegistered = useRef<string | null>(null);
+  // First-launch welcome for guests. null = still reading storage.
+  const [welcomeSeen, setWelcomeSeen] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void AsyncStorage.getItem(WELCOME_SEEN_KEY)
+      .then((v) => {
+        if (active) setWelcomeSeen(v === '1');
+      })
+      .catch(() => {
+        if (active) setWelcomeSeen(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // Register this device for server-side wake-up pushes, once per sign-in.
   useEffect(() => {
@@ -159,7 +177,7 @@ function Root() {
     wasSession.current = !!session;
   }, [session, mode, setLoggedOut]);
 
-  if (loading || !modeLoaded || (session && profileLoading)) {
+  if (loading || !modeLoaded || (session && profileLoading) || (!session && welcomeSeen === null)) {
     return <LoadingGate />;
   }
 
@@ -184,6 +202,13 @@ function Root() {
         <Stack.Screen name="Phone" component={PhoneScreen} />
       </Stack.Navigator>
     );
+  }
+
+  // First launch for guests: show the welcome carousel once, then never
+  // again. Returning users (signed in, or parked on sign-in after a rider
+  // logout) skip it.
+  if (!session && !loggedOut && !welcomeSeen) {
+    return <WelcomeOnboardingScreen onDone={() => setWelcomeSeen(true)} />;
   }
 
   // A guest who tapped "log in to checkout" lands straight on Checkout.

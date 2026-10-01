@@ -53,7 +53,7 @@ export function useRiderBroadcast(enabled: boolean) {
           },
         );
       } catch {
-        // GPS unavailable — customer map falls back to the last pin.
+        // GPS unavailable, customer map falls back to the last pin.
       }
     })();
 

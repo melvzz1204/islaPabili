@@ -120,7 +120,7 @@ export default function ChatScreen({ route }: Props) {
     const text = body.trim();
     if (!text || !profile || sending) return;
     if (order && !canChat(order.status)) {
-      showToast({ message: 'This chat is closed — the order is no longer active.', type: 'info' });
+      showToast({ message: 'This chat is closed, the order is no longer active.', type: 'info' });
       return;
     }
     setSending(true);
@@ -215,7 +215,7 @@ export default function ChatScreen({ route }: Props) {
               <Text style={styles.emptyBody}>
                 {chatOpen
                   ? 'Coordinate pickup, landmarks, or item swaps with each other here.'
-                  : 'No messages in this order yet — the chat opens once a rider is on the way.'}
+                  : 'No messages in this order yet, the chat opens once a rider is on the way.'}
               </Text>
               {order ? (
                 <View style={styles.emptyChip}>
@@ -233,7 +233,7 @@ export default function ChatScreen({ route }: Props) {
         ) : (
           <View style={styles.closed}>
             <AppIcon name="lock" size={15} color={colors.muted} />
-            <Text style={styles.closedText}>Chat closed — this order is {order?.status.replace(/_/g, ' ')}.</Text>
+            <Text style={styles.closedText}>Chat closed, this order is {order?.status.replace(/_/g, ' ')}.</Text>
           </View>
         )}
       </KeyboardAvoidingView>

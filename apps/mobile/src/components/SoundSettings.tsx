@@ -23,7 +23,7 @@ const RIDER_ROWS: Row[] = [
   { key: 'vibrate', title: 'Vibrate', hint: 'Vibrate with alerts', icon: 'phone' },
 ];
 
-/** Shared sound/vibration preferences — customer Settings screen + rider Settings tab. */
+/** Shared sound/vibration preferences, customer Settings screen + rider Settings tab. */
 export function SoundSettingsForm({ role }: { role: 'customer' | 'rider' }) {
   const { settings, update } = useSoundSettings();
   const rows = role === 'rider' ? RIDER_ROWS : CUSTOMER_ROWS;

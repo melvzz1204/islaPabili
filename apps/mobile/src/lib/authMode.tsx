@@ -6,7 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
  * (customer / rider; merchant stores are still onboarding) and persisted,
  * so a rider lands back in the rider dashboard after a restart.
  *
- * Switching shells always goes through logout — the rider dashboard and the
+ * Switching shells always goes through logout, the rider dashboard and the
  * customer app never render in the same session.
  */
 export type AuthMode = 'customer' | 'rider';
@@ -17,7 +17,7 @@ type AuthModeValue = {
   mode: AuthMode;
   setMode: (mode: AuthMode) => void;
   loaded: boolean;
-  /** True right after a rider logout — Root parks on the sign-in page. */
+  /** True right after a rider logout, Root parks on the sign-in page. */
   loggedOut: boolean;
   setLoggedOut: (value: boolean) => void;
 };

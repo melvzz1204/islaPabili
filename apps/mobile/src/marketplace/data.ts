@@ -3,7 +3,7 @@ import type { Database, Supabase } from '@isla/supabase';
 
 /** Live catalog types (Supabase) for the public guest marketplace. */
 
-/** Flagship merchant — Jollibee Boac (see supabase/seed.sql). Menu/prices/stock all come from the DB. */
+/** Flagship merchant, Jollibee Boac (see supabase/seed.sql). Menu/prices/stock all come from the DB. */
 export const JOLLIBEE_MERCHANT_ID = '11111111-1111-4111-8111-111111111111';
 
 export type MerchantKind = 'pharmacy' | 'restaurant' | 'grocery' | 'retail' | 'electronics';
@@ -77,7 +77,7 @@ function toProduct(row: ProductRow): Product {
 }
 
 /**
- * Public catalog read — anon-safe via products_select_public / merchants_select.
+ * Public catalog read, anon-safe via products_select_public / merchants_select.
  *
  * `towns` restricts the result set to those municipalities. Omit it, or pass
  * every supported town, to return the whole island (the default for guests).

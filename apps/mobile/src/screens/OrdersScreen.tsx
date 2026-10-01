@@ -34,7 +34,7 @@ type OrderStatus = Database['public']['Enums']['order_status'];
 type StatusMeta = { label: string; badge: 'pending' | 'transit' | 'delivered' | 'cancelled' | 'neutral' };
 
 const STATUS_META: Record<OrderStatus, StatusMeta> = {
-  // No merchant counter yet — the rider shops, so merchant-wait reads as placed.
+  // No merchant counter yet, the rider shops, so merchant-wait reads as placed.
   awaiting_merchant: { label: 'Order placed', badge: 'pending' },
   preparing: { label: 'Being prepared', badge: 'transit' },
   ready: { label: 'Ready for pickup', badge: 'transit' },
@@ -61,7 +61,7 @@ const ACTIVE_STATUSES: OrderStatus[] = [
   'in_transit',
 ];
 
-/** Rider-led happy path — no merchant counter step yet, the rider shops. */
+/** Rider-led happy path, no merchant counter step yet, the rider shops. */
 const FLOW: OrderStatus[] = [
   'pending_dispatch',
   'rider_assigned',
@@ -166,7 +166,7 @@ export default function OrdersScreen({}: Props) {
     showToast({
       message:
         (offered ?? 0) > 0
-          ? `Looking again — ${offered} rider${offered === 1 ? '' : 's'} on duty notified.`
+          ? `Looking again, ${offered} rider${offered === 1 ? '' : 's'} on duty notified.`
           : 'No riders on duty right now. Please retry again later.',
       type: (offered ?? 0) > 0 ? 'success' : 'error',
     });
@@ -401,8 +401,8 @@ export default function OrdersScreen({}: Props) {
             {selected.is_custom_list && selected.status === 'pending_dispatch' ? (
               <Text style={styles.muted}>
                 {Date.now() - new Date(selected.created_at).getTime() > 5 * 60 * 1000
-                  ? 'Still looking — the last 5-minute offer round lapsed with no takers. Hit “Retry finding rider” below.'
-                  : 'Live now — on-duty riders in your town are being notified. First to accept wins.'}
+                  ? 'Still looking, the last 5-minute offer round lapsed with no takers. Hit “Retry finding rider” below.'
+                  : 'Live now, on-duty riders in your town are being notified. First to accept wins.'}
               </Text>
             ) : null}
 

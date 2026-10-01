@@ -89,7 +89,7 @@ const readBytes = (uri: string): number | null => {
 
 /**
  * Build the body for a Supabase Storage upload. A browser's FormData needs a
- * real Blob — appending the descriptor there would silently upload the string
+ * real Blob, appending the descriptor there would silently upload the string
  * "[object Object]". On native the opposite holds: storage-js documents that
  * Blob/File/FormData uploads do not work on React Native, so raw bytes are
  * sent instead (storage-js then sets the content-type header on the request).
@@ -322,12 +322,12 @@ export default function RiderApplicationScreen({ onSubmitted }: Props) {
           urls[DOC_URL_FIELD[key]] = path;
         } catch (err) {
           const reason = err instanceof Error ? err.message : 'unknown error';
-          throw new Error(`Could not upload ${label} — ${reason}`);
+          throw new Error(`Could not upload ${label}, ${reason}`);
         }
       }
 
       // Operating area is its own column. home_town means "where the rider
-      // lives", so only fill it when the rider has not set one yet — otherwise
+      // lives", so only fill it when the rider has not set one yet, otherwise
       // applying as a rider would silently move a customer's delivery town.
       const primaryTown = operatingTowns[0] ?? null;
       const { error: profileError } = await client

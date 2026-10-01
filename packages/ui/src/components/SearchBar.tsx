@@ -15,7 +15,7 @@ type SearchBarProps = {
   style?: StyleProp<ViewStyle>;
 };
 
-/** Pill search field — the most-used control across the marketplace. */
+/** Pill search field, the most-used control across the marketplace. */
 export function SearchBar({
   value,
   onChangeText,

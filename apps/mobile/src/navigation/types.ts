@@ -56,7 +56,7 @@ export type RootNavProp = CompositeNavigationProp<
 >;
 
 /**
- * Root-stack screens never navigate to a tab directly — the tab list differs
+ * Root-stack screens never navigate to a tab directly, the tab list differs
  * between guest and signed-in modes, so always go through this helper.
  */
 export function toTab(screen: keyof TabParamList) {

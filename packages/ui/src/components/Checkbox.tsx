@@ -8,7 +8,7 @@ type CheckboxProps = {
   style?: StyleProp<ViewStyle>;
 };
 
-/** Standalone checkbox. Composable — pair with any label/link content. */
+/** Standalone checkbox. Composable, pair with any label/link content. */
 export function Checkbox({ checked, onToggle, label, style }: CheckboxProps) {
   return (
     <Pressable

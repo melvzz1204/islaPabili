@@ -179,7 +179,7 @@ export default function JollibeeMenuScreen({}: Props) {
         <View style={styles.brandText}>
           <Text style={styles.brandTitle}>Bida ang saya</Text>
           <Text style={styles.brandSub}>
-            Live menu — prices and stock update with the store. Add to cart and check out.
+            Live menu, prices and stock update with the store. Add to cart and check out.
           </Text>
         </View>
       </View>
@@ -207,7 +207,7 @@ export default function JollibeeMenuScreen({}: Props) {
       {all.length === 0 ? (
         <EmptyState
           title="No products yet"
-          message={`${merchant.name} hasn't listed anything yet. Check back soon — or send a pabili list instead.`}
+          message={`${merchant.name} hasn't listed anything yet. Check back soon, or send a pabili list instead.`}
           icon="package"
           action={<Button title="Send a pabili list" variant="secondary" onPress={orderViaPabili} />}
         />
@@ -240,7 +240,7 @@ export default function JollibeeMenuScreen({}: Props) {
         </>
       )}
 
-      {/* Pabili fallback — a rider buys it when the item isn't listed */}
+      {/* Pabili fallback, a rider buys it when the item isn't listed */}
       <View style={styles.pabiliCard}>
         <Text style={styles.pabiliTitle}>Can&apos;t find what you crave?</Text>
         <Text style={styles.pabiliBody}>

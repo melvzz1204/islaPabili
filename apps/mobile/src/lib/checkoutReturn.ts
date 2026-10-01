@@ -1,4 +1,4 @@
-/** Set when a guest taps "log in to checkout" — the logged-in stack opens Checkout first. */
+/** Set when a guest taps "log in to checkout", the logged-in stack opens Checkout first. */
 let returnToCheckout = false;
 
 export function requestCheckoutReturn() {

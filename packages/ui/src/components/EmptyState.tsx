@@ -11,7 +11,7 @@ type EmptyStateProps = {
   compact?: boolean;
 };
 
-/** Contextual empty state — never show a bare spinner or blank canvas. */
+/** Contextual empty state, never show a bare spinner or blank canvas. */
 export function EmptyState({ title, message, icon = 'package', action, compact = false }: EmptyStateProps) {
   return (
     <View style={[styles.wrap, compact && styles.wrapCompact]}>

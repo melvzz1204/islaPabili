@@ -18,7 +18,8 @@ type ButtonProps = {
 
 const VARIANTS = {
   primary: { bg: colors.primary, fg: colors.onPrimary, border: 'transparent' },
-  accent: { bg: colors.accent, fg: colors.onPrimary, border: 'transparent' },
+  // 10% conversion yellow, dark text for contrast on bright yellow.
+  accent: { bg: colors.accent, fg: colors.onAccent, border: 'transparent' },
   danger: { bg: colors.danger, fg: colors.onPrimary, border: 'transparent' },
   soft: { bg: colors.primarySoft, fg: colors.primaryDeep, border: 'transparent' },
   secondary: { bg: colors.surface, fg: colors.text, border: colors.borderStrong },

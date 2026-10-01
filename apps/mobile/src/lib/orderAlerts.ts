@@ -24,7 +24,7 @@ export function useOrderUpdateAlerts() {
           const n = payload.new as { title: string; body: string; kind: string | null };
           // Chat rows already banner through the message alerts.
           if (n.kind === 'message') return;
-          showToast({ message: `${n.title} — ${n.body}`, type: 'success', duration: 4200 });
+          showToast({ message: `${n.title}, ${n.body}`, type: 'success', duration: 4200 });
           void (async () => {
             const prefs = await getSoundSettings();
             if (prefs.sounds && prefs.orderUpdates) {

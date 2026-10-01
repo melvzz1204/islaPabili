@@ -2,7 +2,7 @@
  * Call a Postgres RPC by name.
  *
  * The generated client overloads recurse under TS 6, so this goes through an
- * untyped signature — but it MUST keep the client as receiver (`.call`),
+ * untyped signature, but it MUST keep the client as receiver (`.call`),
  * because supabase-js reads internal state (`this.rest`) when executing.
  * Detaching the method (`const rpc = client.rpc; rpc(…)`) crashes at runtime.
  */

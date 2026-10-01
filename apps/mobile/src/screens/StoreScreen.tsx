@@ -36,7 +36,7 @@ const SORTS: { value: Sort; label: string }[] = [
   { value: 'popular', label: 'Popular' },
   { value: 'priceAsc', label: 'Price low to high' },
   { value: 'priceDesc', label: 'Price high to low' },
-  { value: 'name', label: 'A – Z' },
+  { value: 'name', label: 'A to Z' },
 ];
 
 export default function StoreScreen({ route }: Props) {

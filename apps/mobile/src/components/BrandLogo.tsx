@@ -3,7 +3,7 @@ import { SvgXml } from 'react-native-svg';
 const LOGO_ASPECT = 680 / 420;
 
 /**
- * IslaPabili brand lockup — badge + wordmark from
+ * IslaPabili brand lockup, badge + wordmark from
  * `apps/mobile/assets/islapabili_logo.svg`, inlined as XML so it renders
  * on native + web without an SVG transformer.
  */

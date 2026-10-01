@@ -9,7 +9,6 @@ import { invokePush } from '../lib/push';
 import { flatFallbackQuote, loadFareConfig, quoteTrip } from '../marketplace/fare';
 import {
   AppIcon,
-  AuthHeader,
   Badge,
   Button,
   Card,
@@ -17,9 +16,11 @@ import {
   SheetModal,
   colors,
   radius,
+  shadows,
   spacing,
   typography,
   useToast,
+  type AppIconName,
 } from '@isla/ui';
 import { TextField } from '../ui/TextField';
 import { SingleTownPicker } from '../ui/TownPicker';
@@ -35,8 +36,22 @@ type ListRow = { name: string; qty: string };
 const EMPTY_ROW: ListRow = { name: '', qty: '1' };
 const CUSTOM_STORE = '__custom__';
 
-/** Quick-pick stores. Merchant catalog arrives later — for now these + typing. */
+/** Quick-pick stores. Merchant catalog arrives later, for now these + typing. */
 const PRESET_STORES = ['Jollibee', 'Public Market'];
+
+/** Combo art: icon + tint per combo so quick picks read as mini menu cards. */
+const COMBO_ART: Record<string, { icon: AppIconName; bg: string; fg: string }> = {
+  jollibee: { icon: 'storefront', bg: '#FDEBD7', fg: colors.primaryDeep },
+  condiments: { icon: 'categoryGrocery', bg: '#E4F5E9', fg: '#14532D' },
+  laundry: { icon: 'package', bg: '#E6EEFD', fg: '#1E3A8A' },
+  beverage: { icon: 'categoryCoffee', bg: '#FDF0D9', fg: '#78350F' },
+  sinigang: { icon: 'categoryFood', bg: '#FDEBD7', fg: colors.primaryDeep },
+  adobo: { icon: 'categoryFood', bg: '#FDE5E5', fg: '#991B1B' },
+  tinola: { icon: 'categoryFood', bg: '#E4F5E9', fg: '#14532D' },
+};
+
+const comboArt = (id: string) =>
+  COMBO_ART[id] ?? { icon: 'package' as AppIconName, bg: colors.surfaceSunken, fg: colors.body };
 
 export default function PabiliCreateScreen({ route }: Props) {
   const navigation = useNavigation<RootNavProp>();
@@ -120,7 +135,7 @@ export default function PabiliCreateScreen({ route }: Props) {
   }, [finding, pulse]);
 
   // Finding only ends two ways: the customer stops it, or a rider accepts.
-  // Watch our own order — on accept, pull the rider card instead of leaving.
+  // Watch our own order, on accept, pull the rider card instead of leaving.
   // (showRiderCard is declared below; the handler only runs after mount.)
   const showRiderCardRef = useRef<(orderId: string, riderId: string) => void>(() => {});
   useEffect(() => {
@@ -229,7 +244,7 @@ export default function PabiliCreateScreen({ route }: Props) {
     showToast({
       message:
         (offered ?? 0) > 0
-          ? `Looking again — ${offered} rider${offered === 1 ? '' : 's'} notified.`
+          ? `Looking again, ${offered} rider${offered === 1 ? '' : 's'} notified.`
           : 'Still no riders on duty. Try again in a bit.',
       type: (offered ?? 0) > 0 ? 'success' : 'error',
     });
@@ -265,6 +280,19 @@ export default function PabiliCreateScreen({ route }: Props) {
 
   const removeRow = (index: number) =>
     setRows((prev) => (prev.length > 1 ? prev.filter((_, i) => i !== index) : prev));
+
+  /** Stepper: qty stays numeric (1-99), typed text falls back to 1. */
+  const bumpQty = (index: number, delta: number) =>
+    setRows((prev) =>
+      prev.map((r, i) => {
+        if (i !== index) return r;
+        const next = Math.min(99, Math.max(1, (Number.parseInt(r.qty, 10) || 1) + delta));
+        return { ...r, qty: String(next) };
+      }),
+    );
+
+  /** Last tapped combo id, for the checkmark flash on its card. */
+  const [addedCombo, setAddedCombo] = useState<string | null>(null);
   const storeName =
     storePick === CUSTOM_STORE ? customStore.trim() : (storePick ?? '').trim();
 
@@ -283,10 +311,14 @@ export default function PabiliCreateScreen({ route }: Props) {
         setCustomStore(combo.store);
       }
     }
-    showToast({ message: `${combo.label} added — edit qty as needed.`, type: 'success' });
+    showToast({ message: `${combo.label} added, edit qty as needed.`, type: 'success' });
+    setAddedCombo(combo.id);
+    setTimeout(() => {
+      setAddedCombo((prev) => (prev === combo.id ? null : prev));
+    }, 1600);
   };
 
-  /** Validated — now ask for GPS before sending (other apps do the same). */
+  /** Validated, now ask for GPS before sending (other apps do the same). */
   const handleSubmit = () => {
     if (named.length === 0) {
       showToast({ message: 'Type at least one item you need.', type: 'error' });
@@ -325,10 +357,10 @@ export default function PabiliCreateScreen({ route }: Props) {
           const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
           gps = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         } else {
-          showToast({ message: 'Location blocked — riders will use your written address.', type: 'error' });
+          showToast({ message: 'Location blocked, riders will use your written address.', type: 'error' });
         }
       } catch {
-        showToast({ message: 'Could not read your location — using your written address.', type: 'error' });
+        showToast({ message: 'Could not read your location, using your written address.', type: 'error' });
       }
     }
     setSubmitting(true);
@@ -409,114 +441,186 @@ export default function PabiliCreateScreen({ route }: Props) {
 
   return (
     <>
-    <Screen footer={<BottomNav />} footerHeight={BOTTOM_NAV_HEIGHT}>
-      <AuthHeader
-        icon="pabili"
-        accent
-        title="Pabili list"
-        subtitle="Type what you need — on-duty riders are notified live and the first to accept shops for you."
-      />
-
-      <Card>
-        <Text style={styles.cardTitle}>Quick combos</Text>
-        <Text style={styles.comboHint}>Tap to add the whole set, then edit qty.</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.comboRow}>
-          {PABILI_COMBOS.map((combo) => (
-            <Pressable
-              key={combo.id}
-              accessibilityRole="button"
-              accessibilityLabel={`Add ${combo.label} combo`}
-              onPress={() => addCombo(combo)}
-              style={({ pressed }) => [styles.comboChip, pressed && styles.pressed]}
-            >
-              <Text style={styles.comboLabel}>{combo.label}</Text>
-              <Text style={styles.comboSub} numberOfLines={1}>
-                {combo.items.length} items
+    <Screen
+      footer={
+        <View style={styles.footerStack}>
+          <View style={[styles.stickyCta, shadows.sticky]}>
+            <View style={styles.stickyTotals}>
+              <Text style={styles.stickyCount}>
+                {named.length} item{named.length === 1 ? '' : 's'} · {itemCount} pc
               </Text>
-            </Pressable>
-          ))}
+              <Text style={styles.stickyFee}>Est. {peso(fee)} hatid</Text>
+            </View>
+            <Button
+              title="Find a rider"
+              variant="accent"
+              onPress={handleSubmit}
+              loading={submitting}
+              fullWidth={false}
+              style={styles.stickyBtn}
+            />
+          </View>
+          <BottomNav />
+        </View>
+      }
+      footerHeight={92 + BOTTOM_NAV_HEIGHT}
+    >
+      {/* Hero: title + honest live estimate, no dead promises. */}
+      <View style={styles.hero}>
+        <View style={styles.heroTop}>
+          <View style={styles.heroMedallion}>
+            <AppIcon name="pabili" size={30} color={colors.primaryDeep} />
+          </View>
+          <View style={styles.heroFeePill}>
+            <View style={styles.heroDot} />
+            <Text style={styles.heroFeeText}>Est. {peso(fee)} hatid</Text>
+          </View>
+        </View>
+        <Text style={styles.heroTitle}>Pabili list</Text>
+        <Text style={styles.heroSub}>Sabihin mo lang ang bibilhin, rider na ang bahala.</Text>
+      </View>
+
+      <Text style={styles.sectionLabel}>Simulan sa combo</Text>
+      <Card style={styles.comboCard} padded={false}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.comboRow}>
+          {PABILI_COMBOS.map((combo) => {
+            const art = comboArt(combo.id);
+            const added = addedCombo === combo.id;
+            return (
+              <Pressable
+                key={combo.id}
+                accessibilityRole="button"
+                accessibilityLabel={`Add ${combo.label} combo, ${combo.items.length} items`}
+                onPress={() => addCombo(combo)}
+                style={({ pressed }) => [styles.comboTile, pressed && styles.pressed]}
+              >
+                <View style={[styles.comboArt, { backgroundColor: art.bg }]}>
+                  <AppIcon name={art.icon} size={26} color={art.fg} />
+                  {added ? (
+                    <View style={styles.comboCheck}>
+                      <AppIcon name="check" size={12} color={colors.onPrimary} />
+                    </View>
+                  ) : null}
+                </View>
+                <Text style={styles.comboLabel} numberOfLines={1}>
+                  {combo.label}
+                </Text>
+                <Text style={styles.comboSub} numberOfLines={1}>
+                  {combo.items.length} items
+                </Text>
+              </Pressable>
+            );
+          })}
         </ScrollView>
+        <Text style={styles.comboHint}>Tap para idagdag ang buong set, tapos edit mo ang qty.</Text>
       </Card>
 
+      <Text style={styles.sectionLabel}>Listahan ({named.length})</Text>
       <Card>
         <View style={styles.cardHead}>
-          <Text style={styles.cardTitle}>Items ({named.length})</Text>
+          <Text style={styles.cardTitle}>Items</Text>
           <Badge label="Cash on delivery" status="pending" />
         </View>
-        {rows.map((row, i) => (
-          <View key={i} style={styles.row}>
-            <View style={styles.rowMain}>
-              <TextField
-                label={i === 0 ? 'Item' : undefined}
-                placeholder="e.g. 1kg pork, suka, diapers"
-                value={row.name}
-                onChangeText={(v) => setRow(i, { name: v })}
-              />
+        {rows.map((row, i) => {
+          const qty = Number.parseInt(row.qty, 10) || 1;
+          return (
+            <View key={i} style={styles.itemRow}>
+              <View style={[styles.itemNum, i > 0 && styles.itemNumNoLabel]}>
+                <Text style={styles.itemNumText}>{i + 1}</Text>
+              </View>
+              <View style={styles.rowMain}>
+                <TextField
+                  label={i === 0 ? 'Item' : undefined}
+                  placeholder="Anong bibilhin?"
+                  value={row.name}
+                  onChangeText={(v) => setRow(i, { name: v })}
+                />
+              </View>
+              <View style={[styles.stepper, i > 0 && styles.stepperNoLabel]}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Less of item ${i + 1}`}
+                  hitSlop={10}
+                  onPress={() => bumpQty(i, -1)}
+                  style={({ pressed }) => [styles.stepBtn, pressed && styles.pressed]}
+                >
+                  <Text style={styles.stepGlyph}>−</Text>
+                </Pressable>
+                <Text style={styles.stepQty}>{qty}</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`More of item ${i + 1}`}
+                  hitSlop={10}
+                  onPress={() => bumpQty(i, 1)}
+                  style={({ pressed }) => [styles.stepBtn, pressed && styles.pressed]}
+                >
+                  <Text style={styles.stepGlyph}>+</Text>
+                </Pressable>
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Remove item ${i + 1}`}
+                hitSlop={10}
+                onPress={() => removeRow(i)}
+                style={[styles.remove, i > 0 && styles.removeNoLabel]}
+              >
+                <AppIcon name="close" size={14} color={colors.muted} />
+              </Pressable>
             </View>
-            <View style={styles.qtyWrap}>
-              <TextField
-                label={i === 0 ? 'Qty' : undefined}
-                placeholder="1"
-                keyboardType="number-pad"
-                value={row.qty}
-                onChangeText={(v) => setRow(i, { qty: v })}
-              />
-            </View>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Remove item ${i + 1}`}
-              hitSlop={10}
-              onPress={() => removeRow(i)}
-              style={styles.remove}
-            >
-              <AppIcon name="close" size={14} color={colors.muted} />
-            </Pressable>
-          </View>
-        ))}
-        <Button title="Add another item" variant="secondary" onPress={() => setRows((p) => [...p, { ...EMPTY_ROW }])} />
+          );
+        })}
+        <Button title="Add another item" variant="ghost" onPress={() => setRows((p) => [...p, { ...EMPTY_ROW }])} />
       </Card>
 
+      <Text style={styles.sectionLabel}>Saan bibilhin</Text>
       <Card>
-        <Text style={styles.cardTitle}>Where to buy</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.comboRow}>
-          {PRESET_STORES.map((store) => {
+        <View style={styles.storeGrid}>
+          {[...PRESET_STORES, CUSTOM_STORE].map((store) => {
+            const isCustom = store === CUSTOM_STORE;
+            const label = isCustom ? 'Others' : store;
             const selected = storePick === store;
             return (
               <Pressable
                 key={store}
                 accessibilityRole="button"
-                accessibilityLabel={`Buy at ${store}`}
+                accessibilityLabel={isCustom ? 'Type another store' : `Buy at ${store}`}
                 accessibilityState={{ selected }}
                 onPress={() => {
-                  setStorePick(store);
-                  setCustomStore('');
+                  if (isCustom) {
+                    setStorePick(CUSTOM_STORE);
+                  } else {
+                    setStorePick(store);
+                    setCustomStore('');
+                  }
                 }}
                 style={({ pressed }) => [
-                  styles.comboChip,
-                  selected && styles.comboChipSelected,
+                  styles.storeTile,
+                  selected && styles.storeTileSelected,
                   pressed && styles.pressed,
                 ]}
               >
-                <Text style={[styles.comboLabel, selected && styles.comboLabelSelected]}>{store}</Text>
+                <View
+                  style={[
+                    styles.storeMono,
+                    selected ? styles.storeMonoSelected : undefined,
+                  ]}
+                >
+                  <Text style={[styles.storeMonoText, selected && styles.storeMonoTextSelected]}>
+                    {label.charAt(0).toUpperCase()}
+                  </Text>
+                </View>
+                <Text style={[styles.storeLabel, selected && styles.storeLabelSelected]} numberOfLines={1}>
+                  {label}
+                </Text>
+                {selected ? (
+                  <View style={styles.storeCheck}>
+                    <AppIcon name="check" size={11} color={colors.onPrimary} />
+                  </View>
+                ) : null}
               </Pressable>
             );
           })}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Type another store"
-            accessibilityState={{ selected: storePick === CUSTOM_STORE }}
-            onPress={() => setStorePick(CUSTOM_STORE)}
-            style={({ pressed }) => [
-              styles.comboChip,
-              storePick === CUSTOM_STORE && styles.comboChipSelected,
-              pressed && styles.pressed,
-            ]}
-          >
-            <Text style={[styles.comboLabel, storePick === CUSTOM_STORE && styles.comboLabelSelected]}>
-              Others…
-            </Text>
-          </Pressable>
-        </ScrollView>
+        </View>
         {storePick === CUSTOM_STORE ? (
           <TextField
             label="Store name"
@@ -527,6 +631,7 @@ export default function PabiliCreateScreen({ route }: Props) {
         ) : null}
       </Card>
 
+      <Text style={styles.sectionLabel}>Ihahatid sa</Text>
       <Card>
         <Text style={styles.cardTitle}>Delivery details</Text>
         <TextField label="Recipient name" placeholder="Juan Dela Cruz" value={name} onChangeText={setName} />
@@ -547,11 +652,10 @@ export default function PabiliCreateScreen({ route }: Props) {
           <Text style={styles.feeLabel}>Delivery fee (est.)</Text>
           <Text style={styles.feeValue}>{peso(fee)}</Text>
         </View>
-        <Text style={styles.finePrint}>{fareBreakdownLabel(estimate, peso)} · final quote pins to your GPS</Text>
+        <Text style={styles.finePrint}>{fareBreakdownLabel(estimate, peso)}, final quote pins to your GPS</Text>
         <Text style={styles.finePrint}>
           You pay the rider in cash: item costs + {peso(fee)} delivery. Keep GPS on so the rider finds you fast.
         </Text>
-        <Button title="Find a rider" onPress={handleSubmit} loading={submitting} />
       </Card>
     </Screen>
 
@@ -570,7 +674,7 @@ export default function PabiliCreateScreen({ route }: Props) {
       }
     >
       <Text style={styles.gpsBody}>
-        We&apos;ll pin your exact drop-off next to your written address. You can still order with just the address —
+        We&apos;ll pin your exact drop-off next to your written address. You can still order with just the address,
         GPS only makes the handoff faster.
       </Text>
     </SheetModal>
@@ -601,8 +705,8 @@ export default function PabiliCreateScreen({ route }: Props) {
             <Text style={styles.findTitle}>Finding a rider…</Text>
             <Text style={styles.findSub}>
               {dutyCount == null
-                ? `Notifying riders in ${finding.town} — first to accept wins.`
-                : `${dutyCount} rider${dutyCount === 1 ? '' : 's'} on duty in ${finding.town} · ${finding.offered} notified — first to accept wins.`}
+                ? `Notifying riders in ${finding.town}, first to accept wins.`
+                : `${dutyCount} rider${dutyCount === 1 ? '' : 's'} on duty in ${finding.town} · ${finding.offered} notified, first to accept wins.`}
             </Text>
             <Text style={styles.findOrder}>
               {finding.orderNumber} · {peso(finding.fee)} delivery ({finding.distanceKm.toFixed(1)} km)
@@ -671,7 +775,7 @@ export default function PabiliCreateScreen({ route }: Props) {
             </View>
             <Text style={styles.findTitle}>No riders on duty</Text>
             <Text style={styles.findSub}>
-              Nobody in {finding.town} is online right now. Your list is saved — retry from Orders when ready.
+              Nobody in {finding.town} is online right now. Your list is saved, retry from Orders when ready.
             </Text>
             <Text style={styles.findOrder}>{finding.orderNumber}</Text>
             <View style={styles.findActions}>
@@ -687,28 +791,160 @@ export default function PabiliCreateScreen({ route }: Props) {
 }
 
 const styles = StyleSheet.create({
+  // Hero
+  hero: { gap: spacing.xs, paddingTop: spacing.sm },
+  heroTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  heroMedallion: {
+    width: 56,
+    height: 56,
+    borderRadius: radius.xl,
+    backgroundColor: colors.accentSoft,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroFeePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  heroDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.success },
+  heroFeeText: { ...typography.label, fontSize: 12 },
+  heroTitle: { ...typography.display, fontSize: 30 },
+  heroSub: { ...typography.body, color: colors.muted },
+
+  // Rhythm: one small caps-ish label per section, cards do the talking.
+  sectionLabel: { ...typography.micro, fontWeight: '700', letterSpacing: 0.8, color: colors.primaryDeep },
+
   cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   cardTitle: { ...typography.heading, fontSize: 16 },
-  comboHint: { ...typography.caption },
-  comboRow: { gap: spacing.sm, paddingVertical: 2 },
-  comboChip: {
+
+  // Combo mini-cards
+  comboCard: { paddingVertical: spacing.md },
+  comboRow: { gap: spacing.sm, paddingHorizontal: spacing.base, paddingVertical: 2 },
+  comboTile: { width: 104, alignItems: 'center', gap: 4 },
+  comboArt: {
+    width: 76,
+    height: 76,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  comboCheck: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.success,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: colors.surface,
+  },
+  comboLabel: { ...typography.label, fontSize: 12.5, fontWeight: '700' },
+  comboSub: { ...typography.micro, fontSize: 10.5 },
+  comboHint: { ...typography.caption, paddingHorizontal: spacing.base, paddingTop: spacing.sm },
+  pressed: { opacity: 0.7 },
+
+  // Receipt rows
+  itemRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs },
+  itemNum: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: colors.primaryTint,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 30,
+  },
+  itemNumText: { ...typography.label, fontSize: 12, color: colors.primaryDeep },
+  itemNumNoLabel: { marginTop: 12 },
+  rowMain: { flex: 1 },
+  stepper: { flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 30 },
+  stepperNoLabel: { marginTop: 12 },
+  stepBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    backgroundColor: colors.surfaceSunken,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepGlyph: { ...typography.subhead, fontSize: 16, color: colors.text },
+  stepQty: { ...typography.subhead, minWidth: 24, textAlign: 'center' },
+  remove: { paddingTop: 38 },
+  removeNoLabel: { paddingTop: 18 },
+  fieldLabel: { ...typography.label, fontSize: 13, fontWeight: '600' },
+
+  // Store grid
+  storeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  storeTile: {
+    width: '31%',
+    flexGrow: 1,
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  storeTileSelected: { borderColor: colors.primary, backgroundColor: colors.primaryTint },
+  storeMono: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.surfaceSunken,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  storeMonoSelected: { backgroundColor: colors.primary },
+  storeMonoText: { ...typography.heading, color: colors.body },
+  storeMonoTextSelected: { color: colors.onPrimary },
+  storeLabel: { ...typography.label, fontSize: 12 },
+  storeLabelSelected: { color: colors.primaryDeep },
+  storeCheck: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // Sticky footer CTA: the single yellow action on screen.
+  footerStack: { gap: spacing.sm },
+  stickyCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginHorizontal: spacing.base,
     paddingHorizontal: spacing.base,
     paddingVertical: spacing.sm,
-    borderRadius: radius.pill,
-    backgroundColor: colors.primaryTint,
-    alignItems: 'center',
-    gap: 1,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.hairline,
   },
-  comboLabel: { ...typography.label, fontWeight: '700', color: colors.primaryDeep },
-  comboLabelSelected: { color: colors.onPrimary },
-  comboChipSelected: { backgroundColor: colors.primary },
-  comboSub: { ...typography.micro, color: colors.primaryDeep },
-  pressed: { opacity: 0.7 },
-  row: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs },
-  rowMain: { flex: 1 },
-  qtyWrap: { width: 72 },
-  remove: { paddingTop: spacing.lg },
-  fieldLabel: { ...typography.label, fontSize: 13, fontWeight: '600' },
+  stickyTotals: { flex: 1, gap: 1 },
+  stickyCount: { ...typography.caption, fontWeight: '600', color: colors.text },
+  stickyFee: { ...typography.price, fontSize: 16 },
+  stickyBtn: { minWidth: 148 },
+
   gpsActions: { flexDirection: 'row', gap: spacing.sm },
   gpsFlex: { flex: 1 },
   gpsBody: { ...typography.body },

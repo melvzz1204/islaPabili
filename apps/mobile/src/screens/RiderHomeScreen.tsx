@@ -90,7 +90,7 @@ export default function RiderHomeScreen() {
   const [overlayId, setOverlayId] = useState<string | null>(null);
   const sirenFor = useRef<string | null>(null);
 
-  // Live GPS broadcast while holding an active delivery — this is what the
+  // Live GPS broadcast while holding an active delivery, this is what the
   // customer watches on the Track screen.
   useRiderBroadcast(mine.length > 0);
   // Live banner for incoming customer messages, anywhere in the rider shell.
@@ -212,7 +212,7 @@ export default function RiderHomeScreen() {
         await notifyLocal({
           channel: CHANNEL_ORDERS,
           title: `New pabili · #${newest.order.order_number}`,
-          body: `${TOWN_LABELS[newest.order.town]} · ${newest.items.length} items · ${peso(Number(newest.order.total_delivery_fee ?? 0))} fee — first to accept wins.`,
+          body: `${TOWN_LABELS[newest.order.town]} · ${newest.items.length} items · ${peso(Number(newest.order.total_delivery_fee ?? 0))} fee, first to accept wins.`,
           data: { orderId: newest.order.id, kind: 'pabili' },
         });
       }
@@ -314,8 +314,8 @@ export default function RiderHomeScreen() {
     showToast({
       message:
         decision === 'accepted'
-          ? `Accepted ${offer.order.order_number} — customer notified.`
-          : 'Passed — the request stays open for other riders.',
+          ? `Accepted ${offer.order.order_number}, customer notified.`
+          : 'Passed, the request stays open for other riders.',
       type: 'success',
     });
     await Promise.all([loadIncoming(), loadMine()]);
@@ -332,7 +332,7 @@ export default function RiderHomeScreen() {
       return;
     }
     showToast({
-      message: next.to === 'completed' ? 'Delivered. Salamat!' : 'Status updated — customer notified.',
+      message: next.to === 'completed' ? 'Delivered. Salamat!' : 'Status updated, customer notified.',
       type: 'success',
     });
     // Wake the customer when their app is killed/backgrounded.
@@ -394,7 +394,7 @@ export default function RiderHomeScreen() {
     return { totalEarned, deliveries: history.length, days };
   }, [history]);
 
-  // Switching tabs always leaves the full-screen map — otherwise the tap
+  // Switching tabs always leaves the full-screen map, otherwise the tap
   // looks dead because the map keeps covering the tab content.
   const changeTab = (t: RiderTab) => {
     setMapOrderId(null);
@@ -654,7 +654,7 @@ function DashboardView({
         <View style={styles.dutyRow}>
           <View style={styles.dutyText}>
             <Badge label={onDuty ? 'On duty' : 'Off duty'} status={onDuty ? 'delivered' : 'neutral'} />
-            <Text style={styles.dutyLabel}>{onDuty ? 'On duty — accepting pabili' : 'Off duty'}</Text>
+            <Text style={styles.dutyLabel}>{onDuty ? 'On duty, accepting pabili' : 'Off duty'}</Text>
             <Text style={styles.dutyHint}>
               {onDuty
                 ? `Visible in ${areaLabel}.`
@@ -679,7 +679,7 @@ function DashboardView({
             <Text style={styles.offerCtaTitle}>
               {requestCount} new request{requestCount === 1 ? '' : 's'}
             </Text>
-            <Text style={styles.offerCtaBody}>First to accept wins — check them now.</Text>
+            <Text style={styles.offerCtaBody}>First to accept wins, check them now.</Text>
           </View>
           <Button title="View" onPress={onViewRequests} />
         </Card>
@@ -692,7 +692,7 @@ function WeeklyBars({ days }: { days: { key: string; label: string; value: numbe
   const max = Math.max(1, ...days.map((d) => d.value));
   const peak = days.reduce((best, d) => (d.value > best.value ? d : best), days[0]!);
   if (peak.value === 0) {
-    return <Text style={styles.muted}>No deliveries yet this week — completed payouts show up here.</Text>;
+    return <Text style={styles.muted}>No deliveries yet this week, completed payouts show up here.</Text>;
   }
   return (
     <View style={styles.barsRow}>
@@ -739,7 +739,7 @@ function RequestsView({
         <View style={styles.greetText}>
           <Text style={styles.screenTitle}>Requests</Text>
           <Text style={styles.muted}>
-            {incoming.length ? 'First to accept wins' : 'Stay on duty — offers appear here live.'}
+            {incoming.length ? 'First to accept wins' : 'Stay on duty, offers appear here live.'}
           </Text>
         </View>
         {incoming.length ? <Badge label={`${incoming.length} new`} status="pending" /> : null}
@@ -747,7 +747,7 @@ function RequestsView({
       {incoming.length === 0 ? (
         <EmptyState
           title="No incoming requests"
-          message="Stay on duty with GPS on — customer lists in your area appear here live."
+          message="Stay on duty with GPS on, customer lists in your area appear here live."
           icon="pabili"
         />
       ) : (
@@ -854,10 +854,10 @@ function DeliveriesView({
                 </Text>
               ))}
               <Text style={styles.contact} numberOfLines={1}>
-                Customer: {o.dropoff_notes || '—'}
+                Customer: {o.dropoff_notes || 'No notes left'}
               </Text>
               {o.dropoff_lat != null && o.dropoff_lng != null ? (
-                <Text style={styles.gpsLine}>Customer GPS pinned ✓ — keep your GPS on</Text>
+                <Text style={styles.gpsLine}>Customer GPS pinned ✓, keep your GPS on</Text>
               ) : null}
               <Text style={styles.feeLine}>
                 {peso(Number(o.total_delivery_fee ?? 0))} fee · COD
@@ -989,7 +989,7 @@ function RiderMessagesView({
     const body = text.trim();
     if (!body || !profile || !openId || sending) return;
     if (open && !canChat(open.status)) {
-      showToast({ message: 'This chat is closed — the order is no longer active.', type: 'info' });
+      showToast({ message: 'This chat is closed, the order is no longer active.', type: 'info' });
       return;
     }
     setSending(true);
@@ -1052,7 +1052,7 @@ function RiderMessagesView({
         {chatOpen ? (
           <ChatComposer onSend={(body) => send(body)} sending={sending} placeholder="Write to customer…" />
         ) : (
-          <Text style={styles.muted}>Chat closed — this order is {open.status.replace(/_/g, ' ')}.</Text>
+          <Text style={styles.muted}>Chat closed, this order is {open.status.replace(/_/g, ' ')}.</Text>
         )}
       </View>
     );
@@ -1224,7 +1224,7 @@ function RiderTrackView({
               {TOWN_LABELS[order.town]}
             </Text>
             <Text style={styles.muted} numberOfLines={2}>
-              {dropoff ? order.dropoff_address : 'No customer GPS pinned — follow this written address.'}
+              {dropoff ? order.dropoff_address : 'No customer GPS pinned, follow this written address.'}
             </Text>
           </View>
         </View>

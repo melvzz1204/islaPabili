@@ -14,7 +14,7 @@ import { SheetModal } from '@isla/ui';
 import { KIND_LABEL, peso, productPhotoSrc, type Merchant, type Product } from './data';
 import { useCart } from './cart';
 
-const TILE_COLORS = ['#0D9488', '#F97316', '#7C3AED', '#0EA5E9', '#059669', '#E11D48'];
+const TILE_COLORS = ['#C2410C', '#15803D', '#1D4ED8', '#9A3412', '#B45309', '#DC2626'];
 
 export function tileColor(seed: string): string {
   let h = 0;
@@ -308,6 +308,7 @@ export function ProductSheet({ product, onClose }: ProductSheetProps) {
       ) : (
         <Button
           title={`Add to cart · ${peso(product.price)}`}
+          variant="accent"
           onPress={() => {
             add(product, 1);
             onClose();
@@ -327,7 +328,7 @@ export function CartBar({ onPress, actionLabel = 'Go to cart' }: { onPress: () =
   return (
     <View style={[styles.cartBar, shadows.sticky]}>
       <View style={styles.cartCount}>
-        <AppIcon name="cart" size={17} color={colors.onPrimary} />
+        <AppIcon name="cart" size={17} color={colors.onAccent} />
         <Text style={styles.cartCountText}>{count}</Text>
       </View>
       <View style={styles.cartInfo}>
@@ -343,7 +344,7 @@ export function CartBar({ onPress, actionLabel = 'Go to cart' }: { onPress: () =
         style={({ pressed }) => [styles.cartCta, pressed && styles.pressed]}
       >
         <Text style={styles.cartCtaText}>{actionLabel}</Text>
-        <AppIcon name="chevronRight" size={15} color={colors.onPrimary} />
+        <AppIcon name="chevronRight" size={15} color={colors.onAccent} />
       </Pressable>
     </View>
   );
@@ -518,7 +519,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     backgroundColor: colors.accent,
   },
-  cartCountText: { ...typography.micro, color: colors.onPrimary },
+  cartCountText: { ...typography.micro, color: colors.onAccent },
   cartInfo: { flex: 1, gap: 1 },
   cartSubtotal: { ...typography.price, fontSize: 16 },
   cartCaption: { ...typography.caption, fontSize: 11 },
@@ -529,9 +530,9 @@ const styles = StyleSheet.create({
     height: 44,
     paddingHorizontal: spacing.lg,
     borderRadius: radius.pill,
-    backgroundColor: colors.text,
+    backgroundColor: colors.accent,
   },
-  cartCtaText: { ...typography.label, color: colors.onPrimary },
+  cartCtaText: { ...typography.label, color: colors.onAccent },
 
   // Shared
   cardPressed: { opacity: 0.9, transform: [{ scale: 0.99 }] },

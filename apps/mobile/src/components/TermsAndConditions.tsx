@@ -5,14 +5,14 @@ export type TermsDoc = 'terms' | 'privacy';
 
 export const TERMS_TITLE = 'Terms and Conditions';
 export const PRIVACY_TITLE = 'Privacy Policy';
-export const TERMS_VERSION = 'Dummy v1.0 — for demo purposes only';
+export const TERMS_VERSION = 'Dummy v1.0, for demo purposes only';
 
 type Section = { heading: string; body: string };
 
 export const TERMS_SECTIONS: Section[] = [
   {
     heading: '1. Acceptance of terms',
-    body: 'By creating an IslaPabili account you agree to these dummy Terms and Conditions. This is placeholder text for development and demo builds — it does not constitute legal advice and will be replaced with the final legal copy before production launch.',
+    body: 'By creating an IslaPabili account you agree to these dummy Terms and Conditions. This is placeholder text for development and demo builds, it does not constitute legal advice and will be replaced with the final legal copy before production launch.',
   },
   {
     heading: '2. Your account',

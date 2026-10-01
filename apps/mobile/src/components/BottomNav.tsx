@@ -60,7 +60,7 @@ export function BottomNav() {
   const { session } = useAuth();
   const active = useActiveTab();
 
-  // Guests only have the Shop tab — offer it plus a way into sign-in.
+  // Guests only have the Shop tab, offer it plus a way into sign-in.
   if (!session) {
     return (
       <View style={styles.bar}>

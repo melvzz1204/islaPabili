@@ -104,7 +104,7 @@ export default function NotificationsScreen({}: Props) {
     void load();
   }, [load]);
 
-  // Refresh every time the inbox is opened, and live while it stays open —
+  // Refresh every time the inbox is opened, and live while it stays open ,
   // otherwise a notification that lands (e.g. the rider-application receipt)
   // only appears after a manual reload.
   useFocusEffect(

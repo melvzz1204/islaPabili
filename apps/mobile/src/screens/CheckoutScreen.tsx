@@ -42,7 +42,7 @@ const PAY_LABELS: Record<PayMethod, string> = {
 
 const PAY_DB: Record<PayMethod, DbPayment> = { cod: 'cod', gcash: 'ewallet', maya: 'ewallet' };
 
-// Self pickup is paused until stores can handle counter handoffs —
+// Self pickup is paused until stores can handle counter handoffs ,
 // rider delivery is the only live fulfillment mode.
 const FULFILLMENT_MODE = 'merchant_delivery' as const;
 
@@ -161,12 +161,12 @@ export default function CheckoutScreen({}: Props) {
     try {
       const perm = await Location.requestForegroundPermissionsAsync();
       if (!perm.granted) {
-        showToast({ message: 'Location blocked — quoting from your town center.', type: 'error' });
+        showToast({ message: 'Location blocked, quoting from your town center.', type: 'error' });
         return;
       }
       const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       setGps({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-      showToast({ message: 'Location pinned — delivery fee now uses real distance.', type: 'success' });
+      showToast({ message: 'Location pinned, delivery fee now uses real distance.', type: 'success' });
     } catch {
       showToast({ message: 'Could not read your location.', type: 'error' });
     } finally {
@@ -252,7 +252,7 @@ export default function CheckoutScreen({}: Props) {
     showRiderCardRef.current = showRiderCard;
   }, [showRiderCard]);
 
-  // Watch our own orders — when a rider is assigned, pull the rider card.
+  // Watch our own orders, when a rider is assigned, pull the rider card.
   const findingPhase = finding?.phase;
   useEffect(() => {
     if (!finding || findingPhase !== 'searching' || !uid) return;
@@ -382,8 +382,8 @@ export default function CheckoutScreen({}: Props) {
               </View>
               <Text style={styles.muted}>
                 {summary.payLabel === PAY_LABELS.cod
-                  ? `Prepare ${peso(summary.total)} in cash for the rider — items plus delivery.`
-                  : 'Simulated e-wallet charge — no real money moves in this build.'}
+                  ? `Prepare ${peso(summary.total)} in cash for the rider, items plus delivery.`
+                  : 'Simulated e-wallet charge, no real money moves in this build.'}
               </Text>
             </Card>
           </View>
@@ -396,7 +396,7 @@ export default function CheckoutScreen({}: Props) {
                 {summary.name} · {summary.phone}
               </Text>
               <Text style={styles.muted}>
-                {summary.townLabel} — {summary.address}
+                {summary.townLabel}, {summary.address}
               </Text>
             </Card>
           </View>
@@ -559,6 +559,7 @@ export default function CheckoutScreen({}: Props) {
             </View>
             <Button
               title="Place order"
+              variant="accent"
               loading={placing}
               onPress={() => void placeOrder()}
               fullWidth={false}
@@ -572,7 +573,7 @@ export default function CheckoutScreen({}: Props) {
     >
       <ScreenHeader title="Checkout" onBack={() => navigation.goBack()} />
 
-      {/* Fulfillment — rider delivery only; self pickup is paused for now */}
+      {/* Fulfillment, rider delivery only; self pickup is paused for now */}
       <View style={styles.section}>
         <SectionHeader title="How do you want it?" />
         <View style={styles.fulfillGrid}>
@@ -622,7 +623,7 @@ export default function CheckoutScreen({}: Props) {
             multiline
           />
           <Button
-            title={gps ? 'Location pinned ✓ — tap to re-pin' : 'Use my exact location'}
+            title={gps ? 'Location pinned ✓, tap to re-pin' : 'Use my exact location'}
             variant="secondary"
             loading={pinning}
             onPress={() => void pinLocation()}
@@ -630,7 +631,7 @@ export default function CheckoutScreen({}: Props) {
           <Text style={styles.muted}>
             {gps
               ? 'Fee uses the real store-to-you distance.'
-              : 'Without a pin we estimate from your town center — fee updates when you pin.'}
+              : 'Without a pin we estimate from your town center, fee updates when you pin.'}
           </Text>
         </Card>
       </View>
@@ -887,8 +888,8 @@ function FindingOverlay({
       <Text style={styles.findTitle}>Finding a rider…</Text>
       <Text style={styles.findSub}>
         {dutyCount == null
-          ? `Notifying riders in ${finding.town} — first to accept shops for you.`
-          : `${dutyCount} rider${dutyCount === 1 ? '' : 's'} on duty in ${finding.town} — first to accept shops and delivers.`}
+          ? `Notifying riders in ${finding.town}, first to accept shops for you.`
+          : `${dutyCount} rider${dutyCount === 1 ? '' : 's'} on duty in ${finding.town}, first to accept shops and delivers.`}
       </Text>
       <Text style={styles.findOrder}>{label}</Text>
       <View style={styles.findActions}>

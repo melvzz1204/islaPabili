@@ -69,7 +69,7 @@ export async function initNotifications(): Promise<void> {
   try {
     await Notifications.requestPermissionsAsync();
   } catch {
-    // Denied — in-app banners/toasts still work.
+    // Denied, in-app banners/toasts still work.
   }
   Notifications.setNotificationHandler({
     handleNotification: () =>

@@ -107,7 +107,7 @@ type ListRowProps = {
   value?: string;
   tone?: 'default' | 'danger';
   showChevron?: boolean;
-  /** Hairline under the row — use between items in a grouped card. */
+  /** Hairline under the row, use between items in a grouped card. */
   divider?: boolean;
 };
 

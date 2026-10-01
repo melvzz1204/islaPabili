@@ -170,7 +170,7 @@ export default function RegisterScreen() {
         accent
         align="center"
         title="Create your account"
-        subtitle="A minute to sign up — you'll pick your town in the next step."
+        subtitle="A minute to sign up, you'll pick your town in the next step."
       />
 
       <View style={styles.stepper}>

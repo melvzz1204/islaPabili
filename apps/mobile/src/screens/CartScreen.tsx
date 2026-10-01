@@ -52,6 +52,7 @@ export default function CartScreen({}: Props) {
               </View>
               <Button
                 title={session ? 'Checkout' : 'Log in to checkout'}
+                variant="accent"
                 onPress={handleCheckout}
                 size="lg"
                 fullWidth={false}

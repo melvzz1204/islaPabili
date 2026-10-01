@@ -21,7 +21,8 @@ const STATUS_COLORS: Record<BadgeStatus, { bg: string; fg: string }> = {
   success: { bg: colors.successSoft, fg: colors.successDark },
   warning: { bg: colors.warnSoft, fg: colors.warnDark },
   danger: { bg: colors.dangerSoft, fg: colors.dangerDark },
-  accent: { bg: colors.accentSoft, fg: colors.accentDark },
+  // 10% solid yellow, discount / promo badges only.
+  accent: { bg: colors.accent, fg: colors.onAccent },
   outline: { bg: 'transparent', fg: colors.body },
   pending: { bg: colors.warnSoft, fg: colors.warnDark },
   transit: { bg: colors.primarySoft, fg: colors.primaryDeep },

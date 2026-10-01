@@ -79,7 +79,7 @@ export function useConversations(role: 'customer' | 'rider') {
   // Live: any new message in my conversations refreshes the list preview.
   // NOTE: the channel name includes a per-hook random suffix. `client.channel()`
   // returns the same instance for an identical topic, and realtime-js throws if
-  // `.on()` is called after `.subscribe()` — this hook mounts 2-3x at once
+  // `.on()` is called after `.subscribe()`, this hook mounts 2-3x at once
   // (tab badge + header badge + list), so a shared name crashes the app.
   const instanceId = useMemo(() => Math.random().toString(36).slice(2, 9), []);
   useEffect(() => {
@@ -118,7 +118,7 @@ export function useUnreadMessages(role: 'customer' | 'rider'): number {
 
 // --- Live incoming-message banners --------------------------------------------
 
-/** Order thread currently on screen — banners stay quiet for it. */
+/** Order thread currently on screen, banners stay quiet for it. */
 let openOrderId: string | null = null;
 
 export function setOpenOrderId(orderId: string | null) {
@@ -127,7 +127,7 @@ export function setOpenOrderId(orderId: string | null) {
 
 /**
  * Mount once per shell (customer tabs, rider home). Pops a toast banner
- * whenever the other party writes in one of my orders — except the thread
+ * whenever the other party writes in one of my orders, except the thread
  * already open on screen, which updates live on its own.
  */
 export function useIncomingMessageAlerts(role: 'customer' | 'rider') {

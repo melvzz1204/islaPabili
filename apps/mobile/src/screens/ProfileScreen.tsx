@@ -90,7 +90,7 @@ export default function ProfileScreen({ navigation }: Props) {
 
   const handleSignOut = () => {
     setConfirmSignOut(false);
-    // Redirect first — sign-out finishes in the background, so a slow
+    // Redirect first, sign-out finishes in the background, so a slow
     // network can never trap the user on this screen.
     navigation.navigate('Shop');
     void supabaseSignOut(client).catch(() => {
@@ -235,7 +235,7 @@ export default function ProfileScreen({ navigation }: Props) {
       <SheetModal
         visible={riderExitOpen}
         title="Switch to rider mode?"
-        subtitle="Rider mode is separate — log out first, then log in as a rider."
+        subtitle="Rider mode is separate, log out first, then log in as a rider."
         onClose={() => setRiderExitOpen(false)}
         footer={
           <View style={styles.confirmRow}>

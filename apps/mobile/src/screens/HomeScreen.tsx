@@ -47,7 +47,7 @@ const ACTIVE_STATUSES: ActiveStatus[] = [
   'in_transit',
 ];
 
-/** Merchant-wait means placed — no merchant counter yet, the rider shops. */
+/** Merchant-wait means placed, no merchant counter yet, the rider shops. */
 const ACTIVE_LABEL: Partial<Record<ActiveStatus, string>> = {
   awaiting_merchant: 'order placed',
 };
@@ -166,7 +166,7 @@ export default function HomeScreen({}: Props) {
         </View>
       </View>
 
-      {/* Pabili CTA — the live flow, so it sits on top */}
+      {/* Pabili CTA, the live flow, so it sits on top */}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Create a pabili list"
@@ -179,13 +179,13 @@ export default function HomeScreen({}: Props) {
           </View>
           <View style={styles.riderText}>
             <Text style={styles.riderTitle}>Pabili errand</Text>
-            <Text style={styles.riderBody}>Type what you need — a rider will buy it and deliver it to you.</Text>
+            <Text style={styles.riderBody}>Type what you need, a rider will buy it and deliver it to you.</Text>
           </View>
           <Badge label="New" status="accent" />
         </Card>
       </Pressable>
 
-      {/* Jollibee shortcut — opens the Jollibee menu */}
+      {/* Jollibee shortcut, opens the Jollibee menu */}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Order Jollibee, open menu"
@@ -202,7 +202,7 @@ export default function HomeScreen({}: Props) {
           <View style={styles.jollibeeText}>
             <Text style={styles.jollibeeTitle}>Jollibee</Text>
             <Text style={styles.jollibeeSub} numberOfLines={1}>
-              Chickenjoy • Spaghetti • Burgers — tap to order
+              Chickenjoy • Spaghetti • Burgers, tap to order
             </Text>
           </View>
           <View style={styles.jollibeeBadge}>
@@ -215,7 +215,7 @@ export default function HomeScreen({}: Props) {
       <Card variant="tinted" style={styles.soonCard}>
         <Text style={styles.soonTitle}>Store catalog coming soon</Text>
         <Text style={styles.soonBody}>
-          Merchant stores are still onboarding — the sections below are paused. Send a pabili list instead.
+          Merchant stores are still onboarding, the sections below are paused. Send a pabili list instead.
         </Text>
       </Card>
 
@@ -304,7 +304,7 @@ export default function HomeScreen({}: Props) {
             <Text style={styles.noStoresText}>
               {shouldFilterTowns(optedTowns)
                 ? `No stores are live in your municipalities yet. See all stores to browse the rest of Marinduque.`
-                : 'No stores are live yet. Check back soon — merchants are onboarding now.'}
+                : 'No stores are live yet. Check back soon, merchants are onboarding now.'}
             </Text>
           </Card>
         ) : (
@@ -325,7 +325,7 @@ export default function HomeScreen({}: Props) {
         )}
       </View>
 
-      {/* Rider CTA — rider mode is a separate shell, so this logs out first */}
+      {/* Rider CTA, rider mode is a separate shell, so this logs out first */}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Become a rider"
@@ -346,7 +346,7 @@ export default function HomeScreen({}: Props) {
       <SheetModal
         visible={riderExitOpen}
         title="Switch to rider mode?"
-        subtitle="Rider mode is separate — log out first, then log in as a rider."
+        subtitle="Rider mode is separate, log out first, then log in as a rider."
         onClose={() => setRiderExitOpen(false)}
         footer={
           <View style={styles.modalFoot}>

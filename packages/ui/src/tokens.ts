@@ -1,67 +1,83 @@
 /**
- * IslaPabili design tokens — single source of truth.
+ * IslaPabili design tokens, single source of truth for the MOBILE app.
  *
- * Direction: calm, minimal, premium. Most surfaces are white on a soft
- * neutral canvas; the brand teal is an accent, not a flood. Hairlines are
- * lighter than borders so elevation reads through shadow, not outline.
+ * Web (admin-web / merchant-web) reads `web-tokens.css`, so changes here
+ * only re-skin mobile. Mobile follows a strict 60/30/10 delivery-app system:
  *
- * Apps must import from `@isla/ui` — never hardcode these values in screens.
+ * - 60% DOMINANT (neutrals): crisp white / light gray / soft cream across
+ *   every background, card, sheet, and content surface. Food photos and menus
+ *   stay clean and legible; neutrals do the quiet work.
+ * - 30% SECONDARY (brand structure): deep orange across top bars, card
+ *   outlines, category headers, secondary buttons, selected states, and
+ *   structural dividers. Recognizable without shouting.
+ * - 10% ACCENT (conversion only): bright yellow reserved for Add to Cart,
+ *   Checkout / Place Order, active delivery pins, and discount badges.
+ *   Never use yellow for decoration, if everything pops, nothing pops.
+ *
+ * Type: Inter everywhere, tuned for small screens.
+ *
+ * Apps must import from `@isla/ui`, never hardcode these values in screens.
  */
 
 // --- Brand & semantic colors ------------------------------------------------
+// 60%, dominant neutrals (backgrounds, cards, sheets)
 export const colors = {
-  // Brand teal — used for primary actions, active states, success-trust.
-  primary: '#0D9488',
-  primaryDark: '#0B7C72',
-  primaryDeep: '#065F59',
-  primarySoft: '#E6F6F4',
-  primaryTint: '#F0FAF9',
+  // 30%, secondary brand structure (deep orange identity).
+  // Primary actions that are NOT purchases: headers, outlines, secondary
+  // buttons, selected states, dividers.
+  primary: '#C2410C',
+  primaryDark: '#9A3412',
+  primaryDeep: '#7C2D12',
+  primarySoft: '#FDEBD7',
+  primaryTint: '#FFF6EA',
 
-  // Warm accent — the "Pabili" action (add to cart, rider, highlights).
-  accent: '#F97316',
-  accentDark: '#EA580C',
-  accentSoft: '#FFF4EC',
+  // 10%, conversion accent (bright yellow). Add to Cart, Checkout Now,
+  // Place Order, active rider pins, discount badges ONLY.
+  accent: '#FFB800',
+  accentDark: '#8A5A00',
+  accentSoft: '#FFF3C4',
 
-  // Canvas & surfaces
-  bg: '#F6F7F9',
+  // 60%, canvas & surfaces (soft cream system, not cold gray).
+  bg: '#FDFBF5',
   surface: '#FFFFFF',
-  surfaceSunken: '#F1F3F6',
-  surfaceMuted: '#F9FAFB',
-  // Warm chat canvas — message thread backdrop.
-  chatCanvas: '#E9E3D7',
+  surfaceSunken: '#F4F0E6',
+  surfaceMuted: '#FAF6EC',
+  // Warm chat canvas, message thread backdrop.
+  chatCanvas: '#EFE8D6',
 
-  // Text
-  text: '#0B1220',
-  ink: '#0B1220',
-  body: '#475569',
-  muted: '#7A8699',
-  faint: '#A3ADBD',
+  // Text (warm stone for cream harmony)
+  text: '#1C1917',
+  ink: '#1C1917',
+  body: '#57534E',
+  muted: '#78716C',
+  faint: '#A8A29E',
   onPrimary: '#FFFFFF',
+  onAccent: '#231303',
 
-  // Lines
-  border: '#E7EAEF',
-  borderStrong: '#D6DBE3',
-  hairline: '#EFF1F4',
+  // Lines (warm, low-contrast so cards read through shadow)
+  border: '#E7E0CF',
+  borderStrong: '#D9CFB8',
+  hairline: '#F0EAD9',
 
-  // Status
-  success: '#0F9D6E',
-  successSoft: '#E3F7EF',
-  successDark: '#046C4E',
-  warn: '#D97706',
-  warnSoft: '#FEF4E2',
-  warnDark: '#92400E',
-  danger: '#E11D48',
-  dangerDark: '#9F1239',
-  dangerSoft: '#FFE9EE',
-  info: '#2563EB',
-  infoSoft: '#E8EFFE',
-  infoDark: '#1E40AF',
-  neutralSoft: '#F1F3F6',
-  neutralDark: '#475569',
+  // Status (kept readable on cream)
+  success: '#15803D',
+  successSoft: '#E4F5E9',
+  successDark: '#14532D',
+  warn: '#B45309',
+  warnSoft: '#FDF0D9',
+  warnDark: '#78350F',
+  danger: '#DC2626',
+  dangerDark: '#991B1B',
+  dangerSoft: '#FDE5E5',
+  info: '#1D4ED8',
+  infoSoft: '#E6EEFD',
+  infoDark: '#1E3A8A',
+  neutralSoft: '#F4F0E6',
+  neutralDark: '#57534E',
 
-  toastBg: '#0B1220',
-  overlay: 'rgba(11, 18, 32, 0.45)',
-  skeleton: '#EAEDF1',
+  toastBg: '#1C1917',
+  overlay: 'rgba(28, 25, 23, 0.45)',
+  skeleton: '#ECE6D6',
 } as const;
 
 export type ColorName = keyof typeof colors;
@@ -99,46 +115,46 @@ export const radius = {
 export type RadiusName = keyof typeof radius;
 
 // --- Elevation --------------------------------------------------------------
-// Layered and low-opacity: premium depth without muddiness.
+// Layered and low-opacity: depth without muddiness on cream.
 export const shadows = {
   none: {},
   card: {
-    shadowColor: '#0B1220',
+    shadowColor: '#1C1917',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
     shadowRadius: 3,
     elevation: 1,
   },
   raised: {
-    shadowColor: '#0B1220',
+    shadowColor: '#1C1917',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.06,
     shadowRadius: 12,
     elevation: 3,
   },
   sticky: {
-    shadowColor: '#0B1220',
+    shadowColor: '#1C1917',
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.05,
     shadowRadius: 16,
     elevation: 10,
   },
   fab: {
-    shadowColor: '#0B1220',
+    shadowColor: '#1C1917',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.18,
     shadowRadius: 16,
     elevation: 8,
   },
   sheet: {
-    shadowColor: '#0B1220',
+    shadowColor: '#1C1917',
     shadowOffset: { width: 0, height: -8 },
     shadowOpacity: 0.14,
     shadowRadius: 28,
     elevation: 20,
   },
   toast: {
-    shadowColor: '#0B1220',
+    shadowColor: '#1C1917',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.2,
     shadowRadius: 20,
@@ -147,35 +163,39 @@ export const shadows = {
 } as const;
 
 // --- Fonts ------------------------------------------------------------------
+// Mobile-only: Inter throughout (single family, small-screen legibility).
+// Web keeps its own stack in web-tokens.css.
 export const fonts = {
-  display: 'PlusJakartaSans',
+  display: 'Inter',
   body: 'Inter',
 } as const;
 
 // --- Typography scale -------------------------------------------------------
+// Inter hierarchy: tight but comfortable line-heights for 5 to 6.5" screens.
+// display/title/heading 700 for headers · body 400 · labels 600.
 export const typography = {
   display: {
     fontFamily: fonts.display,
-    fontSize: 30,
+    fontSize: 28,
     fontWeight: '700' as const,
-    lineHeight: 36,
-    letterSpacing: -0.6,
+    lineHeight: 34,
+    letterSpacing: -0.5,
     color: colors.text,
   },
   title: {
     fontFamily: fonts.display,
-    fontSize: 23,
+    fontSize: 22,
     fontWeight: '700' as const,
-    lineHeight: 29,
-    letterSpacing: -0.4,
+    lineHeight: 28,
+    letterSpacing: -0.3,
     color: colors.text,
   },
   heading: {
     fontFamily: fonts.display,
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '700' as const,
-    lineHeight: 24,
-    letterSpacing: -0.2,
+    lineHeight: 23,
+    letterSpacing: -0.1,
     color: colors.text,
   },
   subhead: {
@@ -189,14 +209,14 @@ export const typography = {
     fontFamily: fonts.body,
     fontSize: 15,
     fontWeight: '400' as const,
-    lineHeight: 22,
+    lineHeight: 23,
     color: colors.body,
   },
   bodyStrong: {
     fontFamily: fonts.body,
     fontSize: 15,
     fontWeight: '600' as const,
-    lineHeight: 22,
+    lineHeight: 23,
     color: colors.text,
   },
   label: {
@@ -217,7 +237,7 @@ export const typography = {
     fontFamily: fonts.body,
     fontSize: 11,
     fontWeight: '600' as const,
-    lineHeight: 14,
+    lineHeight: 15,
     color: colors.muted,
   },
   price: {
@@ -250,3 +270,4 @@ export const layout = {
   touchTarget: 48,
   hairline: 1,
 } as const;
+

@@ -29,7 +29,7 @@ export async function registerPushToken(client: Supabase, userId: string): Promi
 
 /**
  * Asks the push-send edge function to wake the *other* side (killed or
- * backgrounded apps). Fire-and-forget — the sender's UI never waits on it.
+ * backgrounded apps). Fire-and-forget, the sender's UI never waits on it.
  */
 export async function invokePush(
   client: Supabase,

@@ -6,14 +6,14 @@ import { colors } from './tokens';
 
 /**
  * Centralized vector-icon mapping (Material Community Icons + FontAwesome
- * via @expo/vector-icons — fonts load at runtime through expo-font, so this
+ * via @expo/vector-icons, fonts load at runtime through expo-font, so this
  * stays OTA-safe with no native rebuild).
- * Screens reference `AppIcon` names — never import icon sets directly — so
+ * Screens reference `AppIcon` names, never import icon sets directly, so
  * icon set/glyph/color changes propagate from here.
  *
  * NOTE: vector glyphs are single-style (no duotone/fill weights like the
  * previous set). The `weight` prop on AppIcon is accepted for API
- * compatibility but intentionally ignored — active/emphasis states are
+ * compatibility but intentionally ignored, active/emphasis states are
  * expressed through `color`.
  */
 
@@ -138,13 +138,13 @@ export const iconDefaults: Record<
   image: { color: colors.primary, style: 'duotone' },
   storefront: { color: colors.text, style: 'duotone' },
 
-  pabili: { color: colors.accent, style: 'duotone' },
+  pabili: { color: colors.primaryDeep, style: 'duotone' },
   package: { color: colors.muted, style: 'duotone' },
   tag: { color: colors.muted, style: 'regular' },
-  gift: { color: colors.accent, style: 'duotone' },
+  gift: { color: colors.primaryDeep, style: 'duotone' },
   heart: { color: colors.danger, style: 'duotone' },
-  rating: { color: colors.warn, style: 'fill' },
-  add: { color: colors.accent, style: 'fill' },
+  rating: { color: colors.accentDark, style: 'fill' },
+  add: { color: colors.primaryDeep, style: 'fill' },
   minus: { color: colors.primary, style: 'bold' },
   close: { color: colors.muted, style: 'bold' },
   trash: { color: colors.danger, style: 'regular' },
@@ -153,7 +153,7 @@ export const iconDefaults: Record<
 
   // Categories
   categoryPharmacy: { color: colors.danger, style: 'duotone' },
-  categoryFood: { color: colors.accent, style: 'duotone' },
+  categoryFood: { color: colors.primaryDeep, style: 'duotone' },
   categoryCoffee: { color: colors.warnDark, style: 'duotone' },
   categoryGrocery: { color: colors.success, style: 'duotone' },
   categoryRetail: { color: colors.primary, style: 'duotone' },
@@ -176,8 +176,8 @@ export const iconDefaults: Record<
   settings: { color: colors.text, style: 'regular' },
   support: { color: colors.body, style: 'duotone' },
 
-  rider: { color: colors.accent, style: 'fill' },
-  scooter: { color: colors.accent, style: 'duotone' },
+  rider: { color: colors.primaryDeep, style: 'fill' },
+  scooter: { color: colors.primaryDeep, style: 'duotone' },
   route: { color: colors.primary, style: 'fill' },
   earnings: { color: colors.success, style: 'duotone' },
   wallet: { color: colors.success, style: 'duotone' },
@@ -187,11 +187,11 @@ export const iconDefaults: Record<
 
   clock: { color: colors.muted, style: 'regular' },
   timer: { color: colors.primary, style: 'duotone' },
-  trending: { color: colors.accent, style: 'fill' },
+  trending: { color: colors.primaryDeep, style: 'fill' },
   warning: { color: colors.warn, style: 'fill' },
   info: { color: colors.primary, style: 'fill' },
   shield: { color: colors.success, style: 'duotone' },
-  spark: { color: colors.accent, style: 'fill' },
+  spark: { color: colors.accentDark, style: 'fill' },
   logout: { color: colors.danger, style: 'regular' },
   pin: { color: colors.primary, style: 'fill' },
   call: { color: colors.success, style: 'fill' },
