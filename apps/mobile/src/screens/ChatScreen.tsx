@@ -8,7 +8,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { useAuth, type Database } from '@isla/supabase';
 import {
   AppIcon,
@@ -21,7 +21,7 @@ import {
   typography,
   useToast,
 } from '@isla/ui';
-import { canChat, setOpenOrderId, type MessageRow } from '../messaging/chat';
+import { canChat, markConversationRead, setOpenOrderId, type MessageRow } from '../messaging/chat';
 import { ChatComposer, ChatThread } from '../messaging/ChatThread';
 import { invokePush } from '../lib/push';
 import type { RootNavProp, RootStackScreen } from '../navigation/types';
@@ -90,6 +90,16 @@ export default function ChatScreen({ route }: Props) {
     setOpenOrderId(orderId);
     return () => setOpenOrderId(null);
   }, [orderId]);
+
+  // Clear-on-view: everything visible in this open thread counts as read, so
+  // the Messages tab badge drops the moment the thread is seen (including
+  // messages that arrive live while reading).
+  const focused = useIsFocused();
+  useEffect(() => {
+    if (!focused || messages.length === 0) return;
+    const latest = messages[messages.length - 1];
+    if (latest?.created_at) markConversationRead(orderId, latest.created_at);
+  }, [focused, messages, orderId]);
 
   // Per-mount suffix: concurrent mounts must never share a realtime topic
   // (realtime-js throws on `.on()` after `.subscribe()` for the same topic).

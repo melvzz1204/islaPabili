@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth, type Database } from '@isla/supabase';
 import { useToast } from '@isla/ui';
 import { CHANNEL_CHAT, blip, getSoundSettings, notifyLocal } from '../lib/notify';
@@ -27,17 +28,81 @@ export type Conversation = {
   unread: boolean;
 };
 
+// --- Read state (clear-on-view) ------------------------------------------------
+// `unread` used to stick forever: it only meant "last message isn't mine", so
+// opening a thread never cleared its badge. Now every shell records, per
+// order, the timestamp of the latest message the user has SEEN; anything
+// newer from the other party counts as unread. Persisted per profile so a
+// badge cleared on this device stays cleared after a restart.
+const READ_KEY = 'isla-chat-read-v1';
+let readOwner = '';
+let readMap: Record<string, string> = {};
+let readLoaded = false;
+const readListeners = new Set<() => void>();
+
+async function ensureReadMap(owner: string): Promise<void> {
+  if (readLoaded && readOwner === owner) return;
+  readOwner = owner;
+  readMap = {};
+  try {
+    const raw = await AsyncStorage.getItem(`${READ_KEY}:${owner}`);
+    if (raw) readMap = { ...(JSON.parse(raw) as Record<string, string>) };
+  } catch {
+    readMap = {};
+  }
+  readLoaded = true;
+  for (const fn of readListeners) fn();
+}
+
+/**
+ * Mark a thread read up to `atIso` (the latest visible message's
+ * `created_at`). All badges recompute instantly, on every mounted shell.
+ */
+export function markConversationRead(orderId: string, atIso: string): void {
+  if (!orderId || !atIso) return;
+  if ((readMap[orderId] ?? '') >= atIso) return;
+  readMap = { ...readMap, [orderId]: atIso };
+  for (const fn of readListeners) fn();
+  if (readOwner) {
+    void AsyncStorage.setItem(`${READ_KEY}:${readOwner}`, JSON.stringify(readMap)).catch(() => undefined);
+  }
+}
+
+function applyRead(list: Conversation[]): Conversation[] {
+  return list.map((c) => ({
+    ...c,
+    unread:
+      c.unread &&
+      !!c.lastMessage &&
+      c.lastMessage.created_at > (readMap[c.order.id] ?? ''),
+  }));
+}
+
 /** Customer + rider shared: orders with a rider attached and their latest message. */
 export function useConversations(role: 'customer' | 'rider') {
   const { client, profile } = useAuth();
-  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [items, setItems] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [readTick, setReadTick] = useState(0);
+
+  // Re-derive badges the moment any thread is marked read (possibly from a
+  // different mounted hook instance, e.g. the open ChatScreen).
+  useEffect(() => {
+    const fn = () => setReadTick((t) => t + 1);
+    readListeners.add(fn);
+    return () => {
+      readListeners.delete(fn);
+    };
+  }, []);
+
+  const conversations = useMemo(() => applyRead(items), [items, readTick]);
 
   const load = useCallback(async () => {
     if (!profile) {
       setLoading(false);
       return;
     }
+    await ensureReadMap(profile.id);
     const field = role === 'customer' ? 'customer_id' : 'rider_id';
     const { data: orders } = await client
       .from('orders')
@@ -49,7 +114,7 @@ export function useConversations(role: 'customer' | 'rider') {
       .limit(20);
     const list = (orders ?? []) as OrderRow[];
     if (list.length === 0) {
-      setConversations([]);
+      setItems([]);
       setLoading(false);
       return;
     }
@@ -63,7 +128,7 @@ export function useConversations(role: 'customer' | 'rider') {
     for (const m of (messages ?? []) as MessageRow[]) {
       if (!latest.has(m.order_id)) latest.set(m.order_id, m);
     }
-    setConversations(
+    setItems(
       list.map((order) => {
         const last = latest.get(order.id) ?? null;
         return { order, lastMessage: last, unread: !!last && last.sender_id !== profile.id };

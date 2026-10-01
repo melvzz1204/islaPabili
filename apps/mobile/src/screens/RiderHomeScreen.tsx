@@ -26,7 +26,7 @@ import {
   type AppIconName,
 } from '@isla/ui';
 import { peso } from '../marketplace/data';
-import { canChat, setOpenOrderId, useConversations, useIncomingMessageAlerts, type MessageRow } from '../messaging/chat';
+import { canChat, markConversationRead, setOpenOrderId, useConversations, useIncomingMessageAlerts, type MessageRow } from '../messaging/chat';
 import { ChatComposer, ChatEmptyState, ChatThread } from '../messaging/ChatThread';
 import {
   CHANNEL_ORDERS,
@@ -150,14 +150,14 @@ export default function RiderHomeScreen() {
     );
   }, [client, profile]);
 
-  /** Custom lists this rider already claimed and is still working. */
+  /** Orders this rider already claimed and is still working (custom lists
+   * and merchant orders flipped to rider-pabili alike). */
   const loadMine = useCallback(async () => {
     if (!profile) return;
     const { data, error } = await client
       .from('orders')
       .select('*')
       .eq('rider_id', profile.id)
-      .eq('is_custom_list', true)
       .in('status', [...MINE_STATUSES])
       .order('created_at', { ascending: false });
     if (error) return;
@@ -962,6 +962,14 @@ function RiderMessagesView({
     if (openId) void loadThread(openId);
     else setMessages([]);
   }, [openId, loadThread]);
+
+  // Clear-on-view: the open thread counts as read, so the messages-tab badge
+  // drops the moment the rider sees it (including live arrivals while open).
+  useEffect(() => {
+    if (!openId || messages.length === 0) return;
+    const latest = messages[messages.length - 1];
+    if (latest?.created_at) markConversationRead(openId, latest.created_at);
+  }, [openId, messages]);
 
   // Per-mount suffix: concurrent mounts must never share a realtime topic
   // (realtime-js throws on `.on()` after `.subscribe()` for the same topic).

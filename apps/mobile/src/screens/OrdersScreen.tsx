@@ -74,10 +74,15 @@ const FLOW: OrderStatus[] = [
 const PLACED_STATUSES: OrderStatus[] = ['awaiting_merchant', 'preparing', 'ready'];
 
 const FULFILLMENT_LABEL: Record<string, string> = {
+  merchant_delivery: 'Store delivery',
   merchant_pickup: 'Self-pickup',
   rider_pabili: 'Rider pabili',
   rider_delivery: 'Rider delivery',
 };
+
+/** Anything in pending_dispatch with a rider-pabili shape is dispatchable. */
+const isDispatchable = (o: { is_custom_list: boolean | null; fulfillment_mode: string | null }) =>
+  o.is_custom_list || o.fulfillment_mode === 'rider_pabili';
 
 type Scope = 'active' | 'past';
 
@@ -172,6 +177,49 @@ export default function OrdersScreen({}: Props) {
     });
     if ((offered ?? 0) > 0) void invokePush(client, order.id, 'pabili');
     await load();
+  };
+
+  /** Store declined: flip to rider-pabili AND dispatch, so the rider inbox
+   * actually gets the request (flipping alone leaves no offer round behind). */
+  const switchToPabili = async (order: OrderRow) => {
+    setActing(true);
+    try {
+      let storeName: string | null = null;
+      if (order.merchant_id) {
+        const { data: m } = await client
+          .from('merchants')
+          .select('name')
+          .eq('id', order.merchant_id)
+          .maybeSingle();
+        storeName = ((m as { name?: string } | null)?.name ?? null) || null;
+      }
+      const { error: flipError } = await client
+        .from('orders')
+        .update({ status: 'pending_dispatch', fulfillment_mode: 'rider_pabili', store_name: storeName })
+        .eq('id', order.id);
+      if (flipError) throw new Error(flipError.message);
+      const { data: offered, error: rpcError } = await callRpc<number>(client, 'request_pabili_riders', {
+        p_order_id: order.id,
+      });
+      if (rpcError) throw new Error(rpcError.message);
+      showToast({
+        message:
+          (offered ?? 0) > 0
+            ? `Switched to rider pabili, ${offered} rider${offered === 1 ? '' : 's'} notified.`
+            : 'Switched to rider pabili. No riders on duty, retry shortly.',
+        type: (offered ?? 0) > 0 ? 'success' : 'error',
+      });
+      if ((offered ?? 0) > 0) void invokePush(client, order.id, 'pabili');
+      await load();
+      await openDetail({ ...order, status: 'pending_dispatch', fulfillment_mode: 'rider_pabili' } as OrderRow);
+    } catch (err) {
+      showToast({
+        message: err instanceof Error ? err.message : 'Could not switch to rider pabili.',
+        type: 'error',
+      });
+    } finally {
+      setActing(false);
+    }
   };
 
   const transition = async (order: OrderRow, patch: Partial<OrderRow>, done: string) => {
@@ -301,13 +349,7 @@ export default function OrdersScreen({}: Props) {
                   <Button
                     title="Let a rider shop for me"
                     loading={acting}
-                    onPress={() =>
-                      void transition(
-                        selected,
-                        { status: 'pending_dispatch', fulfillment_mode: 'rider_pabili' },
-                        'Switched to rider pabili.',
-                      )
-                    }
+                    onPress={() => void switchToPabili(selected)}
                   />
                   <Button
                     title="Cancel order"
@@ -323,7 +365,7 @@ export default function OrdersScreen({}: Props) {
                   loading={acting}
                   onPress={() => void transition(selected, { status: 'cancelled' }, 'Order cancelled.')}
                 />
-              ) : selected.is_custom_list && selected.status === 'pending_dispatch' ? (
+              ) : isDispatchable(selected) && selected.status === 'pending_dispatch' ? (
                 <>
                   <Button
                     title="Retry finding rider"
@@ -398,7 +440,7 @@ export default function OrdersScreen({}: Props) {
               ))
             )}
 
-            {selected.is_custom_list && selected.status === 'pending_dispatch' ? (
+            {isDispatchable(selected) && selected.status === 'pending_dispatch' ? (
               <Text style={styles.muted}>
                 {Date.now() - new Date(selected.created_at).getTime() > 5 * 60 * 1000
                   ? 'Still looking, the last 5-minute offer round lapsed with no takers. Hit “Retry finding rider” below.'

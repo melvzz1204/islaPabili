@@ -25,6 +25,8 @@ import { peso } from '../marketplace/data';
 import { loadFareConfig, quoteTrip, type Gps } from '../marketplace/fare';
 import { useCart } from '../marketplace/cart';
 import { requestCheckoutReturn } from '../lib/checkoutReturn';
+import { callRpc } from '../lib/rpc';
+import { invokePush } from '../lib/push';
 import { SingleTownPicker } from '../ui/TownPicker';
 import { BottomNav, BOTTOM_NAV_HEIGHT } from '../components/BottomNav';
 import { goToTab, type RootNavProp, type RootStackScreen } from '../navigation/types';
@@ -46,7 +48,7 @@ const PAY_DB: Record<PayMethod, DbPayment> = { cod: 'cod', gcash: 'ewallet', may
 // rider delivery is the only live fulfillment mode.
 const FULFILLMENT_MODE = 'merchant_delivery' as const;
 
-type PlacedOrder = { id: string; orderNumber: string };
+type PlacedOrder = { id: string; orderNumber: string; merchantId: string };
 
 type SummaryLine = { name: string; qty: number; price: number };
 
@@ -101,6 +103,8 @@ export default function CheckoutScreen({}: Props) {
   const [gps, setGps] = useState<Gps | null>(null);
   const [pinning, setPinning] = useState(false);
   const [merchantGps, setMerchantGps] = useState<Record<string, Gps | null>>({});
+  const [merchantNames, setMerchantNames] = useState<Record<string, string>>({});
+  const [dispatching, setDispatching] = useState(false);
   const pulse = useRef(new Animated.Value(0)).current;
 
   // Live pricing rules from the admin console.
@@ -108,19 +112,23 @@ export default function CheckoutScreen({}: Props) {
     void loadFareConfig(client).then(setFareConfig);
   }, [client]);
 
-  // Store GPS per merchant so each store quotes its own real distance.
+  // Store GPS + names per merchant so each store quotes its own real distance
+  // and the rider inbox can say which counter to buy at.
   useEffect(() => {
     const ids = [...new Set(lines.map((l) => l.merchantId).filter(Boolean))];
     if (ids.length === 0) return;
     let active = true;
     void (async () => {
-      const { data } = await client.from('merchants').select('id, lat, lng').in('id', ids);
+      const { data } = await client.from('merchants').select('id, name, lat, lng').in('id', ids);
       if (!active) return;
       const map: Record<string, Gps | null> = {};
-      for (const row of (data ?? []) as { id: string; lat: number | null; lng: number | null }[]) {
+      const names: Record<string, string> = {};
+      for (const row of (data ?? []) as { id: string; name: string; lat: number | null; lng: number | null }[]) {
         map[row.id] = row.lat != null && row.lng != null ? { lat: row.lat, lng: row.lng } : null;
+        if (row.name) names[row.id] = row.name;
       }
       setMerchantGps(map);
+      setMerchantNames(names);
     })();
     return () => {
       active = false;
@@ -178,11 +186,64 @@ export default function CheckoutScreen({}: Props) {
   const goOrders = () => goToTab(navigation, 'Orders');
   const uid = session?.user?.id ?? null;
 
-  /** Open the find-a-rider moment on demand from the order summary. */
-  const startFinding = () => {
-    if (!placed || !summary) return;
-    setDutyCount(null);
-    setFinding({ orderIds: placed.map((p) => p.id), town: summary.town, phase: 'searching' });
+  /** Find-a-rider actually dispatches: flip merchant orders into the
+   * rider-shops flow, offer them to whoever is on duty, then open the radar.
+   * Orders the store already started (no longer awaiting) are left alone. */
+  const startFinding = async () => {
+    if (!placed || !summary || !uid || dispatching) return;
+    setDispatching(true);
+    try {
+      const flipped: string[] = [];
+      let skipped = 0;
+      for (const p of placed) {
+        const { data: row } = await client
+          .from('orders')
+          .update({
+            status: 'pending_dispatch',
+            fulfillment_mode: 'rider_pabili',
+            store_name: merchantNames[p.merchantId] ?? null,
+          })
+          .eq('id', p.id)
+          .eq('customer_id', uid)
+          .eq('status', 'awaiting_merchant')
+          .select('id')
+          .maybeSingle();
+        if (row) flipped.push(p.id);
+        else skipped += 1;
+      }
+      if (flipped.length === 0) {
+        showToast({
+          message: 'These orders already moved past dispatch, track them in Orders.',
+          type: 'info',
+        });
+        return;
+      }
+      let offered = 0;
+      for (const id of flipped) {
+        const { data, error } = await callRpc<number>(client, 'request_pabili_riders', {
+          p_order_id: id,
+        });
+        if (error) throw new Error(error.message);
+        offered += data ?? 0;
+        if ((data ?? 0) > 0) void invokePush(client, id, 'pabili');
+      }
+      setDutyCount(null);
+      setFinding({ orderIds: flipped, town: summary.town, phase: 'searching' });
+      showToast({
+        message:
+          offered > 0
+            ? `Finding a rider, ${offered} on duty notified${skipped > 0 ? ` (${skipped} order${skipped === 1 ? '' : 's'} already with the store)` : ''}.`
+            : 'No riders on duty right now. Your order stays open, retry from Orders.',
+        type: offered > 0 ? 'success' : 'error',
+      });
+    } catch (err) {
+      showToast({
+        message: err instanceof Error ? err.message : 'Could not find a rider.',
+        type: 'error',
+      });
+    } finally {
+      setDispatching(false);
+    }
   };
 
   // Radar pulse while looking for a rider (same moment as the pabili flow).
@@ -402,7 +463,7 @@ export default function CheckoutScreen({}: Props) {
           </View>
 
           <View style={styles.confirmActions}>
-            <Button title="Find a rider now" onPress={startFinding} />
+            <Button title="Find a rider now" loading={dispatching} onPress={() => void startFinding()} />
             <Button title="Track my orders" variant="secondary" onPress={goOrders} />
             <Button title="Continue shopping" variant="ghost" onPress={goShop} />
           </View>
@@ -515,7 +576,7 @@ export default function CheckoutScreen({}: Props) {
           })),
         );
         if (itemsError) throw itemsError;
-        numbers.push({ id: order.id, orderNumber: order.order_number });
+        numbers.push({ id: order.id, orderNumber: order.order_number, merchantId });
       }
       clear();
       setPlaced(numbers);
