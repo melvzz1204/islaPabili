@@ -27,17 +27,17 @@ const withRootAssets = (plugins) =>
 
 module.exports = {
   ...mobile,
-  icon: './apps/mobile/assets/icon.png',
+  icon: './apps/mobile/assets/islapabili_logo.png',
   android: {
     ...mobile.android,
     adaptiveIcon: {
       ...mobile.android?.adaptiveIcon,
-      foregroundImage: './apps/mobile/assets/adaptive-icon.png',
+      foregroundImage: './apps/mobile/assets/islapabili_logo.png',
     },
   },
   web: {
     ...mobile.web,
-    favicon: './apps/mobile/assets/favicon.png',
+    favicon: './apps/mobile/assets/islapabili_logo.png',
   },
   plugins: withRootAssets(mobile.plugins),
 };

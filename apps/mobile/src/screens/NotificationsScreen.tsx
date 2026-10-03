@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useAuth, type Database } from '@isla/supabase';
+import { useAuthMode } from '../lib/authMode';
 import { CACHE_TTLS, cacheKey, invalidate, peekEntry, readPersistedEntry, setEntry } from '../lib/cache';
 import { useCachedQuery } from '../lib/useCachedQuery';
 import {
@@ -10,6 +11,7 @@ import {
   EmptyState,
   Screen,
   ScreenHeader,
+  SheetModal,
   Skeleton,
   colors,
   radius,
@@ -92,6 +94,13 @@ export function useUnreadCount(): number {
           void refresh(true);
         },
       )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'notifications', filter: `user_id=eq.${uid}` },
+        () => {
+          void refresh(true);
+        },
+      )
       .subscribe();
     return () => {
       void client.removeChannel(channel);
@@ -105,6 +114,10 @@ export default function NotificationsScreen({}: Props) {
   const navigation = useNavigation<RootNavProp>();
   const { client, session } = useAuth();
   const { showToast } = useToast();
+  const { mode } = useAuthMode();
+  // The rider shell has no customer tabs: no BottomNav footer there, and
+  // taps land back on the rider dashboard (threads live in its Messages tab).
+  const isRider = mode === 'rider';
   const uid = session?.user.id ?? null;
 
   // Cache-first inbox (30s TTL, offline fallback).
@@ -130,6 +143,30 @@ export default function NotificationsScreen({}: Props) {
     { ttlMs: CACHE_TTLS.notifications, persist: true, enabled: !!uid },
   );
   const items = itemsData ?? [];
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const hasUnread = items.some((n) => !n.is_read);
+
+  /** Permanently delete every notification for this user (both roles). */
+  const clearAll = async () => {
+    const { data: userData } = await client.auth.getUser();
+    const id = userData.user?.id ?? uid;
+    if (!id || clearing) return;
+    setClearing(true);
+    const { error } = await client.from('notifications').delete().eq('user_id', id);
+    setClearing(false);
+    if (error) {
+      showToast({ message: error.message, type: 'error' });
+      return;
+    }
+    setConfirmClear(false);
+    // Detach both caches so the list empties and every badge drops to zero;
+    // the badge hook re-reads on the realtime DELETE event (forced refresh).
+    invalidate(cacheKey('notifications', id));
+    invalidate(cacheKey('notifications-unread', id));
+    await refresh();
+    showToast({ message: 'Notifications cleared.', type: 'success' });
+  };
 
   // Refresh every time the inbox is opened, and live while it stays open ,
   // otherwise a notification that lands (e.g. the rider-application receipt)
@@ -143,16 +180,24 @@ export default function NotificationsScreen({}: Props) {
   const listInstanceId = useMemo(() => Math.random().toString(36).slice(2, 9), []);
 
   useEffect(() => {
+    if (!uid) return;
     const channel = client
       .channel(`notifications-list-${listInstanceId}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, () => {
         void refresh();
       })
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'notifications', filter: `user_id=eq.${uid}` },
+        () => {
+          void refresh();
+        },
+      )
       .subscribe();
     return () => {
       void client.removeChannel(channel);
     };
-  }, [client, refresh, listInstanceId]);
+  }, [client, refresh, listInstanceId, uid]);
 
   const markAllRead = async () => {
     const { data: userData } = await client.auth.getUser();
@@ -172,6 +217,13 @@ export default function NotificationsScreen({}: Props) {
       await client.from('notifications').update({ is_read: true }).eq('id', n.id);
       if (uid) invalidate(cacheKey('notifications-unread', uid));
       await refresh();
+    }
+    if (isRider) {
+      // No Chat/Orders routes in the rider shell: everything lands back on
+      // the dashboard, where the Messages tab badge marks the unread thread
+      // and Requests holds pabili broadcasts.
+      navigation.navigate('Rider');
+      return;
     }
     // Message notifications deep-link straight into the order chat.
     if (n.kind === 'message' && n.order_id) {
@@ -196,21 +248,52 @@ export default function NotificationsScreen({}: Props) {
   };
 
   return (
-    <Screen footer={<BottomNav />} footerHeight={BOTTOM_NAV_HEIGHT}>
+    <Screen footer={isRider ? undefined : <BottomNav />} footerHeight={isRider ? 0 : BOTTOM_NAV_HEIGHT}>
       <ScreenHeader
         title="Notifications"
         onBack={() => navigation.goBack()}
         right={
-          items.some((n) => !n.is_read) ? (
-            <Button
-              title="Mark all read"
-              variant="ghost"
-              size="md"
-              onPress={() => void markAllRead()}
-            />
+          items.length > 0 ? (
+            <View style={styles.headerActions}>
+              {hasUnread ? (
+                <Button
+                  title="Mark all read"
+                  variant="ghost"
+                  size="md"
+                  onPress={() => void markAllRead()}
+                />
+              ) : null}
+              <Button
+                title="Clear"
+                variant="ghost"
+                size="md"
+                onPress={() => setConfirmClear(true)}
+              />
+            </View>
           ) : undefined
         }
       />
+      <SheetModal
+        visible={confirmClear}
+        title="Clear notifications?"
+        subtitle="This permanently removes every notification in your inbox. New updates will still arrive afterwards."
+        onClose={() => setConfirmClear(false)}
+        footer={
+          <View style={styles.confirmFoot}>
+            <View style={styles.confirmFlex}>
+              <Button title="Keep them" variant="secondary" disabled={clearing} onPress={() => setConfirmClear(false)} />
+            </View>
+            <View style={styles.confirmFlex}>
+              <Button title="Clear all" variant="danger" loading={clearing} onPress={() => void clearAll()} />
+            </View>
+          </View>
+        }
+      >
+        <Text style={styles.confirmBody}>
+          {items.length} notification{items.length === 1 ? '' : 's'}
+          {hasUnread ? ` (${items.filter((n) => !n.is_read).length} unread)` : ''} will be deleted. This cannot be undone.
+        </Text>
+      </SheetModal>
       {loading ? (
         <View style={styles.list}>
           {[0, 1, 2, 3].map((i) => (
@@ -226,10 +309,16 @@ export default function NotificationsScreen({}: Props) {
       ) : items.length === 0 ? (
         <EmptyState
           title="All caught up"
-          message="Order updates from your stores and riders will appear here."
+          message={
+            isRider
+              ? 'Pabili broadcasts, order updates and application results will appear here.'
+              : 'Order updates from your stores and riders will appear here.'
+          }
           icon="bell"
           action={
-            <Button title="Browse stores" onPress={() => goToTab(navigation, 'Shop')} />
+            isRider ? undefined : (
+              <Button title="Browse stores" onPress={() => goToTab(navigation, 'Shop')} />
+            )
           }
         />
       ) : (
@@ -267,6 +356,10 @@ const styles = StyleSheet.create({
   skeletonRow: { flexDirection: 'row', gap: spacing.md, alignItems: 'center' },
   skeletonBody: { flex: 1, gap: 7 },
 
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  confirmFoot: { flexDirection: 'row', gap: spacing.sm },
+  confirmFlex: { flex: 1 },
+  confirmBody: { ...typography.body },
   card: { gap: 4, padding: spacing.base },
   cardHead: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
   cardHeadText: { flex: 1, gap: 1 },

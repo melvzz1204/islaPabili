@@ -69,7 +69,7 @@ export default function App() {
     <>
       <header className="topbar">
         <span className="brand">
-          <img className="brand-logo" src="/islapabili_logo.svg" alt="IslaPabili logo" /> IslaPabili Merchant
+          <img className="brand-logo" src="/islapabili_logo.png" alt="IslaPabili logo" /> IslaPabili Merchant
         </span>
         {view.name === 'dashboard' || view.name === 'status' || view.name === 'apply' ? (
           <button type="button" className="isla-btn isla-btn-secondary isla-btn-sm" onClick={() => void signOut()}>

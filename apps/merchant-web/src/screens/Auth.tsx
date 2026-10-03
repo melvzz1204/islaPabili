@@ -25,7 +25,7 @@ export function LoginForm({ onRegister }: { onRegister: () => void }) {
 
   return (
     <form onSubmit={(e) => void submit(e)} className="isla-card">
-      <img className="auth-logo" src="/islapabili_logo.svg" alt="IslaPabili logo" />
+      <img className="auth-logo" src="/islapabili_logo.png" alt="IslaPabili logo" />
       <h1>Merchant login</h1>
       <p>Manage your store catalog on IslaPabili.</p>
       <Field label="Username or email">
@@ -116,7 +116,7 @@ export function RegisterForm({ onDone, onLogin }: { onDone: () => void; onLogin:
 
   return (
     <form onSubmit={(e) => void submit(e)} className="isla-card">
-      <img className="auth-logo" src="/islapabili_logo.svg" alt="IslaPabili logo" />
+      <img className="auth-logo" src="/islapabili_logo.png" alt="IslaPabili logo" />
       <h1>Create merchant account</h1>
       <p>One account per store. Approval takes 1–2 business days.</p>
       <Field label="Full name">

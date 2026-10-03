@@ -1,6 +1,32 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AppIcon, Button, colors, radius, shadows, spacing, typography } from '@isla/ui';
 import { useAppUpdate } from '../lib/appUpdate';
+import { useOtaUpdate } from '../lib/otaUpdate';
+
+/**
+ * Over-the-air update sheet: the new JS bundle is already downloaded,
+ * one restart applies it — no reinstall. Mounted next to UpdatePrompt.
+ */
+export function OtaPrompt() {
+  const { showPrompt, restart, later } = useOtaUpdate();
+  if (!showPrompt) return null;
+
+  return (
+    <View style={styles.overlay} pointerEvents="box-none">
+      <View style={styles.sheet}>
+        <View style={styles.badge}>
+          <AppIcon name="spark" size={26} color={colors.onPrimary} />
+        </View>
+        <Text style={styles.title}>Update downloaded</Text>
+        <Text style={styles.otaBody}>Fresh improvements are ready. Restart now to apply them — no reinstall needed.</Text>
+        <Button title="Restart now" onPress={() => void restart()} />
+        <Pressable accessibilityRole="button" accessibilityLabel="Later" onPress={later} hitSlop={8}>
+          <Text style={styles.later}>Later</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
 
 /**
  * Real-app style update sheet: version + "What's new" notes with a download
@@ -71,6 +97,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     ...shadows.sheet,
   },
+  otaBody: { ...typography.body, textAlign: 'center', color: colors.muted },
   badge: {
     width: 64,
     height: 64,

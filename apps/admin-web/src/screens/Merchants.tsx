@@ -4,6 +4,7 @@ import { sumBy } from '../lib/analytics';
 import { num, peso } from '../lib/currency';
 import { formatDateTime } from '../lib/format';
 import { Badge, Card, Detail, Empty, Modal, SearchInput, Skeleton } from '../components/ui';
+import { Icon } from '../components/icon';
 import { supabase } from '../lib/supabase';
 
 export function Merchants({ data, loading, reload }: { data: AdminData; loading: boolean; reload: () => void }) {
@@ -76,7 +77,7 @@ export function Merchants({ data, loading, reload }: { data: AdminData; loading:
             );
           })}
         </div>
-        {rows.length === 0 ? <Empty icon="🏪" title="No stores match" body="Try a different category or search." /> : null}
+        {rows.length === 0 ? <Empty icon="store" title="No stores match" body="Try a different category or search." /> : null}
       </Card>
 
       {merchant ? (
@@ -107,7 +108,7 @@ function MerchantDetail({ data, id, busy, onToggle }: {
       </div>
       <div className="btn-row">
         <button type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={() => onToggle(m.id, !m.is_active)}>
-          {m.is_active ? '⏸ Pause store' : '▶ Set live'}
+          {m.is_active ? <><Icon name="pause" size={14} /> Pause store</> : <><Icon name="play" size={14} /> Set live</>}
         </button>
       </div>
       <div className="panel-soft">
@@ -116,7 +117,7 @@ function MerchantDetail({ data, id, busy, onToggle }: {
           <ul className="lines">
             {products.slice(0, 20).map((p) => (
               <li key={p.id}>
-                <span>{p.is_active ? '🟢' : '⚪'} {p.name} <small>· {p.category} · stock {p.stock}</small></span>
+                <span><span className={`dot ${p.is_active ? 'dot-on' : 'dot-off'}`} /> {p.name} <small>· {p.category} · stock {p.stock}</small></span>
                 <strong>{peso(p.price)}</strong>
               </li>
             ))}

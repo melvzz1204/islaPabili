@@ -56,7 +56,7 @@ export function Riders({ data, loading, reload }: { data: AdminData; loading: bo
       ) : null}
       {tab === 'ratings' ? (
         <Card title="Rider ratings" subtitle="Post-delivery reviews from customers">
-          {data.ratings.length === 0 ? <Empty icon="★" title="No reviews yet" body="Ratings appear here after completed deliveries." /> : (
+          {data.ratings.length === 0 ? <Empty icon="star" title="No reviews yet" body="Ratings appear here after completed deliveries." /> : (
             <ul className="attention">
               {data.ratings.slice(0, 30).map((r) => {
                 const rider = profileById(data.profiles, r.rider_id);
@@ -109,7 +109,7 @@ function Fleet({ data, riders }: { data: AdminData; riders: AdminData['profiles'
             })}
           </tbody>
         </table>
-        {riders.length === 0 ? <Empty icon="🛵" title="No riders found" body="Approved riders will appear in the fleet board." /> : null}
+        {riders.length === 0 ? <Empty icon="bike" title="No riders found" body="Approved riders will appear in the fleet board." /> : null}
       </div>
     </Card>
   );
@@ -125,7 +125,7 @@ function Applications({ data, onOpen }: { data: AdminData; onOpen: (id: string) 
       subtitle="Compliance review — approve to promote, decline with a reason"
       action={<Segmented value={f} onChange={setF} options={(['pending', 'approved', 'rejected', 'all'] as const).map((k) => ({ key: k, label: k[0].toUpperCase() + k.slice(1), count: count(k) }))} />}
     >
-      {rows.length === 0 ? <Empty icon="📋" title={`No ${f} applications`} body="New rider sign-ups land here for review." /> : (
+      {rows.length === 0 ? <Empty icon="clipboard" title={`No ${f} applications`} body="New rider sign-ups land here for review." /> : (
         <div className="app-grid">
           {rows.map((a) => {
             const p = profileById(data.profiles, a.rider_id);

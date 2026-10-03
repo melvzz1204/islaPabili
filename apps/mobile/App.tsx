@@ -37,7 +37,7 @@ import MessagesScreen from './src/screens/MessagesScreen';
 import ChatScreen from './src/screens/ChatScreen';
 import TrackScreen from './src/screens/TrackScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
-import { UpdatePrompt } from './src/components/UpdatePrompt';
+import { OtaPrompt, UpdatePrompt } from './src/components/UpdatePrompt';
 import NotificationsScreen from './src/screens/NotificationsScreen';
 import RiderGateScreen from './src/screens/RiderGateScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
@@ -189,6 +189,7 @@ function Root() {
     return (
       <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
         <Stack.Screen name="Rider" component={RiderGateScreen} />
+        <Stack.Screen name="Notifications" component={NotificationsScreen} />
       </Stack.Navigator>
     );
   }
@@ -271,6 +272,7 @@ export default function App() {
             <CartProvider>
               <NavigationContainer theme={navigationTheme}>
                 <Root />
+                <OtaPrompt />
                 <UpdatePrompt />
               </NavigationContainer>
             </CartProvider>

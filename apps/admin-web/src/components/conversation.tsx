@@ -17,7 +17,7 @@ export function ConversationThread({ data, orderId, limit = 100 }: { data: Admin
   );
 
   if (messages.length === 0) {
-    return <Empty icon="💬" title="No messages" body="No rider–customer chat on this order." />;
+    return <Empty icon="message" title="No messages" body="No rider–customer chat on this order." />;
   }
 
   return (

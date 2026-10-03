@@ -6,6 +6,7 @@ import { peso } from '../lib/currency';
 import { formatDateTime } from '../lib/format';
 import { supabase } from '../lib/supabase';
 import { Badge, Card, Detail, Empty, Modal, SearchInput, Segmented, Skeleton, statusTone } from '../components/ui';
+import { Icon } from '../components/icon';
 import { ConversationThread } from '../components/conversation';
 import type { Order } from '../lib/adminData';
 
@@ -69,7 +70,7 @@ export function Orders({ data, loading }: { data: AdminData; loading: boolean })
           </select>
         </div>
         {visible.length === 0 ? (
-          <Empty icon="🧾" title="No orders match" body="Try a different status, town, or search term." action={<button type="button" className="btn btn-secondary btn-sm" onClick={() => { setFilter('all'); setTown('all'); setQ(''); }}>Clear filters</button>} />
+          <Empty icon="receipt" title="No orders match" body="Try a different status, town, or search term." action={<button type="button" className="btn btn-secondary btn-sm" onClick={() => { setFilter('all'); setTown('all'); setQ(''); }}>Clear filters</button>} />
         ) : (
           <div className="table-wrap">
             <table className="table">
@@ -86,7 +87,7 @@ export function Orders({ data, loading }: { data: AdminData; loading: boolean })
                       <td>{o.is_custom_list ? 'Custom pabili' : (m?.name ?? '—')}<small>{o.payment_method.toUpperCase()} · {o.fulfillment_mode.replaceAll('_', ' ')}</small></td>
                       <td><strong>{peso(o.grand_total)}</strong><small>fee {peso(o.total_delivery_fee)}</small></td>
                       <td><Badge tone={statusTone(o.status)}>{o.status.replaceAll('_', ' ')}</Badge></td>
-                      <td><span className="go">{chatCount > 0 ? `💬${chatCount} →` : '→'}</span></td>
+                      <td><span className="go">{chatCount > 0 ? <><Icon name="message" size={14} />{chatCount}</> : null} <Icon name="chevronRight" size={15} /></span></td>
                     </tr>
                   );
                 })}

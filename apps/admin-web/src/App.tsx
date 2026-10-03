@@ -59,7 +59,7 @@ export default function App() {
   if (view.name === 'loading') {
     return (
       <div className="boot">
-        <img src="/islapabili_logo.svg" alt="IslaPabili" />
+        <img src="/islapabili_logo.png" alt="IslaPabili" />
         <p>Opening island console…</p>
       </div>
     );

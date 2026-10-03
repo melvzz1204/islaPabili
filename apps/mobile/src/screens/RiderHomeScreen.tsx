@@ -1,6 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Dimensions, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import {
+  Dimensions,
+  Keyboard,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  View,
+} from 'react-native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { isAllTowns, isNoTowns, resolveOptedTowns, TOWN_LABELS, type Town } from '@isla/shared';
 import { signOut, useAuth } from '@isla/supabase';
@@ -40,6 +52,8 @@ import { invokePush } from '../lib/push';
 import { OrderMap, MARINDUQUE_CENTER, type LatLng } from '../maps/OrderMap';
 import { useRiderBroadcast } from '../maps/useRiderBroadcast';
 import { SoundSettingsForm } from '../components/SoundSettings';
+import type { RootNavProp } from '../navigation/types';
+import { useUnreadCount } from './NotificationsScreen';
 
 type RiderStatusRow = Database['public']['Tables']['rider_status']['Row'];
 type PabiliOrder = Database['public']['Tables']['orders']['Row'];
@@ -605,6 +619,8 @@ function DashboardView({
   onBell: () => void;
   onViewRequests: () => void;
 }) {
+  const navigation = useNavigation<RootNavProp>();
+  const notifUnread = useUnreadCount();
   return (
     <View style={styles.tabBody}>
       <View style={styles.greetRow}>
@@ -619,6 +635,13 @@ function DashboardView({
         </View>
         <IconButton
           icon="bell"
+          label={notifUnread > 0 ? `Notifications, ${notifUnread} unread` : 'Notifications'}
+          onPress={() => navigation.navigate('Notifications')}
+          tone="soft"
+          badge={notifUnread}
+        />
+        <IconButton
+          icon="pabili"
           label={requestCount > 0 ? `${requestCount} new requests` : 'No new requests'}
           onPress={onBell}
           tone="soft"
@@ -916,6 +939,21 @@ function RiderMessagesView({
   const [messages, setMessages] = useState<MessageRow[]>([]);
   const [sending, setSending] = useState(false);
   const [customerNames, setCustomerNames] = useState<Record<string, string>>({});
+  const threadScrollRef = useRef<ScrollView>(null);
+
+  const scrollThreadToEnd = useCallback((animated = true) => {
+    threadScrollRef.current?.scrollToEnd({ animated });
+  }, []);
+
+  useEffect(() => {
+    scrollThreadToEnd(true);
+  }, [messages.length, scrollThreadToEnd]);
+
+  // Keep the latest message + composer visible above the keyboard.
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', () => scrollThreadToEnd(true));
+    return () => show.remove();
+  }, [scrollThreadToEnd]);
 
   useFocusEffect(
     useCallback(() => {
@@ -1025,7 +1063,11 @@ function RiderMessagesView({
     const customer = customerNames[open.customer_id] ?? 'Customer';
     const chatOpen = canChat(open.status);
     return (
-      <View style={[styles.tabBody, styles.threadCanvas]}>
+      <KeyboardAvoidingView
+        style={[styles.tabBody, styles.threadCanvas, styles.threadAvoid]}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}
+      >
         <View style={styles.threadHeader}>
           <Pressable
             accessibilityRole="button"
@@ -1050,10 +1092,12 @@ function RiderMessagesView({
           </View>
         </View>
         <ScrollView
+          ref={threadScrollRef}
           style={styles.threadScroll}
           contentContainerStyle={styles.threadContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
+          onContentSizeChange={() => scrollThreadToEnd(false)}
         >
           {messages.length === 0 ? (
             <ChatEmptyState orderNumber={open.order_number} />
@@ -1066,7 +1110,7 @@ function RiderMessagesView({
         ) : (
           <Text style={styles.muted}>Chat closed, this order is {open.status.replace(/_/g, ' ')}.</Text>
         )}
-      </View>
+      </KeyboardAvoidingView>
     );
   }
 
@@ -1538,6 +1582,7 @@ const styles = StyleSheet.create({
 
   // Rider messages (premium thread on warm canvas)
   threadCanvas: { backgroundColor: colors.chatCanvas, borderRadius: radius.lg, padding: spacing.sm },
+  threadAvoid: { flex: 1 },
   threadHeader: {
     flexDirection: 'row',
     alignItems: 'center',

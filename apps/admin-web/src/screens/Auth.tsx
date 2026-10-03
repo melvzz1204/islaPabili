@@ -33,7 +33,7 @@ export function AdminLogin({ onSignedIn }: { onSignedIn: () => void }) {
     <div className="auth-wrap">
       <div className="auth-card">
         <div className="auth-brand">
-          <img src="/islapabili_logo.svg" alt="IslaPabili" />
+          <img src="/islapabili_logo.png" alt="IslaPabili" />
           <span>Island admin console</span>
         </div>
         <h1>Welcome back, Admin</h1>

@@ -5,6 +5,7 @@ import { sumBy } from '../lib/analytics';
 import { num, peso } from '../lib/currency';
 import { formatDateTime } from '../lib/format';
 import { Badge, Card, Empty, Field, Kpi, SearchInput, Segmented, Skeleton } from '../components/ui';
+import { Icon } from '../components/icon';
 import { supabase } from '../lib/supabase';
 
 export function Finance({ data, loading, reload }: { data: AdminData; loading: boolean; reload: () => void }) {
@@ -45,18 +46,18 @@ export function Finance({ data, loading, reload }: { data: AdminData; loading: b
       </div>
 
       <div className="kpi-grid">
-        <Kpi tone="teal" icon="₱" label="Completed GMV" value={peso(gmv)} hint="completed orders only" />
-        <Kpi tone="blue" icon="🛣" label="Delivery fees" value={peso(fees)} hint="platform + rider share" />
-        <Kpi tone="green" icon="💰" label="Settled volume" value={peso(settled)} hint={`${num(data.transactions.length)} transactions`} />
-        <Kpi tone="orange" icon="🤝" label="Cash on hand (riders)" value={peso(cashOnHand)} hint="COD float" />
-        <Kpi tone="violet" icon="🏦" label="Payout balance" value={peso(payout)} hint="owed to riders" />
-        <Kpi tone="red" icon="🎟" label="Tips paid" value={peso(tips)} hint="100% to riders" />
+        <Kpi tone="teal" icon="peso" label="Completed GMV" value={peso(gmv)} hint="completed orders only" />
+        <Kpi tone="blue" icon="route" label="Delivery fees" value={peso(fees)} hint="platform + rider share" />
+        <Kpi tone="green" icon="banknote" label="Settled volume" value={peso(settled)} hint={`${num(data.transactions.length)} transactions`} />
+        <Kpi tone="orange" icon="coins" label="Cash on hand (riders)" value={peso(cashOnHand)} hint="COD float" />
+        <Kpi tone="violet" icon="wallet" label="Payout balance" value={peso(payout)} hint="owed to riders" />
+        <Kpi tone="red" icon="ticket" label="Tips paid" value={peso(tips)} hint="100% to riders" />
       </div>
 
       {tab === 'money' ? (
         <div className="grid-2">
           <Card title="Transactions" subtitle="Settlement bookkeeping" action={<SearchInput value={q} onChange={setQ} placeholder="Search kind, rider…" />}>
-            {txs.length === 0 ? <Empty icon="💠" title="No transactions" body="COD collections, commissions and payouts post here." /> : (
+            {txs.length === 0 ? <Empty icon="inbox" title="No transactions" body="COD collections, commissions and payouts post here." /> : (
               <ul className="lines">
                 {txs.slice(0, 30).map((t) => (
                   <li key={t.id}>
@@ -68,7 +69,7 @@ export function Finance({ data, loading, reload }: { data: AdminData; loading: b
             )}
           </Card>
           <Card title="Rider wallets" subtitle="COD float vs payout balance">
-            {data.wallets.length === 0 ? <Empty icon="👛" title="No wallets" body="Wallets auto-create on rider activity." /> : (
+            {data.wallets.length === 0 ? <Empty icon="wallet" title="No wallets" body="Wallets auto-create on rider activity." /> : (
               <div className="table-wrap">
                 <table className="table">
                   <thead><tr><th>Rider</th><th>Cash on hand</th><th>Payout</th></tr></thead>
@@ -130,7 +131,7 @@ function Vouchers({ data, reload }: { data: AdminData; reload: () => void }) {
           </select>
         </Field>
         <Field label="Min spend"><input className="input" type="number" min="0" value={form.min_spend} onChange={(e) => setForm({ ...form, min_spend: e.target.value })} /></Field>
-        <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void create()}>{busy ? 'Creating…' : '+ Create'}</button>
+        <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void create()}>{busy ? 'Creating…' : <><Icon name="plus" size={15} /> Create</>}</button>
       </div>
       {error ? <p className="error">{error}</p> : null}
       <div className="table-wrap">
@@ -148,7 +149,7 @@ function Vouchers({ data, reload }: { data: AdminData; reload: () => void }) {
             ))}
           </tbody>
         </table>
-        {data.vouchers.length === 0 ? <Empty icon="🎟" title="No vouchers yet" body="Create your first island promo above." /> : null}
+        {data.vouchers.length === 0 ? <Empty icon="ticket" title="No vouchers yet" body="Create your first island promo above." /> : null}
       </div>
     </Card>
   );
@@ -180,9 +181,9 @@ function Fares({ data, reload }: { data: AdminData; reload: () => void }) {
   return (
     <Card title="Fare engine" subtitle="Publishing creates a new version — history is preserved">
       <div className="kpi-grid">
-        <Kpi tone="teal" icon="₱" label="Base fare" value={peso(active?.base_fare ?? 45)} hint={`first ${active?.base_km ?? 2} km`} />
-        <Kpi tone="blue" icon="⇄" label="Per km" value={peso(active?.per_km_rate ?? 15)} hint="beyond base" />
-        <Kpi tone="violet" icon="📦" label="Config" value={active?.name ?? 'Default'} hint={active ? formatDateTime(active.updated_at) : ''} />
+        <Kpi tone="teal" icon="peso" label="Base fare" value={peso(active?.base_fare ?? 45)} hint={`first ${active?.base_km ?? 2} km`} />
+        <Kpi tone="blue" icon="swap" label="Per km" value={peso(active?.per_km_rate ?? 15)} hint="beyond base" />
+        <Kpi tone="violet" icon="box" label="Config" value={active?.name ?? 'Default'} hint={active ? formatDateTime(active.updated_at) : ''} />
       </div>
       <div className="form-row">
         <Field label="Base fare ₱" hint="Covers first base-km"><input className="input" type="number" min="0" value={form.base_fare} onChange={(e) => setForm({ ...form, base_fare: e.target.value })} placeholder={String(active?.base_fare ?? 45)} /></Field>

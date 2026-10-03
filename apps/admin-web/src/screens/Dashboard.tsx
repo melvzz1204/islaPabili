@@ -7,6 +7,7 @@ import { num, peso, pesoShort, pct } from '../lib/currency';
 import { formatDateTime } from '../lib/format';
 import { Badge, Card, Empty, Kpi, Skeleton, statusTone } from '../components/ui';
 import { Donut, Hbars, Spark, TrendChart } from '../components/charts';
+import { Icon } from '../components/icon';
 import type { AdminTab } from '../components/layout';
 
 const RANGES: { key: RangeKey; label: string }[] = [
@@ -107,17 +108,17 @@ export function Dashboard({ data, loading, go }: {
               </button>
             ))}
           </div>
-          <button type="button" className="btn btn-primary" onClick={() => go('orders')}>View live orders →</button>
+          <button type="button" className="btn btn-primary" onClick={() => go('orders')}>View live orders <Icon name="arrowRight" size={15} /></button>
         </div>
       </div>
 
       <div className="kpi-grid">
-        <Kpi tone="teal" icon="₱" label="Gross merchandise value" value={pesoShort(gmv)} hint={`${num(completed.length)} completed · ${pesoShort(fees)} fees`} delta={range === 'all' ? undefined : 'in range'} />
-        <Kpi tone="orange" icon="🧾" label="Orders" value={num(orders.length)} hint={`${num(active.length)} live right now`} />
-        <Kpi tone="green" icon="✓" label="Completion rate" value={pct(completed.length, orders.length)} hint={`${num(completed.length)} of ${num(orders.length)} done`} />
-        <Kpi tone="blue" icon="🛵" label="Riders on duty" value={num(onDuty.length)} hint={`${num(data.riderStatus.length)} tracked · ${num(data.profiles.filter((p) => p.role === 'rider').length)} riders`} />
-        <Kpi tone="violet" icon="★" label="Avg rider rating" value={rating ? rating.toFixed(2) : '—'} hint={`${num(data.ratings.length)} reviews`} />
-        <Kpi tone="red" icon="⏳" label="Pending rider approvals" value={num(pendingApps.length)} hint="Needs review" delta={pendingApps.length > 0 ? 'action' : undefined} />
+        <Kpi tone="teal" icon="peso" label="Gross merchandise value" value={pesoShort(gmv)} hint={`${num(completed.length)} completed · ${pesoShort(fees)} fees`} delta={range === 'all' ? undefined : 'in range'} />
+        <Kpi tone="orange" icon="receipt" label="Orders" value={num(orders.length)} hint={`${num(active.length)} live right now`} />
+        <Kpi tone="green" icon="check" label="Completion rate" value={pct(completed.length, orders.length)} hint={`${num(completed.length)} of ${num(orders.length)} done`} />
+        <Kpi tone="blue" icon="bike" label="Riders on duty" value={num(onDuty.length)} hint={`${num(data.riderStatus.length)} tracked · ${num(data.profiles.filter((p) => p.role === 'rider').length)} riders`} />
+        <Kpi tone="violet" icon="star" label="Avg rider rating" value={rating ? rating.toFixed(2) : '—'} hint={`${num(data.ratings.length)} reviews`} />
+        <Kpi tone="red" icon="clock" label="Pending rider approvals" value={num(pendingApps.length)} hint="Needs review" delta={pendingApps.length > 0 ? 'action' : undefined} />
       </div>
 
       <div className="grid-2">
@@ -153,10 +154,10 @@ export function Dashboard({ data, loading, go }: {
         <Card
           title="Top merchants"
           subtitle="By GMV in selected range"
-          action={<button type="button" className="btn btn-ghost btn-sm" onClick={() => go('merchants')}>Manage →</button>}
+          action={<button type="button" className="btn btn-ghost btn-sm" onClick={() => go('merchants')}>Manage <Icon name="arrowRight" size={14} /></button>}
         >
           {topMerchants.length === 0 ? (
-            <Empty icon="🏪" title="No merchant orders yet" body="Merchant-attributed orders will rank here once checkout flows." />
+            <Empty icon="store" title="No merchant orders yet" body="Merchant-attributed orders will rank here once checkout flows." />
           ) : (
             <ul className="rank">
               {topMerchants.map((m, i) => (
@@ -176,7 +177,7 @@ export function Dashboard({ data, loading, go }: {
         <Card
           title="Needs your attention"
           subtitle="Approvals, stuck orders, payouts"
-          action={<button type="button" className="btn btn-ghost btn-sm" onClick={() => go('riders')}>Review riders →</button>}
+          action={<button type="button" className="btn btn-ghost btn-sm" onClick={() => go('riders')}>Review riders <Icon name="arrowRight" size={14} /></button>}
         >
           <ul className="attention">
             {pendingApps.slice(0, 3).map((a) => {
@@ -197,14 +198,14 @@ export function Dashboard({ data, loading, go }: {
               </li>
             ))}
             {pendingApps.length === 0 && active.length === 0 ? (
-              <Empty icon="🌊" title="All calm across the island" body="No pending approvals and no live orders. Enjoy the quiet." />
+              <Empty icon="sun" title="All calm across the island" body="No pending approvals and no live orders. Enjoy the quiet." />
             ) : null}
           </ul>
         </Card>
         <Card
           title="Recent orders"
           subtitle="Latest across all towns"
-          action={<button type="button" className="btn btn-ghost btn-sm" onClick={() => go('orders')}>Open order book →</button>}
+          action={<button type="button" className="btn btn-ghost btn-sm" onClick={() => go('orders')}>Open order book <Icon name="arrowRight" size={14} /></button>}
         >
           <div className="table-wrap">
             <table className="table">
@@ -220,7 +221,7 @@ export function Dashboard({ data, loading, go }: {
                 ))}
               </tbody>
             </table>
-            {data.orders.length === 0 ? <Empty icon="🧾" title="No orders yet" body="Orders from the mobile app will stream in here." /> : null}
+            {data.orders.length === 0 ? <Empty icon="receipt" title="No orders yet" body="Orders from the mobile app will stream in here." /> : null}
           </div>
         </Card>
       </div>

@@ -1,6 +1,7 @@
 {
   "cli": {
-    "version": ">= 24.8.0"
+    "version": ">= 24.8.0",
+    "appVersionSource": "remote"
   },
   "build": {
     "development": {
@@ -13,21 +14,15 @@
       "android": {
         "buildType": "apk"
       },
-      "env": {
-        "EXPO_PUBLIC_SUPABASE_URL": "https://wxkbdejcwkpyggmmohgo.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_33ZXi06xELYAi5P3ewimZw_ag6_2n_7"
-      },
-      "channel": "preview"
+      "channel": "preview",
+      "autoIncrement": true
     },
     "production": {
       "android": {
         "buildType": "app-bundle"
       },
-      "env": {
-        "EXPO_PUBLIC_SUPABASE_URL": "https://wxkbdejcwkpyggmmohgo.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_33ZXi06xELYAi5P3ewimZw_ag6_2n_7"
-      },
-      "channel": "production"
+      "channel": "production",
+      "autoIncrement": true
     }
   },
   "submit": {

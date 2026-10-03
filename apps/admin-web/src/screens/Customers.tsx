@@ -6,6 +6,7 @@ import { avgRating, sumBy } from '../lib/analytics';
 import { num, peso } from '../lib/currency';
 import { formatDateTime, townSummary } from '../lib/format';
 import { Badge, Card, Detail, Empty, Modal, SearchInput, Skeleton, statusTone } from '../components/ui';
+import { Icon } from '../components/icon';
 import { supabase } from '../lib/supabase';
 
 export function Customers({ data, loading, reload }: { data: AdminData; loading: boolean; reload: () => void }) {
@@ -86,7 +87,7 @@ export function Customers({ data, loading, reload }: { data: AdminData; loading:
               ))}
             </tbody>
           </table>
-          {rows.length === 0 ? <Empty icon="👥" title="No customers yet" body="App sign-ups will appear here with spend history." /> : null}
+          {rows.length === 0 ? <Empty icon="users" title="No customers yet" body="App sign-ups will appear here with spend history." /> : null}
         </div>
         <p className="muted">Joined {formatDateTime(data.profiles.find((p) => p.role === 'customer')?.created_at)} (earliest in window) · blocking is reversible and enforced by RLS.</p>
       </Card>
@@ -189,7 +190,7 @@ function CustomerFile({
 
       <Card title="Recent orders" subtitle={`${num(orders.length)} in window`}>
         {orders.length === 0 ? (
-          <Empty icon="🧾" title="No orders yet" body="This customer has not placed an order in the loaded window." />
+          <Empty icon="receipt" title="No orders yet" body="This customer has not placed an order in the loaded window." />
         ) : (
           <div className="table-wrap">
             <table className="table">
@@ -215,7 +216,7 @@ function CustomerFile({
 
       <Card title="Recent messages" subtitle="Rider–customer chat across this account's orders">
         {messages.length === 0 ? (
-          <Empty icon="💬" title="No messages yet" body="Chat threads appear here once a rider is assigned." />
+          <Empty icon="message" title="No messages yet" body="Chat threads appear here once a rider is assigned." />
         ) : (
           <ul className="attention">
             {messages.map((m) => {
@@ -224,7 +225,7 @@ function CustomerFile({
               const isRider = sender?.role === 'rider';
               return (
                 <li key={m.id}>
-                  <span className="stars">{isRider ? '🛵' : '👤'}</span>
+                  <span className="stars"><Icon name={isRider ? 'bike' : 'user'} size={16} /></span>
                   <span>
                     <strong>{sender?.full_name || sender?.username || '—'} <small>· {isRider ? 'Rider' : 'Customer'}</small></strong>
                     <small>{m.body.length > 140 ? `${m.body.slice(0, 140)}…` : m.body}</small>
@@ -235,11 +236,11 @@ function CustomerFile({
             })}
           </ul>
         )}
-        <p className="muted">Full threads live under each order — open Orders and select a row with 💬.</p>
+        <p className="muted">Full threads live under each order — open Orders and select a row with chat.</p>
       </Card>
 
       <Card title="Ratings given" subtitle="Reviews this customer left for riders">        {ratings.length === 0 ? (
-          <Empty icon="★" title="No reviews yet" body="Ratings appear here after completed deliveries." />
+          <Empty icon="star" title="No reviews yet" body="Ratings appear here after completed deliveries." />
         ) : (
           <ul className="attention">
             {ratings.slice(0, 10).map((r) => {

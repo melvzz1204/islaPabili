@@ -1,4 +1,5 @@
-import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Animated, Easing, Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import { AppIcon, Button, Card, colors, radius, spacing, typography, type AppIconName } from '@isla/ui';
 
 /** Landing steps, mirrors the Figma "How its works?" prototype timeline. */
@@ -46,66 +47,140 @@ export const HOW_IT_WORKS_STEPS: {
   },
 ];
 
-const TRUST: { icon: AppIconName; label: string }[] = [
-  { icon: 'shield', label: 'Verified riders' },
-  { icon: 'timer', label: 'Live tracking' },
-  { icon: 'wallet', label: 'Cash or e-payment' },
-];
-
 type Props = {
   onCreate: () => void;
 };
 
 /**
- * Premium prototype landing: warm hero card, icon timeline, big CTA plus a
- * trust row. Shared by the signed-in Home tab and the guest landing screen.
+ * Premium prototype landing: warm hero card, live rider strip, auto-cycling
+ * (and tappable) icon timeline, big CTA plus a trust row. Shared by the
+ * signed-in Home tab and the guest landing screen.
  */
 export function HowItWorks({ onCreate }: Props) {
+  const [active, setActive] = useState(0);
+
+  // Staggered entrance: hero, then each step, then the CTA.
+  const heroA = useRef(new Animated.Value(0)).current;
+  const stepAs = useRef(HOW_IT_WORKS_STEPS.map(() => new Animated.Value(0))).current;
+  const ctaA = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(heroA, {
+        toValue: 1,
+        duration: 450,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      ...stepAs.map((v, i) =>
+        Animated.timing(v, {
+          toValue: 1,
+          duration: 450,
+          delay: 200 + i * 110,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ),
+      Animated.timing(ctaA, {
+        toValue: 1,
+        duration: 450,
+        delay: 200 + stepAs.length * 110,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [heroA, ctaA, stepAs]);
+
+  // Spotlight cycles through the steps; tapping one jumps straight to it.
+  useEffect(() => {
+    const t = setInterval(() => {
+      setActive((a) => (a + 1) % HOW_IT_WORKS_STEPS.length);
+    }, 2600);
+    return () => clearInterval(t);
+  }, []);
+
+  // Smooth medallion zoom toward the spotlighted step.
+  const spotAs = useRef(HOW_IT_WORKS_STEPS.map(() => new Animated.Value(0))).current;
+  useEffect(() => {
+    spotAs.forEach((v, i) => {
+      Animated.timing(v, {
+        toValue: i === active ? 1 : 0,
+        duration: 280,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+    });
+  }, [active, spotAs]);
+
   return (
     <>
-      <Card variant="tinted" style={styles.hero}>
-        <View style={styles.heroMedallion}>
-          <AppIcon name="pabili" size={28} color={colors.onPrimary} />
-        </View>
-        <View style={styles.heroText}>
-          <Text style={styles.heroTitle}>Pabili na, hatid pa sa pinto mo.</Text>
-          <Text style={styles.heroBody}>
-            Send one list and a rider shops it across Marinduque, then delivers to your door.
-          </Text>
-        </View>
-      </Card>
+      <Animated.View style={{ opacity: heroA }}>
+        <Card variant="tinted" style={styles.hero}>
+          <View style={styles.heroMedallion}>
+            <AppIcon name="pabili" size={28} color={colors.onPrimary} />
+          </View>
+          <View style={styles.heroText}>
+            <Text style={styles.heroTitle}>Pabili na, hatid pa sa pinto mo.</Text>
+            <Text style={styles.heroBody}>
+              Send one list and a rider shops it across Marinduque, then delivers to your door.
+            </Text>
+          </View>
+        </Card>
+      </Animated.View>
 
       <View style={styles.howWrap}>
         <Text style={styles.howTitle}>How it works?</Text>
         <View style={styles.steps}>
-          {HOW_IT_WORKS_STEPS.map((step, i) => (
-            <View key={step.title} style={styles.stepRow}>
-              <View style={styles.stepRail}>
-                <View style={[styles.stepMedallion, step.medallion]}>
-                  <AppIcon name={step.icon} size={20} color={step.tint} />
-                </View>
-                {i < HOW_IT_WORKS_STEPS.length - 1 ? <View style={styles.stepLine} /> : null}
-              </View>
-              <View style={styles.stepText}>
-                <Text style={styles.stepTitle}>{step.title}</Text>
-                <Text style={styles.stepBody}>{step.body}</Text>
-              </View>
-            </View>
-          ))}
+          {HOW_IT_WORKS_STEPS.map((step, i) => {
+            const enter = stepAs[i]!;
+            const spotlight = spotAs[i]!;
+            const isActive = i === active;
+            return (
+              <Animated.View
+                key={step.title}
+                style={{
+                  opacity: enter,
+                  transform: [{ translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }],
+                }}
+              >
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`${step.title}: ${step.body}`}
+                  onPress={() => setActive(i)}
+                  style={({ pressed }) => [styles.stepRow, pressed && styles.pressed]}
+                >
+                  <View style={styles.stepRail}>
+                    <Animated.View
+                      style={[
+                        styles.stepMedallion,
+                        step.medallion,
+                        isActive && styles.stepMedallionActive,
+                        {
+                          transform: [
+                            { scale: spotlight.interpolate({ inputRange: [0, 1], outputRange: [1, 1.14] }) },
+                          ],
+                        },
+                      ]}
+                    >
+                      <AppIcon name={step.icon} size={20} color={isActive ? colors.onPrimary : step.tint} />
+                    </Animated.View>
+                    {i < HOW_IT_WORKS_STEPS.length - 1 ? <View style={styles.stepLine} /> : null}
+                  </View>
+                  <View style={styles.stepText}>
+                    <Text style={[styles.stepTitle, isActive && styles.stepTitleActive]}>{step.title}</Text>
+                    <Text style={styles.stepBody}>{step.body}</Text>
+                  </View>
+                </Pressable>
+              </Animated.View>
+            );
+          })}
         </View>
       </View>
 
-      <View style={styles.ctaWrap}>
-        <Button title="Create Pabili List" onPress={onCreate} />
-        <View style={styles.trustRow}>
-          {TRUST.map((t) => (
-            <View key={t.label} style={styles.trustItem}>
-              <AppIcon name={t.icon} size={14} color={colors.primaryDeep} />
-              <Text style={styles.trustLabel}>{t.label}</Text>
-            </View>
-          ))}
+      <Animated.View style={{ opacity: ctaA }}>
+        <View style={styles.ctaWrap}>
+          <Button title="Create Pabili List" onPress={onCreate} />
         </View>
-      </View>
+      </Animated.View>
     </>
   );
 }
@@ -141,13 +216,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  stepMedallionActive: { backgroundColor: colors.primary },
   stepLine: { width: 2, flex: 1, minHeight: 14, backgroundColor: colors.hairline, marginVertical: 4 },
   stepText: { flex: 1, gap: 2, paddingBottom: spacing.base, paddingTop: 2 },
   stepTitle: { ...typography.subhead, fontWeight: '700' },
+  stepTitleActive: { color: colors.primaryDeep },
   stepBody: { ...typography.caption, color: colors.muted },
 
-  ctaWrap: { paddingTop: spacing.sm, gap: spacing.sm },
-  trustRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.base },
-  trustItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  trustLabel: { ...typography.micro, color: colors.muted, fontWeight: '600' },
+  ctaWrap: { paddingTop: spacing.sm },
+
+  pressed: { opacity: 0.7 },
 });

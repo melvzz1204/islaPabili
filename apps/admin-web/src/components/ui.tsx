@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { Icon, type IconName } from './icon';
 
 /* ---------- primitives ---------- */
 
@@ -31,12 +32,12 @@ export function Kpi({ label, value, hint, delta, tone = 'teal', icon }: {
   hint?: string;
   delta?: string;
   tone?: 'teal' | 'orange' | 'green' | 'red' | 'violet' | 'blue';
-  icon?: string;
+  icon?: IconName;
 }) {
   return (
     <div className={`kpi kpi-${tone}`}>
       <div className="kpi-top">
-        <span className="kpi-icon" aria-hidden>{icon ?? '◈'}</span>
+        <span className="kpi-icon" aria-hidden><Icon name={icon ?? 'spark'} size={20} /></span>
         {delta ? <span className="kpi-delta">{delta}</span> : null}
       </div>
       <div className="kpi-value">{value}</div>
@@ -70,12 +71,12 @@ export function Field({ label, children, hint }: { label: string; children: Reac
   );
 }
 
-export function Empty({ icon = '◌', title, body, action }: {
-  icon?: string; title: string; body?: string; action?: ReactNode;
+export function Empty({ icon = 'inbox', title, body, action }: {
+  icon?: IconName; title: string; body?: string; action?: ReactNode;
 }) {
   return (
     <div className="empty">
-      <div className="empty-icon" aria-hidden>{icon}</div>
+      <span className="empty-icon" aria-hidden><Icon name={icon} size={24} /></span>
       <div className="empty-title">{title}</div>
       {body ? <p className="empty-body">{body}</p> : null}
       {action ?? null}
@@ -110,7 +111,7 @@ export function Modal({ title, subtitle, onClose, children, wide }: {
             <h2 className="sheet-title">{title}</h2>
             {subtitle ? <p className="sheet-sub">{subtitle}</p> : null}
           </div>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>✕ Close</button>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}><Icon name="close" size={14} /> Close</button>
         </div>
         <div className="sheet-body">{children}</div>
       </div>
@@ -132,13 +133,13 @@ export function SearchInput({ value, onChange, placeholder }: {
 }) {
   return (
     <div className="search">
-      <span aria-hidden>⌕</span>
+      <Icon name="search" size={18} />
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder ?? 'Search…'}
       />
-      {value ? <button type="button" onClick={() => onChange('')}>✕</button> : null}
+      {value ? <button type="button" onClick={() => onChange('')} aria-label="Clear"><Icon name="close" size={14} /></button> : null}
     </div>
   );
 }

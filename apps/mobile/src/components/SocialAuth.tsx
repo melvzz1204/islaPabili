@@ -9,7 +9,6 @@ import {
   colors,
   radius,
   spacing,
-  taglines,
   typography,
 } from '@isla/ui';
 import { BrandLogo } from './BrandLogo';
@@ -96,10 +95,8 @@ const PROVIDER_LABELS: Record<'google' | 'facebook', string> = {
 export function AuthIntro() {
   return (
     <View style={styles.intro}>
-      <BrandLogo width={212} />
-      <View style={styles.introText}>
-        <Text style={styles.tagline}>{taglines.primary}</Text>
-      </View>
+      <BrandLogo width={132} />
+      <Text style={styles.wordmark}>Isla Pabili</Text>
     </View>
   );
 }
@@ -121,6 +118,5 @@ const styles = StyleSheet.create({
   dim: { opacity: 0.45 },
 
   intro: { alignItems: 'center', gap: spacing.md, marginTop: spacing.xxl, marginBottom: spacing.sm },
-  introText: { alignItems: 'center', gap: spacing.xs },
-  tagline: { ...typography.body, color: colors.muted, textAlign: 'center' },
+  wordmark: { ...typography.title, fontSize: 28, color: colors.ink, textAlign: 'center' },
 });

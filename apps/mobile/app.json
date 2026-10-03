@@ -6,13 +6,14 @@
     "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-    "icon": "./assets/icon.png",
+          "icon": "./assets/islapabili_logo.png",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "ph.islapabili.app"
     },
     "android": {
       "package": "ph.islapabili.app",
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#065F59"
@@ -26,7 +27,7 @@
     "web": {
       "name": "IslaPabili",
       "shortName": "IslaPabili",
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/islapabili_logo.png"
     },
     "plugins": [
       "expo-image-picker",
@@ -34,7 +35,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/icon.png",
+    "icon": "./assets/islapabili_logo.png",
           "color": "#065F59"
         }
       ],
@@ -49,10 +50,10 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/icon.png",
+          "image": "./assets/islapabili_logo.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#FFFFFF"
+          "backgroundColor": "#FBF5E9"
         }
       ],
       [
@@ -60,7 +61,8 @@
         {
           "android": {
             "enableProguardInReleaseBuilds": true,
-            "enableShrinkResourcesInReleaseBuilds": true
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "extraDependencies": ["androidx.core:core-splashscreen:1.2.0"]
           }
         }
       ]
@@ -74,7 +76,9 @@
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/d8522891-0d14-408a-b9d9-9a2f95feb2e0"
+      "url": "https://u.expo.dev/d8522891-0d14-408a-b9d9-9a2f95feb2e0",
+      "checkAutomaticallyOnLaunch": "ALWAYS",
+      "fallbackToCacheTimeout": 0
     }
   }
 }

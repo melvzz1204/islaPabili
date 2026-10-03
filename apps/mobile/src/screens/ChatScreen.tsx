@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -8,6 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { useAuth, type Database } from '@isla/supabase';
 import {
@@ -26,7 +28,7 @@ import { ChatComposer, ChatThread } from '../messaging/ChatThread';
 import { invokePush } from '../lib/push';
 import { CACHE_TTLS, cacheKey, peekEntry, readPersistedEntry, setEntry } from '../lib/cache';
 import type { RootNavProp, RootStackScreen } from '../navigation/types';
-import { BottomNav, BOTTOM_NAV_HEIGHT } from '../components/BottomNav';
+import { BottomNav } from '../components/BottomNav';
 
 type OrderRow = Database['public']['Tables']['orders']['Row'];
 type Props = RootStackScreen<'Chat'>;
@@ -43,6 +45,11 @@ export default function ChatScreen({ route }: Props) {
   const [messages, setMessages] = useState<MessageRow[]>([]);
   const [sending, setSending] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
+  const insets = useSafeAreaInsets();
+
+  const scrollToEnd = useCallback((animated = true) => {
+    scrollRef.current?.scrollToEnd({ animated });
+  }, []);
 
   const loadOrder = useCallback(async () => {
     // Cache-first header so reopening a thread is instant/offline.
@@ -158,8 +165,15 @@ export default function ChatScreen({ route }: Props) {
   }, [client, orderId, instanceId]);
 
   useEffect(() => {
-    scrollRef.current?.scrollToEnd({ animated: true });
-  }, [messages.length]);
+    scrollToEnd(true);
+  }, [messages.length, scrollToEnd]);
+
+  // When the keyboard opens, the latest message + composer must stay visible
+  // above it on both platforms (resize shrinks Android; padding lifts iOS).
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', () => scrollToEnd(true));
+    return () => show.remove();
+  }, [scrollToEnd]);
 
   const send = async (body: string) => {
     const text = body.trim();
@@ -188,13 +202,14 @@ export default function ChatScreen({ route }: Props) {
   const online = presence === 'Online now';
 
   return (
-    <Screen
-      scroll={false}
-      footer={<BottomNav />}
-      footerHeight={BOTTOM_NAV_HEIGHT}
-      background={colors.chatCanvas}
-      contentStyle={styles.fill}
-    >
+    <Screen scroll={false} keyboard={false} background={colors.chatCanvas} contentStyle={styles.fill}>
+      {/* Single avoidance wrapper owns header, thread, composer and bottom
+          nav together, so nothing is left behind the keyboard on either OS. */}
+      <KeyboardAvoidingView
+        style={styles.fill}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}
+      >
       {/* Premium header: back · avatar + presence · order chip · track */}
       <View style={styles.header}>
         <Pressable
@@ -238,18 +253,13 @@ export default function ChatScreen({ route }: Props) {
         ) : null}
       </View>
 
-      <KeyboardAvoidingView
-        style={styles.fill}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={90}
-      >
         <ScrollView
           ref={scrollRef}
           style={styles.thread}
           contentContainerStyle={styles.threadContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
-          onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
+          onContentSizeChange={() => scrollToEnd(false)}
         >
           {messages.length === 0 ? (
             <View style={styles.emptyWrap}>
@@ -281,6 +291,9 @@ export default function ChatScreen({ route }: Props) {
             <Text style={styles.closedText}>Chat closed, this order is {order?.status.replace(/_/g, ' ')}.</Text>
           </View>
         )}
+        <View style={{ paddingBottom: insets.bottom }}>
+          <BottomNav />
+        </View>
       </KeyboardAvoidingView>
     </Screen>
   );

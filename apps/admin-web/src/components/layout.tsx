@@ -1,32 +1,33 @@
 import { useState } from 'react';
 import { signOut } from '@isla/supabase';
 import { supabase } from '../lib/supabase';
+import { Icon, type IconName } from './icon';
 
 export type AdminTab = 'dashboard' | 'orders' | 'riders' | 'merchants' | 'customers' | 'finance' | 'settings';
 
-export const NAV: { section: string; items: { key: AdminTab; label: string; icon: string; blurb: string }[] }[] = [
+export const NAV: { section: string; items: { key: AdminTab; label: string; icon: IconName; blurb: string }[] }[] = [
   {
     section: 'Overview',
-    items: [{ key: 'dashboard', label: 'Dashboard', icon: '◧', blurb: 'Island-wide pulse' }],
+    items: [{ key: 'dashboard', label: 'Dashboard', icon: 'grid', blurb: 'Island-wide pulse' }],
   },
   {
     section: 'Operations',
     items: [
-      { key: 'orders', label: 'Orders', icon: '🧾', blurb: 'Live order book' },
-      { key: 'riders', label: 'Riders', icon: '🛵', blurb: 'Fleet + applications' },
-      { key: 'merchants', label: 'Merchants', icon: '🏪', blurb: 'Stores & catalog' },
+      { key: 'orders', label: 'Orders', icon: 'receipt', blurb: 'Live order book' },
+      { key: 'riders', label: 'Riders', icon: 'bike', blurb: 'Fleet + applications' },
+      { key: 'merchants', label: 'Merchants', icon: 'store', blurb: 'Stores & catalog' },
     ],
   },
   {
     section: 'Growth',
     items: [
-      { key: 'customers', label: 'Customers', icon: '👥', blurb: 'Demand side' },
-      { key: 'finance', label: 'Finance', icon: '💠', blurb: 'Money + promos' },
+      { key: 'customers', label: 'Customers', icon: 'users', blurb: 'Demand side' },
+      { key: 'finance', label: 'Finance', icon: 'wallet', blurb: 'Money + promos' },
     ],
   },
   {
     section: 'System',
-    items: [{ key: 'settings', label: 'Settings', icon: '⚙', blurb: 'Pricing & ops' }],
+    items: [{ key: 'settings', label: 'Settings', icon: 'settings', blurb: 'Pricing & ops' }],
   },
 ];
 
@@ -44,7 +45,7 @@ export function Shell({ tab, setTab, email, pendingApps, children }: {
     <div className="shell">
       <aside className={`side ${open ? 'side-open' : ''}`}>
         <div className="side-brand">
-          <img src="/islapabili_logo.svg" alt="IslaPabili" />
+          <img src="/islapabili_logo.png" alt="IslaPabili" />
           <div>
             <strong>IslaPabili</strong>
             <span>Admin console</span>
@@ -62,7 +63,7 @@ export function Shell({ tab, setTab, email, pendingApps, children }: {
                   className={`side-link ${tab === i.key ? 'side-active' : ''}`}
                   onClick={() => { setTab(i.key); setOpen(false); }}
                 >
-                  <span className="side-ico" aria-hidden>{i.icon}</span>
+                  <span className="side-ico" aria-hidden><Icon name={i.icon} size={19} /></span>
                   <span className="side-txt">
                     <span>{i.label}</span>
                     <small>{i.blurb}</small>
@@ -88,20 +89,20 @@ export function Shell({ tab, setTab, email, pendingApps, children }: {
             className="btn btn-ghost btn-sm"
             onClick={() => void signOut(supabase)}
           >
-            ⎋ Log out
+            <Icon name="logout" size={15} /> Log out
           </button>
         </div>
       </aside>
       <div className="main">
         <header className="topbar">
-          <button type="button" className="icon-btn" onClick={() => setOpen((v) => !v)} aria-label="Menu">☰</button>
+          <button type="button" className="icon-btn" onClick={() => setOpen((v) => !v)} aria-label="Menu"><Icon name="menu" size={18} /></button>
           <div className="crumb">
             <span className="crumb-now">{active?.label ?? ''}</span>
             <small>{active?.blurb ?? ''} · {new Date().toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric' })}</small>
           </div>
           <div className="top-actions">
             <span className="net"><span className="pulse" /> Live · Supabase</span>
-            <button type="button" className="btn btn-secondary btn-sm" onClick={() => window.location.reload()}>↻ Refresh</button>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => window.location.reload()}><Icon name="refresh" size={15} /> Refresh</button>
           </div>
         </header>
         <main className="content">{children}</main>

@@ -1,6 +1,6 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { Button, Screen, ScreenHeader, colors, radius, shadows, spacing, typography } from '@isla/ui';
+import { Button, Screen, ScreenHeader, colors, radius, shadows, spacing } from '@isla/ui';
 import { AuthIntro, SocialAuth } from '../../components/SocialAuth';
 import { RolePicker } from '../../components/RolePicker';
 import { useAuthMode } from '../../lib/authMode';
@@ -19,17 +19,6 @@ export default function AuthHomeScreen() {
 
       <AuthIntro />
 
-      <View style={styles.headline}>
-        <Text style={styles.title}>
-          {mode === 'rider' ? 'Deliver and earn' : 'Order anything, delivered'}
-        </Text>
-        <Text style={styles.subtitle}>
-          {mode === 'rider'
-            ? 'Sign in with your rider account to start accepting deliveries.'
-            : 'Sign in to order food and pabili from stores across Marinduque.'}
-        </Text>
-      </View>
-
       <RolePicker value={mode} onChange={setMode} />
       <SocialAuth />
 
@@ -38,18 +27,11 @@ export default function AuthHomeScreen() {
         <Button title="Create an account" variant="secondary" onPress={() => navigation.navigate('Register')} />
         <Button title="Continue with phone" variant="ghost" onPress={() => navigation.navigate('Phone')} />
       </View>
-
-      <Text style={styles.footnote}>
-        One IslaPabili account works for both ordering and delivering.
-      </Text>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  headline: { alignItems: 'center', gap: spacing.xs, marginBottom: spacing.xs },
-  title: { ...typography.title, textAlign: 'center' },
-  subtitle: { ...typography.body, color: colors.muted, textAlign: 'center' },
   ctaCard: {
     gap: spacing.sm,
     padding: spacing.lg,
@@ -60,5 +42,4 @@ const styles = StyleSheet.create({
     ...shadows.card,
   },
   pill: { borderRadius: radius.pill },
-  footnote: { ...typography.caption, textAlign: 'center' },
 });
