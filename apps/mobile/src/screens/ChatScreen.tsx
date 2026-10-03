@@ -24,6 +24,7 @@ import {
 import { canChat, markConversationRead, setOpenOrderId, type MessageRow } from '../messaging/chat';
 import { ChatComposer, ChatThread } from '../messaging/ChatThread';
 import { invokePush } from '../lib/push';
+import { CACHE_TTLS, cacheKey, peekEntry, readPersistedEntry, setEntry } from '../lib/cache';
 import type { RootNavProp, RootStackScreen } from '../navigation/types';
 import { BottomNav, BOTTOM_NAV_HEIGHT } from '../components/BottomNav';
 
@@ -44,10 +45,20 @@ export default function ChatScreen({ route }: Props) {
   const scrollRef = useRef<ScrollView>(null);
 
   const loadOrder = useCallback(async () => {
+    // Cache-first header so reopening a thread is instant/offline.
+    const key = cacheKey('order', orderId);
+    const peeked = peekEntry<OrderRow>(key);
+    const applyOrder = (o: OrderRow) => setOrder(o);
+    if (peeked) applyOrder(peeked.value);
+    else {
+      const stored = await readPersistedEntry<OrderRow>(key);
+      if (stored) applyOrder(stored.value);
+    }
     const { data } = await client.from('orders').select('*').eq('id', orderId).maybeSingle();
     if (!data) return;
     const o = data as OrderRow;
-    setOrder(o);
+    applyOrder(o);
+    setEntry(key, o, CACHE_TTLS.orders, true);
     const otherId = o.customer_id === profile?.id ? o.rider_id : o.customer_id;
     if (otherId) {
       const { data: person } = await client.from('profiles').select('full_name').eq('id', otherId).maybeSingle();
@@ -70,15 +81,34 @@ export default function ChatScreen({ route }: Props) {
     }
   }, [client, orderId, profile?.id]);
 
-  const loadMessages = useCallback(async () => {
-    const { data } = await client
-      .from('order_messages')
-      .select('*')
-      .eq('order_id', orderId)
-      .order('created_at', { ascending: true })
-      .limit(200);
-    setMessages((data ?? []) as MessageRow[]);
-  }, [client, orderId]);
+  const loadMessages = useCallback(
+    async (force = false) => {
+      const key = cacheKey('messages', orderId);
+      if (!force) {
+        const peeked = peekEntry<MessageRow[]>(key);
+        if (peeked) setMessages(peeked.value);
+        else {
+          const stored = await readPersistedEntry<MessageRow[]>(key);
+          if (stored) setMessages(stored.value);
+        }
+        if (peeked?.fresh) return;
+      }
+      try {
+        const { data } = await client
+          .from('order_messages')
+          .select('*')
+          .eq('order_id', orderId)
+          .order('created_at', { ascending: true })
+          .limit(200);
+        const rows = (data ?? []) as MessageRow[];
+        setMessages(rows);
+        setEntry(key, rows, CACHE_TTLS.messages, true);
+      } catch {
+        // Offline: keep cached thread visible.
+      }
+    },
+    [client, orderId],
+  );
 
   useEffect(() => {
     void loadOrder();
@@ -113,7 +143,12 @@ export default function ChatScreen({ route }: Props) {
         { event: 'INSERT', schema: 'public', table: 'order_messages', filter: `order_id=eq.${orderId}` },
         (payload) => {
           const row = payload.new as MessageRow;
-          setMessages((prev) => (prev.some((m) => m.id === row.id) ? prev : [...prev, row]));
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === row.id)) return prev;
+            const next = [...prev, row];
+            setEntry(cacheKey('messages', orderId), next, CACHE_TTLS.messages, true);
+            return next;
+          });
         },
       )
       .subscribe();
@@ -146,7 +181,7 @@ export default function ChatScreen({ route }: Props) {
     }
     // Wake the other side when their app is killed/backgrounded.
     void invokePush(client, orderId, 'message');
-    await loadMessages();
+    await loadMessages(true);
   };
 
   const chatOpen = order ? canChat(order.status) : true;

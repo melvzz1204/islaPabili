@@ -26,6 +26,7 @@ import {
   type AppIconName,
 } from '@isla/ui';
 import { peso } from '../marketplace/data';
+import { ListPhotos } from '../marketplace/ListPhotos';
 import { canChat, markConversationRead, setOpenOrderId, useConversations, useIncomingMessageAlerts, type MessageRow } from '../messaging/chat';
 import { ChatComposer, ChatEmptyState, ChatThread } from '../messaging/ChatThread';
 import {
@@ -550,6 +551,7 @@ function IncomingOverlay({
             {offer.items.length > 4 ? (
               <Text style={styles.muted}>+{offer.items.length - 4} more</Text>
             ) : null}
+            <ListPhotos paths={offer.order.list_photo_urls} />
           </View>
           <View style={styles.takeFeeRow}>
             <Text style={styles.takeFee}>{peso(Number(offer.order.total_delivery_fee ?? 0))}</Text>
@@ -773,6 +775,7 @@ function RequestsView({
               </Text>
             ))}
             {offer.items.length > 4 ? <Text style={styles.muted}>+{offer.items.length - 4} more</Text> : null}
+            <ListPhotos paths={offer.order.list_photo_urls} />
             <Text style={styles.feeLine}>
               {peso(Number(offer.order.total_delivery_fee ?? 0))} fee · COD
               {distanceTo(offer.order.dropoff_lat, offer.order.dropoff_lng)
@@ -853,6 +856,7 @@ function DeliveriesView({
                   {it.store ? ` (${it.store})` : ''}
                 </Text>
               ))}
+              <ListPhotos paths={o.list_photo_urls} />
               <Text style={styles.contact} numberOfLines={1}>
                 Customer: {o.dropoff_notes || 'No notes left'}
               </Text>

@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { resolveOptedTowns, shouldFilterTowns, TOWN_LABELS } from '@isla/shared';
 import { useAuth } from '@isla/supabase';
+import { CACHE_TTLS, cacheKey } from '../lib/cache';
+import { useCachedQuery } from '../lib/useCachedQuery';
 import {
   Button,
   Card,
@@ -35,9 +37,6 @@ const FILTERS: { value: Filter; label: string }[] = [
 export default function MarketScreen({}: Props) {
   const navigation = useNavigation<RootNavProp>();
   const { client, session, profile } = useAuth();
-  const [loading, setLoading] = useState(true);
-  const [merchants, setMerchants] = useState<Merchant[]>([]);
-  const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [kind, setKind] = useState<Filter>('all');
   // Guests and "All municipalities" shoppers always browse the whole island.
@@ -46,22 +45,22 @@ export default function MarketScreen({}: Props) {
   const optedTowns = useMemo(() => resolveOptedTowns(profile), [profile]);
   const townFilterApplies = shouldFilterTowns(optedTowns);
   const activeTowns = townFilterApplies && !browseAll ? optedTowns : undefined;
+  const townsKey = activeTowns ? [...activeTowns].sort().join(',') : 'all';
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setMerchants(await fetchMerchants(client, activeTowns));
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Could not load stores.');
-    } finally {
-      setLoading(false);
-    }
-  }, [client, activeTowns]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  // Cache-first catalog: instant stale render + offline fallback, 10-min TTL.
+  const {
+    data: merchantsData,
+    loading,
+    error: queryError,
+    refresh,
+  } = useCachedQuery<Merchant[]>(
+    cacheKey('merchants', townsKey),
+    () => fetchMerchants(client, activeTowns),
+    { ttlMs: CACHE_TTLS.merchants, persist: true },
+  );
+  const merchants = merchantsData ?? [];
+  const error = queryError ? queryError.message : null;
+  const load = () => void refresh();
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -172,7 +171,7 @@ export default function MarketScreen({}: Props) {
           title="Could not load stores"
           message={error}
           icon="warning"
-          action={<Button title="Try again" onPress={() => void load()} />}
+          action={<Button title="Try again" onPress={load} />}
         />
       ) : results.length === 0 ? (
         hiddenByTowns ? (

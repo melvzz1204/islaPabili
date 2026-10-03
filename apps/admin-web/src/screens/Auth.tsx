@@ -67,7 +67,7 @@ export function AdminLogin({ onSignedIn }: { onSignedIn: () => void }) {
         </form>
       </div>
       <div className="auth-side">
-        <div className="auth-metric"><strong>₱40 + ₱10/km</strong><span>transparent island fare</span></div>
+        <div className="auth-metric"><strong>₱45 + ₱15/km</strong><span>transparent island fare</span></div>
         <div className="auth-metric"><strong>Live</strong><span>orders · riders · stores</span></div>
         <p>“Salamat sa pag-Pabili” — every completed order, rated and settled.</p>
       </div>

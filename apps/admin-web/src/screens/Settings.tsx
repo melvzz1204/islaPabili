@@ -22,8 +22,8 @@ export function Settings({ data, reload }: { data: AdminData; reload: () => void
   const save = async () => {
     setBusy(true); setMsg(null);
     const { error } = await supabase.from('fare_config').insert({
-      base_fare: base ? Number(base) : (active?.base_fare ?? 40),
-      per_km_rate: perKm ? Number(perKm) : (active?.per_km_rate ?? 10),
+      base_fare: base ? Number(base) : (active?.base_fare ?? 45),
+      per_km_rate: perKm ? Number(perKm) : (active?.per_km_rate ?? 15),
       base_km: active?.base_km ?? 2,
       name: `Console update ${new Date().toLocaleString('en-PH')}`,
       is_active: true,
@@ -77,14 +77,14 @@ export function Settings({ data, reload }: { data: AdminData; reload: () => void
       <div className="grid-2">
         <Card title="Delivery pricing" subtitle="Base + per-km · changes version, never overwrite">
           <div className="detail-grid">
-            <Detail label="Base fare" value={peso(active?.base_fare ?? 40)} />
-            <Detail label="Per km" value={peso(active?.per_km_rate ?? 10)} />
+            <Detail label="Base fare" value={peso(active?.base_fare ?? 45)} />
+            <Detail label="Per km" value={peso(active?.per_km_rate ?? 15)} />
             <Detail label="Base km" value={String(active?.base_km ?? 2)} />
             <Detail label="Active config" value={active?.name ?? 'Default'} />
           </div>
           <div className="form-row">
-            <Field label="New base fare"><input className="input" type="number" value={base} onChange={(e) => setBase(e.target.value)} placeholder="40" /></Field>
-            <Field label="New per-km"><input className="input" type="number" value={perKm} onChange={(e) => setPerKm(e.target.value)} placeholder="10" /></Field>
+            <Field label="New base fare"><input className="input" type="number" value={base} onChange={(e) => setBase(e.target.value)} placeholder="45" /></Field>
+            <Field label="New per-km"><input className="input" type="number" value={perKm} onChange={(e) => setPerKm(e.target.value)} placeholder="15" /></Field>
             <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void save()}>{busy ? 'Saving…' : 'Publish'}</button>
           </div>
           {msg ? <p className="notice">{msg}</p> : null}

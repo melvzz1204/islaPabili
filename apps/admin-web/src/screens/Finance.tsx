@@ -162,8 +162,8 @@ function Fares({ data, reload }: { data: AdminData; reload: () => void }) {
 
   const save = async () => {
     const payload = {
-      base_fare: form.base_fare ? Number(form.base_fare) : active?.base_fare ?? 40,
-      per_km_rate: form.per_km_rate ? Number(form.per_km_rate) : active?.per_km_rate ?? 10,
+      base_fare: form.base_fare ? Number(form.base_fare) : active?.base_fare ?? 45,
+      per_km_rate: form.per_km_rate ? Number(form.per_km_rate) : active?.per_km_rate ?? 15,
       base_km: form.base_km ? Number(form.base_km) : active?.base_km ?? 2,
       is_active: true,
       name: `Updated ${new Date().toLocaleDateString('en-PH')}`,
@@ -180,14 +180,14 @@ function Fares({ data, reload }: { data: AdminData; reload: () => void }) {
   return (
     <Card title="Fare engine" subtitle="Publishing creates a new version — history is preserved">
       <div className="kpi-grid">
-        <Kpi tone="teal" icon="₱" label="Base fare" value={peso(active?.base_fare ?? 40)} hint={`first ${active?.base_km ?? 2} km`} />
-        <Kpi tone="blue" icon="⇄" label="Per km" value={peso(active?.per_km_rate ?? 10)} hint="beyond base" />
+        <Kpi tone="teal" icon="₱" label="Base fare" value={peso(active?.base_fare ?? 45)} hint={`first ${active?.base_km ?? 2} km`} />
+        <Kpi tone="blue" icon="⇄" label="Per km" value={peso(active?.per_km_rate ?? 15)} hint="beyond base" />
         <Kpi tone="violet" icon="📦" label="Config" value={active?.name ?? 'Default'} hint={active ? formatDateTime(active.updated_at) : ''} />
       </div>
       <div className="form-row">
-        <Field label="Base fare ₱" hint="Covers first base-km"><input className="input" type="number" min="0" value={form.base_fare} onChange={(e) => setForm({ ...form, base_fare: e.target.value })} placeholder={String(active?.base_fare ?? 40)} /></Field>
+        <Field label="Base fare ₱" hint="Covers first base-km"><input className="input" type="number" min="0" value={form.base_fare} onChange={(e) => setForm({ ...form, base_fare: e.target.value })} placeholder={String(active?.base_fare ?? 45)} /></Field>
         <Field label="Base km"><input className="input" type="number" min="0" step="0.5" value={form.base_km} onChange={(e) => setForm({ ...form, base_km: e.target.value })} placeholder={String(active?.base_km ?? 2)} /></Field>
-        <Field label="Per-km ₱"><input className="input" type="number" min="0" value={form.per_km_rate} onChange={(e) => setForm({ ...form, per_km_rate: e.target.value })} placeholder={String(active?.per_km_rate ?? 10)} /></Field>
+        <Field label="Per-km ₱"><input className="input" type="number" min="0" value={form.per_km_rate} onChange={(e) => setForm({ ...form, per_km_rate: e.target.value })} placeholder={String(active?.per_km_rate ?? 15)} /></Field>
         <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void save()}>{busy ? 'Publishing…' : 'Publish fare'}</button>
       </div>
       {msg ? <p className="notice">{msg}</p> : null}

@@ -496,6 +496,7 @@ export type Database = {
           in_transit_at: string | null
           is_custom_list: boolean
           is_paid: boolean
+          list_photo_urls: string[]
           merchant_id: string | null
           order_number: string
           payment_method: Database["public"]["Enums"]["payment_method"]
@@ -536,6 +537,7 @@ export type Database = {
           in_transit_at?: string | null
           is_custom_list?: boolean
           is_paid?: boolean
+          list_photo_urls?: string[]
           merchant_id?: string | null
           // Filled by trg_orders_assign_number when omitted.
           order_number?: string
@@ -577,6 +579,7 @@ export type Database = {
           in_transit_at?: string | null
           is_custom_list?: boolean
           is_paid?: boolean
+          list_photo_urls?: string[]
           merchant_id?: string | null
           order_number?: string
           payment_method?: Database["public"]["Enums"]["payment_method"]

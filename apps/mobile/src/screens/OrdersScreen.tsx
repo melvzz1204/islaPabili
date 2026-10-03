@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth, type Database } from '@isla/supabase';
@@ -21,8 +21,11 @@ import {
   type TimelineStep,
 } from '@isla/ui';
 import { peso } from '../marketplace/data';
+import { ListPhotos } from '../marketplace/ListPhotos';
 import { callRpc } from '../lib/rpc';
 import { invokePush } from '../lib/push';
+import { CACHE_TTLS, cacheKey, fetchWithCache } from '../lib/cache';
+import { useCachedQuery } from '../lib/useCachedQuery';
 import type { RootNavProp, TabScreen } from '../navigation/types';
 
 type Props = TabScreen<'Orders'>;
@@ -90,29 +93,35 @@ export default function OrdersScreen({}: Props) {
   const navigation = useNavigation<RootNavProp>();
   const { client, profile } = useAuth();
   const { showToast } = useToast();
-  const [orders, setOrders] = useState<OrderRow[]>([]);
-  const [loading, setLoading] = useState(true);
   const [scope, setScope] = useState<Scope>('active');
   const [selected, setSelected] = useState<OrderRow | null>(null);
   const [items, setItems] = useState<OrderItem[]>([]);
   const [logs, setLogs] = useState<StatusLog[]>([]);
   const [acting, setActing] = useState(false);
 
-  const load = useCallback(async () => {
-    if (!profile) return;
-    const { data, error } = await client
-      .from('orders')
-      .select('*')
-      .eq('customer_id', profile.id)
-      .order('created_at', { ascending: false })
-      .limit(30);
-    if (!error) setOrders(data ?? []);
-    setLoading(false);
-  }, [client, profile]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  // Cache-first order list (30s TTL, offline fallback); realtime forces refresh.
+  const ordersKey = profile ? cacheKey('orders', 'customer', profile.id) : null;
+  const {
+    data: ordersData,
+    loading,
+    refresh,
+  } = useCachedQuery<OrderRow[]>(
+    ordersKey,
+    async () => {
+      if (!profile) return [];
+      const { data, error } = await client
+        .from('orders')
+        .select('*')
+        .eq('customer_id', profile.id)
+        .order('created_at', { ascending: false })
+        .limit(30);
+      if (error) throw new Error(error.message);
+      return (data ?? []) as OrderRow[];
+    },
+    { ttlMs: CACHE_TTLS.orders, persist: true, enabled: !!profile },
+  );
+  const orders = ordersData ?? [];
+  const load = () => refresh();
 
   useEffect(() => {
     if (!profile) return;
@@ -121,13 +130,13 @@ export default function OrdersScreen({}: Props) {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'orders', filter: `customer_id=eq.${profile.id}` },
-        () => void load(),
+        () => void refresh(),
       )
       .subscribe();
     return () => {
       void client.removeChannel(channel);
     };
-  }, [client, profile, load]);
+  }, [client, profile, refresh]);
 
   const { active, past } = useMemo(() => {
     const a: OrderRow[] = [];
@@ -145,16 +154,33 @@ export default function OrdersScreen({}: Props) {
     setSelected(order);
     setItems([]);
     setLogs([]);
-    const [{ data: itemRows }, { data: logRows }] = await Promise.all([
-      client.from('order_items').select('*').eq('order_id', order.id),
-      client
-        .from('order_status_log')
-        .select('*')
-        .eq('order_id', order.id)
-        .order('created_at', { ascending: true }),
+    // Detail rows are cache-first (30s) so reopening a sheet is instant/offline.
+    const [itemRows, logRows] = await Promise.all([
+      fetchWithCache<OrderItem[]>(
+        cacheKey('order-items', order.id),
+        async () => {
+          const { data, error } = await client.from('order_items').select('*').eq('order_id', order.id);
+          if (error) throw new Error(error.message);
+          return (data ?? []) as OrderItem[];
+        },
+        { ttlMs: CACHE_TTLS.orderDetail, persist: true },
+      ).catch(() => [] as OrderItem[]),
+      fetchWithCache<StatusLog[]>(
+        cacheKey('order-logs', order.id),
+        async () => {
+          const { data, error } = await client
+            .from('order_status_log')
+            .select('*')
+            .eq('order_id', order.id)
+            .order('created_at', { ascending: true });
+          if (error) throw new Error(error.message);
+          return (data ?? []) as StatusLog[];
+        },
+        { ttlMs: CACHE_TTLS.orderDetail, persist: true },
+      ).catch(() => [] as StatusLog[]),
     ]);
-    setItems(itemRows ?? []);
-    setLogs(logRows ?? []);
+    setItems(itemRows);
+    setLogs(logRows);
   };
 
   /** Re-offer a waiting pabili list to whoever is on duty right now. */
@@ -439,6 +465,8 @@ export default function OrdersScreen({}: Props) {
                 </View>
               ))
             )}
+
+            <ListPhotos paths={selected.list_photo_urls} />
 
             {isDispatchable(selected) && selected.status === 'pending_dispatch' ? (
               <Text style={styles.muted}>

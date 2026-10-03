@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, Image, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { File as FileHandle } from 'expo-file-system';
+import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { TOWN_CENTERS, fareBreakdownLabel, fareConfigFromDefaults, type FareConfig, type Town } from '@isla/shared';
 import { useAuth } from '@isla/supabase';
@@ -12,6 +14,7 @@ import {
   Badge,
   Button,
   Card,
+  OrDivider,
   Screen,
   SheetModal,
   colors,
@@ -35,6 +38,19 @@ type ListRow = { name: string; qty: string };
 
 const EMPTY_ROW: ListRow = { name: '', qty: '1' };
 const CUSTOM_STORE = '__custom__';
+
+/** Snapshot of a handwritten paper pabili list, uploaded at submit time. */
+type ListPhoto = { uri: string; name: string; mime: string; bytes: number };
+type PickedAsset = {
+  uri: string;
+  width?: number | null;
+  height?: number | null;
+  fileSize?: number | null;
+  mimeType?: string | null;
+};
+
+const MAX_LIST_PHOTOS = 3;
+const MAX_LIST_PHOTO_BYTES = 5 * 1024 * 1024;
 
 /** Quick-pick stores. Merchant catalog arrives later, for now these + typing. */
 const PRESET_STORES = ['Jollibee', 'Public Market'];
@@ -70,6 +86,10 @@ export default function PabiliCreateScreen({ route }: Props) {
   const [rows, setRows] = useState<ListRow[]>(() =>
     presetItems ? presetItems.map((i) => ({ ...i })) : [{ ...EMPTY_ROW }],
   );
+  // Add-items modal (item rows + paper-list photos live here, not inline).
+  const [itemsOpen, setItemsOpen] = useState(false);
+  const [photos, setPhotos] = useState<ListPhoto[]>([]);
+  const [photoBusy, setPhotoBusy] = useState(false);
   const [name, setName] = useState(profile?.full_name ?? '');
   const [phone, setPhone] = useState(profile?.phone ?? '');
   const [town, setTown] = useState<Town | null>(profile?.home_town ?? null);
@@ -291,6 +311,95 @@ export default function PabiliCreateScreen({ route }: Props) {
       }),
     );
 
+  /** Snap or attach a paper-list photo (handwritten list, shelf tag, etc.). */
+  const pickListPhoto = async (source: 'camera' | 'library') => {
+    if (photos.length >= MAX_LIST_PHOTOS) {
+      showToast({ message: `Up to ${MAX_LIST_PHOTOS} list photos only.`, type: 'error' });
+      return;
+    }
+    setPhotoBusy(true);
+    try {
+      if (source === 'camera') {
+        const perm = await ImagePicker.requestCameraPermissionsAsync();
+        if (!perm.granted) {
+          showToast({ message: 'Allow camera access to snap your paper list.', type: 'error' });
+          return;
+        }
+        const result = await ImagePicker.launchCameraAsync({ quality: 0.7 });
+        if (!result.canceled && result.assets[0]) await attachListPhoto(result.assets[0]);
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'] });
+      if (!result.canceled && result.assets[0]) await attachListPhoto(result.assets[0]);
+    } catch {
+      showToast({ message: 'Could not attach that photo. Please try again.', type: 'error' });
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+
+  const attachListPhoto = async (asset: PickedAsset) => {
+    let bytes = asset.fileSize ?? 0;
+    if (Platform.OS !== 'web') {
+      try {
+        bytes = new FileHandle(asset.uri).size ?? bytes;
+      } catch {
+        // Fall back to the picker's own fileSize; the bucket limit backstops us.
+      }
+    }
+    if (bytes > MAX_LIST_PHOTO_BYTES) {
+      showToast({ message: 'That photo is over 5 MB. Please pick a smaller one.', type: 'error' });
+      return;
+    }
+    setPhotos((prev) =>
+      prev.length >= MAX_LIST_PHOTOS
+        ? prev
+        : [
+            ...prev,
+            {
+              uri: asset.uri,
+              name: `list-${Date.now()}-${prev.length}.jpg`,
+              mime: asset.mimeType ?? 'image/jpeg',
+              bytes,
+            },
+          ],
+    );
+  };
+
+  const removePhoto = (index: number) => setPhotos((prev) => prev.filter((_, i) => i !== index));
+
+  /**
+   * Upload body for Supabase Storage. Browsers need a real Blob in FormData;
+   * on native, storage-js wants raw bytes (Blob/FormData uploads don't work).
+   */
+  const toUploadBody = async (photo: ListPhoto): Promise<FormData | ArrayBuffer> => {
+    if (Platform.OS === 'web') {
+      const form = new FormData();
+      const blob = await (await fetch(photo.uri)).blob();
+      form.append('file', blob, photo.name);
+      return form;
+    }
+    const buffer = await new FileHandle(photo.uri).arrayBuffer();
+    if (buffer.byteLength === 0) {
+      throw new Error('A list photo file looks empty. Please re-attach it.');
+    }
+    return buffer;
+  };
+
+  const uploadListPhotos = async (uid: string): Promise<string[]> => {
+    const paths: string[] = [];
+    for (let i = 0; i < photos.length; i += 1) {
+      const photo = photos[i]!;
+      const path = `pabili-lists/${uid}/${Date.now()}-${i}.jpg`;
+      const { error } = await client.storage
+        .from('pabili-lists')
+        .upload(path, await toUploadBody(photo), { upsert: true, contentType: photo.mime });
+      if (error) throw new Error(error.message);
+      paths.push(path);
+    }
+    return paths;
+  };
+
   /** Last tapped combo id, for the checkmark flash on its card. */
   const [addedCombo, setAddedCombo] = useState<string | null>(null);
   const storeName =
@@ -320,8 +429,8 @@ export default function PabiliCreateScreen({ route }: Props) {
 
   /** Validated, now ask for GPS before sending (other apps do the same). */
   const handleSubmit = () => {
-    if (named.length === 0) {
-      showToast({ message: 'Type at least one item you need.', type: 'error' });
+    if (named.length === 0 && photos.length === 0) {
+      showToast({ message: 'Add at least one item or a photo of your list.', type: 'error' });
       return;
     }
     if (!phone.trim()) {
@@ -365,6 +474,8 @@ export default function PabiliCreateScreen({ route }: Props) {
     }
     setSubmitting(true);
     try {
+      // Paper-list photos go up first so the order row can reference them.
+      const listPhotoUrls = await uploadListPhotos(uid);
       // Final quote: town-center shop area → customer GPS when pinned,
       // otherwise the flat estimate shown on the form. Snapshot every input
       // so the receipt is auditable.
@@ -385,6 +496,7 @@ export default function PabiliCreateScreen({ route }: Props) {
           fulfillment_mode: 'rider_pabili',
           status: 'pending_dispatch',
           is_custom_list: true,
+          list_photo_urls: listPhotoUrls,
           store_name: storeName || null,
           payment_method: 'cod',
           est_items_total: 0,
@@ -515,61 +627,45 @@ export default function PabiliCreateScreen({ route }: Props) {
         <Text style={styles.comboHint}>Tap para idagdag ang buong set, tapos edit mo ang qty.</Text>
       </Card>
 
-      <Text style={styles.sectionLabel}>Listahan ({named.length})</Text>
+      <OrDivider label="or" />
+
+      <Text style={styles.sectionLabel}>Pabili list ({named.length})</Text>
       <Card>
         <View style={styles.cardHead}>
           <Text style={styles.cardTitle}>Items</Text>
-          <Badge label="Cash on delivery" status="pending" />
+          <Badge
+            label={
+              named.length > 0
+                ? `${named.length} item${named.length === 1 ? '' : 's'}${photos.length > 0 ? ` · ${photos.length} photo${photos.length === 1 ? '' : 's'}` : ''}`
+                : photos.length > 0
+                  ? `${photos.length} photo${photos.length === 1 ? '' : 's'}`
+                  : 'Empty'
+            }
+            status="pending"
+          />
         </View>
-        {rows.map((row, i) => {
-          const qty = Number.parseInt(row.qty, 10) || 1;
-          return (
-            <View key={i} style={styles.itemRow}>
-              <View style={[styles.itemNum, i > 0 && styles.itemNumNoLabel]}>
-                <Text style={styles.itemNumText}>{i + 1}</Text>
+        {named.length === 0 && photos.length === 0 ? (
+          <Text style={styles.emptyList}>
+            Walang laman — type your items or snap a photo of your paper list.
+          </Text>
+        ) : (
+          <>
+            {named.slice(0, 4).map((r, i) => (
+              <Text key={i} style={styles.summaryLine} numberOfLines={1}>
+                {Math.max(1, Number.parseInt(r.qty, 10) || 1)}× {r.name.trim()}
+              </Text>
+            ))}
+            {named.length > 4 ? <Text style={styles.mutedLine}>+{named.length - 4} more</Text> : null}
+            {photos.length > 0 ? (
+              <View style={styles.summaryPhotos}>
+                {photos.map((p, i) => (
+                  <Image key={i} source={{ uri: p.uri }} style={styles.summaryThumb} />
+                ))}
               </View>
-              <View style={styles.rowMain}>
-                <TextField
-                  label={i === 0 ? 'Item' : undefined}
-                  placeholder="Anong bibilhin?"
-                  value={row.name}
-                  onChangeText={(v) => setRow(i, { name: v })}
-                />
-              </View>
-              <View style={[styles.stepper, i > 0 && styles.stepperNoLabel]}>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`Less of item ${i + 1}`}
-                  hitSlop={10}
-                  onPress={() => bumpQty(i, -1)}
-                  style={({ pressed }) => [styles.stepBtn, pressed && styles.pressed]}
-                >
-                  <Text style={styles.stepGlyph}>−</Text>
-                </Pressable>
-                <Text style={styles.stepQty}>{qty}</Text>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`More of item ${i + 1}`}
-                  hitSlop={10}
-                  onPress={() => bumpQty(i, 1)}
-                  style={({ pressed }) => [styles.stepBtn, pressed && styles.pressed]}
-                >
-                  <Text style={styles.stepGlyph}>+</Text>
-                </Pressable>
-              </View>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Remove item ${i + 1}`}
-                hitSlop={10}
-                onPress={() => removeRow(i)}
-                style={[styles.remove, i > 0 && styles.removeNoLabel]}
-              >
-                <AppIcon name="close" size={14} color={colors.muted} />
-              </Pressable>
-            </View>
-          );
-        })}
-        <Button title="Add another item" variant="ghost" onPress={() => setRows((p) => [...p, { ...EMPTY_ROW }])} />
+            ) : null}
+          </>
+        )}
+        <Button title="Add items List" variant="secondary" onPress={() => setItemsOpen(true)} />
       </Card>
 
       <Text style={styles.sectionLabel}>Saan bibilhin</Text>
@@ -658,6 +754,107 @@ export default function PabiliCreateScreen({ route }: Props) {
         </Text>
       </Card>
     </Screen>
+
+    <SheetModal
+      visible={itemsOpen}
+      title="Add items List"
+      subtitle="Type each item, or snap a photo of your paper list instead."
+      onClose={() => setItemsOpen(false)}
+      footer={<Button title={`Done · ${named.length} item${named.length === 1 ? '' : 's'}`} onPress={() => setItemsOpen(false)} />}
+    >
+      {rows.map((row, i) => {
+        const qty = Number.parseInt(row.qty, 10) || 1;
+        return (
+          <View key={i} style={styles.itemRow}>
+            <View style={[styles.itemNum, i > 0 && styles.itemNumNoLabel]}>
+              <Text style={styles.itemNumText}>{i + 1}</Text>
+            </View>
+            <View style={styles.rowMain}>
+              <TextField
+                label={i === 0 ? 'Item' : undefined}
+                placeholder="Anong bibilhin?"
+                value={row.name}
+                onChangeText={(v) => setRow(i, { name: v })}
+              />
+            </View>
+            <View style={[styles.stepper, i > 0 && styles.stepperNoLabel]}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Less of item ${i + 1}`}
+                hitSlop={10}
+                onPress={() => bumpQty(i, -1)}
+                style={({ pressed }) => [styles.stepBtn, pressed && styles.pressed]}
+              >
+                <Text style={styles.stepGlyph}>−</Text>
+              </Pressable>
+              <Text style={styles.stepQty}>{qty}</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`More of item ${i + 1}`}
+                hitSlop={10}
+                onPress={() => bumpQty(i, 1)}
+                style={({ pressed }) => [styles.stepBtn, pressed && styles.pressed]}
+              >
+                <Text style={styles.stepGlyph}>+</Text>
+              </Pressable>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Remove item ${i + 1}`}
+              hitSlop={10}
+              onPress={() => removeRow(i)}
+              style={[styles.remove, i > 0 && styles.removeNoLabel]}
+            >
+              <AppIcon name="close" size={14} color={colors.muted} />
+            </Pressable>
+          </View>
+        );
+      })}
+      <Button title="Add another item" variant="ghost" onPress={() => setRows((p) => [...p, { ...EMPTY_ROW }])} />
+
+      <OrDivider label="or" />
+
+      <View style={styles.photoHead}>
+        <Text style={styles.cardTitle}>Paper list photo ({photos.length}/{MAX_LIST_PHOTOS})</Text>
+        <Text style={styles.photoHint}>Snap your handwritten list — the rider reads it directly.</Text>
+      </View>
+      {photos.length > 0 ? (
+        <View style={styles.photoGrid}>
+          {photos.map((p, i) => (
+            <View key={i} style={styles.photoCell}>
+              <Image source={{ uri: p.uri }} style={styles.photoThumb} />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Remove list photo ${i + 1}`}
+                hitSlop={10}
+                onPress={() => removePhoto(i)}
+                style={({ pressed }) => [styles.photoRemove, pressed && styles.pressed]}
+              >
+                <AppIcon name="close" size={12} color={colors.onPrimary} />
+              </Pressable>
+            </View>
+          ))}
+        </View>
+      ) : null}
+      <View style={styles.photoActions}>
+        <View style={styles.photoFlex}>
+          <Button
+            title="Snap paper list"
+            variant="secondary"
+            loading={photoBusy}
+            onPress={() => void pickListPhoto('camera')}
+          />
+        </View>
+        <View style={styles.photoFlex}>
+          <Button
+            title="From gallery"
+            variant="secondary"
+            disabled={photoBusy}
+            onPress={() => void pickListPhoto('library')}
+          />
+        </View>
+      </View>
+    </SheetModal>
 
     <SheetModal
       visible={gpsPrompt}
@@ -854,6 +1051,33 @@ const styles = StyleSheet.create({
   comboSub: { ...typography.micro, fontSize: 10.5 },
   comboHint: { ...typography.caption, paddingHorizontal: spacing.base, paddingTop: spacing.sm },
   pressed: { opacity: 0.7 },
+
+  // List summary (main screen) + photo thumbnails
+  emptyList: { ...typography.caption, color: colors.muted },
+  summaryLine: { ...typography.body },
+  mutedLine: { ...typography.caption, color: colors.muted },
+  summaryPhotos: { flexDirection: 'row', gap: spacing.sm },
+  summaryThumb: { width: 56, height: 56, borderRadius: radius.md, backgroundColor: colors.surfaceSunken },
+
+  // Paper-list photos (inside the Add-items modal)
+  photoHead: { gap: 2 },
+  photoHint: { ...typography.caption, color: colors.muted },
+  photoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  photoCell: { position: 'relative' },
+  photoThumb: { width: 96, height: 96, borderRadius: radius.md, backgroundColor: colors.surfaceSunken },
+  photoRemove: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.text,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoActions: { flexDirection: 'row', gap: spacing.sm },
+  photoFlex: { flex: 1 },
 
   // Receipt rows
   itemRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs },

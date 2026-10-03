@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useAuth, type Database } from '@isla/supabase';
+import { CACHE_TTLS, cacheKey, invalidate, peekEntry, readPersistedEntry, setEntry } from '../lib/cache';
+import { useCachedQuery } from '../lib/useCachedQuery';
 import {
   Button,
   Card,
@@ -26,19 +28,42 @@ export function useUnreadCount(): number {
   const { client, session } = useAuth();
   const [unread, setUnread] = useState(0);
   const uid = session?.user.id ?? null;
+  const countKey = uid ? cacheKey('notifications-unread', uid) : null;
 
-  const refresh = useCallback(async () => {
-    if (!uid) {
-      setUnread(0);
-      return;
-    }
-    const { count } = await client
-      .from('notifications')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', uid)
-      .eq('is_read', false);
-    setUnread(count ?? 0);
-  }, [client, uid]);
+  const refresh = useCallback(
+    async (force = false) => {
+      if (!uid || !countKey) {
+        setUnread(0);
+        return;
+      }
+      if (!force) {
+        const peeked = peekEntry<number>(countKey);
+        if (peeked) {
+          setUnread(peeked.value);
+          if (peeked.fresh) return;
+        } else {
+          const stored = await readPersistedEntry<number>(countKey);
+          if (stored) {
+            setUnread(stored.value);
+            if (stored.fresh) return;
+          }
+        }
+      }
+      try {
+        const { count } = await client
+          .from('notifications')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', uid)
+          .eq('is_read', false);
+        const next = count ?? 0;
+        setUnread(next);
+        setEntry(countKey, next, CACHE_TTLS.unreadCount, true);
+      } catch {
+        // Offline: keep cached badge.
+      }
+    },
+    [client, uid, countKey],
+  );
 
   // Per-hook suffix: client.channel() reuses the instance for an identical
   // topic and realtime-js throws on `.on()` after `.subscribe()`, so
@@ -57,14 +82,14 @@ export function useUnreadCount(): number {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${uid}` },
         () => {
-          void refresh();
+          void refresh(true);
         },
       )
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'notifications', filter: `user_id=eq.${uid}` },
         () => {
-          void refresh();
+          void refresh(true);
         },
       )
       .subscribe();
@@ -78,39 +103,41 @@ export function useUnreadCount(): number {
 
 export default function NotificationsScreen({}: Props) {
   const navigation = useNavigation<RootNavProp>();
-  const { client } = useAuth();
+  const { client, session } = useAuth();
   const { showToast } = useToast();
-  const [items, setItems] = useState<Notification[]>([]);
-  const [loading, setLoading] = useState(true);
+  const uid = session?.user.id ?? null;
 
-  const load = useCallback(async () => {
-    const { data: userData } = await client.auth.getUser();
-    const uid = userData.user?.id;
-    if (!uid) {
-      setLoading(false);
-      return;
-    }
-    const { data } = await client
-      .from('notifications')
-      .select('*')
-      .eq('user_id', uid)
-      .order('created_at', { ascending: false })
-      .limit(50);
-    setItems(data ?? []);
-    setLoading(false);
-  }, [client]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  // Cache-first inbox (30s TTL, offline fallback).
+  const {
+    data: itemsData,
+    loading,
+    refresh,
+  } = useCachedQuery<Notification[]>(
+    uid ? cacheKey('notifications', uid) : null,
+    async () => {
+      const { data: userData } = await client.auth.getUser();
+      const id = userData.user?.id ?? uid;
+      if (!id) return [];
+      const { data, error } = await client
+        .from('notifications')
+        .select('*')
+        .eq('user_id', id)
+        .order('created_at', { ascending: false })
+        .limit(50);
+      if (error) throw new Error(error.message);
+      return (data ?? []) as Notification[];
+    },
+    { ttlMs: CACHE_TTLS.notifications, persist: true, enabled: !!uid },
+  );
+  const items = itemsData ?? [];
 
   // Refresh every time the inbox is opened, and live while it stays open ,
   // otherwise a notification that lands (e.g. the rider-application receipt)
   // only appears after a manual reload.
   useFocusEffect(
     useCallback(() => {
-      void load();
-    }, [load]),
+      void refresh();
+    }, [refresh]),
   );
 
   const listInstanceId = useMemo(() => Math.random().toString(36).slice(2, 9), []);
@@ -119,30 +146,32 @@ export default function NotificationsScreen({}: Props) {
     const channel = client
       .channel(`notifications-list-${listInstanceId}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, () => {
-        void load();
+        void refresh();
       })
       .subscribe();
     return () => {
       void client.removeChannel(channel);
     };
-  }, [client, load, listInstanceId]);
+  }, [client, refresh, listInstanceId]);
 
   const markAllRead = async () => {
     const { data: userData } = await client.auth.getUser();
-    const uid = userData.user?.id;
-    if (!uid) return;
-    const { error } = await client.from('notifications').update({ is_read: true }).eq('user_id', uid).eq('is_read', false);
+    const id = userData.user?.id ?? uid;
+    if (!id) return;
+    const { error } = await client.from('notifications').update({ is_read: true }).eq('user_id', id).eq('is_read', false);
     if (error) {
       showToast({ message: error.message, type: 'error' });
       return;
     }
-    await load();
+    if (uid) invalidate(cacheKey('notifications-unread', uid));
+    await refresh();
   };
 
   const openItem = async (n: Notification) => {
     if (!n.is_read) {
       await client.from('notifications').update({ is_read: true }).eq('id', n.id);
-      await load();
+      if (uid) invalidate(cacheKey('notifications-unread', uid));
+      await refresh();
     }
     // Message notifications deep-link straight into the order chat.
     if (n.kind === 'message' && n.order_id) {

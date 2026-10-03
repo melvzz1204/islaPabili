@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { TOWN_LABELS } from '@isla/shared';
 import type { AdminData } from '../lib/adminData';
 import { merchantById, profileById } from '../lib/adminData';
 import { peso } from '../lib/currency';
 import { formatDateTime } from '../lib/format';
+import { supabase } from '../lib/supabase';
 import { Badge, Card, Detail, Empty, Modal, SearchInput, Segmented, Skeleton, statusTone } from '../components/ui';
 import { ConversationThread } from '../components/conversation';
 import type { Order } from '../lib/adminData';
@@ -98,14 +99,18 @@ export function Orders({ data, loading }: { data: AdminData; loading: boolean })
 
       {selected ? (
         <Modal title={selected.order_number} subtitle={`${formatDateTime(selected.created_at)} · ${selected.status.replaceAll('_', ' ')}`} onClose={() => setSelected(null)} wide>
-          <OrderDetail data={data} order={selected} />
+          <OrderDetail
+            data={data}
+            order={selected}
+            onChanged={(next) => setSelected((prev) => (prev && prev.id === next.id ? next : prev))}
+          />
         </Modal>
       ) : null}
     </div>
   );
 }
 
-export function OrderDetail({ data, order }: { data: AdminData; order: Order }) {
+export function OrderDetail({ data, order, onChanged }: { data: AdminData; order: Order; onChanged?: (next: Order) => void }) {
   const customer = profileById(data.profiles, order.customer_id);
   const rider = profileById(data.profiles, order.rider_id);
   const merchant = merchantById(data.merchants, order.merchant_id);
@@ -139,6 +144,9 @@ export function OrderDetail({ data, order }: { data: AdminData; order: Order }) 
           </ul>
         )}
       </div>
+      {order.is_custom_list || (order.list_photo_urls ?? []).length > 0 ? (
+        <ListPhotosPanel order={order} onChanged={onChanged} />
+      ) : null}
       <div className="panel-soft">
         <h4>Conversation ({messageCount})</h4>
         <ConversationThread data={data} orderId={order.id} />
@@ -155,6 +163,102 @@ export function OrderDetail({ data, order }: { data: AdminData; order: Order }) 
           <div key={k} className="t-row"><span className="t-dot" /><span><strong>{k}</strong><small>{formatDateTime(t as string)}</small></span></div>
         ))}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Paper-list photos on a pabili order. Admins see thumbnails (short-lived
+ * signed URLs, same pattern as rider compliance docs) and can detach +
+ * delete a photo at any time — the rider and customer views update on
+ * their next refresh since they read the same row.
+ */
+function ListPhotosPanel({ order, onChanged }: { order: Order; onChanged?: (next: Order) => void }) {
+  const paths = order.list_photo_urls ?? [];
+  const [urls, setUrls] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (paths.length === 0) return;
+    let active = true;
+    void (async () => {
+      const entries = await Promise.all(
+        paths.map(async (p) => {
+          const { data } = await supabase.storage.from('pabili-lists').createSignedUrl(p, 300);
+          return [p, data?.signedUrl ?? null] as const;
+        }),
+      );
+      if (!active) return;
+      const map: Record<string, string> = {};
+      for (const [p, u] of entries) {
+        if (u) map[p] = u;
+      }
+      setUrls(map);
+    })();
+    return () => {
+      active = false;
+    };
+  }, [order.id, JSON.stringify(paths)]);
+
+  const view = (path: string) => {
+    const url = urls[path];
+    if (url) window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const remove = async (path: string) => {
+    setBusy(path);
+    setError(null);
+    const next = paths.filter((p) => p !== path);
+    const { error: updateError } = await supabase
+      .from('orders')
+      .update({ list_photo_urls: next })
+      .eq('id', order.id);
+    if (updateError) {
+      setError(updateError.message);
+      setBusy(null);
+      return;
+    }
+    const { error: deleteError } = await supabase.storage.from('pabili-lists').remove([path]);
+    if (deleteError) {
+      setError(`Detached from the order, but the file delete failed: ${deleteError.message}`);
+    }
+    setBusy(null);
+    onChanged?.({ ...order, list_photo_urls: next });
+  };
+
+  return (
+    <div className="panel-soft">
+      <h4>Paper list photos · signed links expire in 5 min</h4>
+      {error ? <p className="error" role="alert">{error}</p> : null}
+      {paths.length === 0 ? (
+        <p className="muted">No list photos on this order.</p>
+      ) : (
+        <div className="doc-list">
+          {paths.map((p, i) => (
+            <div key={p} className="doc-row">
+              <span>
+                {urls[p] ? (
+                  <img
+                    src={urls[p]}
+                    alt={`Paper list photo ${i + 1}`}
+                    style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 8, display: 'block' }}
+                  />
+                ) : (
+                  <span className="muted">Loading preview…</span>
+                )}
+                <small>{`Photo ${i + 1}`}</small>
+              </span>
+              <span className="btn-row">
+                <button type="button" className="btn btn-secondary btn-sm" disabled={!urls[p]} onClick={() => view(p)}>View</button>
+                <button type="button" className="btn btn-danger btn-sm" disabled={busy !== null} onClick={() => void remove(p)}>
+                  {busy === p ? 'Removing…' : 'Remove'}
+                </button>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

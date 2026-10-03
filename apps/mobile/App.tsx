@@ -25,6 +25,7 @@ import PhoneScreen from './src/screens/auth/PhoneScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
 import WelcomeOnboardingScreen, { WELCOME_SEEN_KEY } from './src/screens/WelcomeOnboardingScreen';
 import HomeScreen from './src/screens/HomeScreen';
+import LandingScreen from './src/screens/LandingScreen';
 import MarketScreen from './src/screens/MarketScreen';
 import StoreScreen from './src/screens/StoreScreen';
 import CartScreen from './src/screens/CartScreen';
@@ -86,8 +87,9 @@ function TabBarIcon({
 }
 
 /**
- * Guest mode collapses the tabs to a single `Shop` destination with no tab bar;
- * signed-in users get the full five-tab layout (Home, Shop, Orders, Messages, Profile).
+ * Guest mode collapses the tabs to a single prototype landing with no tab bar
+ * (no stores listed); signed-in users get the full five-tab layout
+ * (Home, Shop, Orders, Messages, Profile).
  */
 function MainTabs({ guest }: { guest: boolean }) {
   const { conversations } = useConversations('customer');
@@ -99,7 +101,7 @@ function MainTabs({ guest }: { guest: boolean }) {
   if (guest) {
     return (
       <Tabs.Navigator screenOptions={{ headerShown: false }} tabBar={() => null}>
-        <Tabs.Screen name="Shop" component={MarketScreen} />
+        <Tabs.Screen name="Shop" component={LandingScreen} />
       </Tabs.Navigator>
     );
   }

@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '@isla/supabase';
+import { CACHE_TTLS, cacheKey } from '../lib/cache';
+import { useCachedQuery } from '../lib/useCachedQuery';
 import {
   Badge,
   Button,
@@ -43,35 +45,40 @@ export default function StoreScreen({ route }: Props) {
   const navigation = useNavigation<RootNavProp>();
   const { merchantId } = route.params;
   const { client } = useAuth();
-  const [merchant, setMerchant] = useState<Merchant | null>(null);
-  const [all, setAll] = useState<Product[]>([]);
   const [categoryId, setCategoryId] = useState<string | undefined>(undefined);
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<Sort>('popular');
   const [selected, setSelected] = useState<Product | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let active = true;
-    setLoading(true);
-    setError(null);
-    void Promise.all([fetchMerchant(client, merchantId), fetchProducts(client, merchantId)])
-      .then(([m, products]) => {
-        if (!active) return;
-        setMerchant(m);
-        setAll(products);
-        setLoading(false);
-      })
-      .catch((err: unknown) => {
-        if (!active) return;
-        setError(err instanceof Error ? err.message : 'Could not load this store.');
-        setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [client, merchantId]);
+  // Cache-first: store header (10-min) + product list (5-min), offline fallback.
+  const {
+    data: merchant,
+    loading: merchantLoading,
+    error: merchantError,
+    refresh: refreshMerchant,
+  } = useCachedQuery<Merchant | null>(
+    cacheKey('merchant', merchantId),
+    () => fetchMerchant(client, merchantId),
+    { ttlMs: CACHE_TTLS.merchant, persist: true },
+  );
+  const {
+    data: productsData,
+    loading: productsLoading,
+    error: productsError,
+    refresh: refreshProducts,
+  } = useCachedQuery<Product[]>(
+    cacheKey('products', merchantId),
+    () => fetchProducts(client, merchantId),
+    { ttlMs: CACHE_TTLS.products, persist: true },
+  );
+  const all = productsData ?? [];
+  const loading = merchantLoading || productsLoading;
+  const queryError = merchantError ?? productsError;
+  const error = queryError
+    ? queryError.message
+    : !loading && !merchant
+      ? 'This store is no longer available.'
+      : null;
 
   const cats = useMemo(() => categoriesOf(all), [all]);
 
@@ -118,7 +125,18 @@ export default function StoreScreen({ route }: Props) {
           title="Could not load this store"
           message={error ?? 'This store is no longer available.'}
           icon="warning"
-          action={<Button title="Back to shop" onPress={goShop} />}
+          action={
+            <View style={styles.errorActions}>
+              <Button
+                title="Try again"
+                onPress={() => {
+                  void refreshMerchant();
+                  void refreshProducts();
+                }}
+              />
+              <Button title="Back to shop" variant="secondary" onPress={goShop} />
+            </View>
+          }
         />
       </Screen>
     );
@@ -234,5 +252,6 @@ const styles = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   gridCell: { width: '48.2%', flexGrow: 1 },
 
+  errorActions: { gap: spacing.sm, width: '100%' },
   footerStack: { gap: spacing.sm },
 });

@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth, type Database } from '@isla/supabase';
 import { useToast } from '@isla/ui';
 import { CHANNEL_CHAT, blip, getSoundSettings, notifyLocal } from '../lib/notify';
+import { CACHE_TTLS, cacheKey, fetchWithCache, peekEntry, readPersistedEntry } from '../lib/cache';
 
 export type OrderRow = Database['public']['Tables']['orders']['Row'];
 export type MessageRow = Database['public']['Tables']['order_messages']['Row'];
@@ -97,45 +98,73 @@ export function useConversations(role: 'customer' | 'rider') {
 
   const conversations = useMemo(() => applyRead(items), [items, readTick]);
 
-  const load = useCallback(async () => {
-    if (!profile) {
-      setLoading(false);
-      return;
-    }
-    await ensureReadMap(profile.id);
-    const field = role === 'customer' ? 'customer_id' : 'rider_id';
-    const { data: orders } = await client
-      .from('orders')
-      .select('*')
-      .eq(field, profile.id)
-      .not('rider_id', 'is', null)
-      .in('status', CONVERSATION_STATUSES)
-      .order('created_at', { ascending: false })
-      .limit(20);
-    const list = (orders ?? []) as OrderRow[];
-    if (list.length === 0) {
-      setItems([]);
-      setLoading(false);
-      return;
-    }
-    const ids = list.map((o) => o.id);
-    const { data: messages } = await client
-      .from('order_messages')
-      .select('*')
-      .in('order_id', ids)
-      .order('created_at', { ascending: false });
-    const latest = new Map<string, MessageRow>();
-    for (const m of (messages ?? []) as MessageRow[]) {
-      if (!latest.has(m.order_id)) latest.set(m.order_id, m);
-    }
-    setItems(
-      list.map((order) => {
-        const last = latest.get(order.id) ?? null;
-        return { order, lastMessage: last, unread: !!last && last.sender_id !== profile.id };
-      }),
-    );
-    setLoading(false);
-  }, [client, profile, role]);
+  // Cache-first conversation list (20s TTL, offline fallback).
+  const load = useCallback(
+    async (force = false) => {
+      if (!profile) {
+        setLoading(false);
+        return;
+      }
+      await ensureReadMap(profile.id);
+      const key = cacheKey('conversations', role, profile.id);
+      const fetchNetwork = async (): Promise<Conversation[]> => {
+        const field = role === 'customer' ? 'customer_id' : 'rider_id';
+        const { data: orders } = await client
+          .from('orders')
+          .select('*')
+          .eq(field, profile.id)
+          .not('rider_id', 'is', null)
+          .in('status', CONVERSATION_STATUSES)
+          .order('created_at', { ascending: false })
+          .limit(20);
+        const list = (orders ?? []) as OrderRow[];
+        if (list.length === 0) return [];
+        const ids = list.map((o) => o.id);
+        const { data: messages } = await client
+          .from('order_messages')
+          .select('*')
+          .in('order_id', ids)
+          .order('created_at', { ascending: false });
+        const latest = new Map<string, MessageRow>();
+        for (const m of (messages ?? []) as MessageRow[]) {
+          if (!latest.has(m.order_id)) latest.set(m.order_id, m);
+        }
+        return list.map((order) => {
+          const last = latest.get(order.id) ?? null;
+          return { order, lastMessage: last, unread: !!last && last.sender_id !== profile.id };
+        });
+      };
+
+      if (!force) {
+        const peeked = peekEntry<Conversation[]>(key);
+        if (peeked) {
+          setItems(peeked.value);
+          setLoading(false);
+          if (peeked.fresh) return;
+        } else {
+          const stored = await readPersistedEntry<Conversation[]>(key);
+          if (stored) {
+            setItems(stored.value);
+            setLoading(false);
+            if (stored.fresh) return;
+          }
+        }
+      }
+      try {
+        const value = await fetchWithCache<Conversation[]>(key, fetchNetwork, {
+          ttlMs: CACHE_TTLS.conversations,
+          persist: true,
+          force,
+        });
+        setItems(value);
+      } catch {
+        // Offline: keep stale items on screen.
+      } finally {
+        setLoading(false);
+      }
+    },
+    [client, profile, role],
+  );
 
   useEffect(() => {
     void load();
@@ -154,7 +183,7 @@ export function useConversations(role: 'customer' | 'rider') {
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'order_messages' },
-        () => void load(),
+        () => void load(true),
       )
       .on(
         'postgres_changes',
@@ -164,7 +193,7 @@ export function useConversations(role: 'customer' | 'rider') {
           table: 'orders',
           filter: role === 'customer' ? `customer_id=eq.${profile.id}` : `rider_id=eq.${profile.id}`,
         },
-        () => void load(),
+        () => void load(true),
       )
       .subscribe();
     return () => {

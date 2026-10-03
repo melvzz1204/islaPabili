@@ -7,15 +7,11 @@
 
 insert into public.fare_config (name, base_fare, base_km, per_km_rate, volume_tiers, peak_surge, is_active)
 values (
-  'Default (v1)',
-  40.00,
+  'Default (v2)',
+  45.00,
   2.00,
-  10.00,
-  '[
-    {"min_items": 0, "min_weight_kg": 0, "surcharge": 0},
-    {"min_items": 6, "min_weight_kg": 5, "surcharge": 20},
-    {"min_items": 12, "min_weight_kg": 10, "surcharge": 40}
-  ]'::jsonb,
+  15.00,
+  '[]'::jsonb,
   '{}'::jsonb,
   true
 );

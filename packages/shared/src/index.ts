@@ -83,9 +83,9 @@ export function shouldFilterTowns(towns: readonly Town[] | null | undefined): bo
 }
 
 export const FARE_DEFAULTS = {
-  baseFare: 40,
+  baseFare: 45,
   baseKm: 2,
-  perKmRate: 10,
+  perKmRate: 15,
 } as const;
 
 /** Fallback trip length (km) when no coordinates are known yet. */
@@ -198,7 +198,7 @@ export function quoteDeliveryFee(args: {
   return { distanceKm, baseFare, distanceFee, volumeSurcharge, surgeMultiplier, fee };
 }
 
-/** One-line peso breakdown for receipts, e.g. "₱40 base + ₱12 · 1.2 km". */
+/** One-line peso breakdown for receipts, e.g. "₱45 base + ₱18 · 1.2 km". */
 export function fareBreakdownLabel(q: FareQuote, peso: (n: number) => string): string {
   const parts = [`${peso(q.baseFare)} base`];
   if (q.distanceFee > 0) parts.push(`+ ${peso(Math.round(q.distanceFee))} · ${q.distanceKm.toFixed(1)} km`);
