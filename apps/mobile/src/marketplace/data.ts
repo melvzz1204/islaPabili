@@ -14,6 +14,8 @@ export type Merchant = {
   kind: MerchantKind;
   town: string;
   tagline: string;
+  logoUrl: string | null;
+  description: string | null;
 };
 
 type DbCategory = Database['public']['Enums']['merchant_category'];
@@ -52,12 +54,15 @@ type MerchantRow = Database['public']['Tables']['merchants']['Row'];
 type ProductRow = Database['public']['Tables']['products']['Row'];
 
 function toMerchant(row: MerchantRow): Merchant {
+  const kind = KIND_FROM_DB[row.category] ?? 'retail';
   return {
     id: row.id,
     name: row.name,
-    kind: KIND_FROM_DB[row.category] ?? 'retail',
+    kind,
     town: TOWN_LABELS[row.town] ?? row.town,
-    tagline: row.address ?? KIND_LABEL[KIND_FROM_DB[row.category] ?? 'retail'],
+    tagline: row.description ?? row.address ?? KIND_LABEL[kind],
+    logoUrl: row.logo_url,
+    description: row.description,
   };
 }
 
@@ -117,6 +122,14 @@ export function categoriesOf(products: Product[]): Category[] {
     if (!seen.has(p.categoryId)) seen.set(p.categoryId, p.categoryLabel);
   }
   return [...seen.entries()].map(([id, label]) => ({ id, label }));
+}
+
+/** Resolve a store-logos storage path (or absolute URL) to a fetchable URL. */
+export function storeLogoSrc(client: Supabase, logoUrl: string | null): string | null {
+  if (!logoUrl) return null;
+  if (logoUrl.startsWith('http')) return logoUrl;
+  const { data } = client.storage.from('store-logos').getPublicUrl(logoUrl);
+  return data.publicUrl;
 }
 
 /** Resolve a product-photos storage path (or absolute URL) to a fetchable URL. */

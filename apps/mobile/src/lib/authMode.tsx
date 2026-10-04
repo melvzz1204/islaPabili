@@ -3,13 +3,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 /**
  * Which shell the user signed in for. Picked on the auth screens
- * (customer / rider; merchant stores are still onboarding) and persisted,
- * so a rider lands back in the rider dashboard after a restart.
+ * (customer / rider / merchant) and persisted, so a merchant lands back
+ * in the store dashboard after a restart.
  *
- * Switching shells always goes through logout, the rider dashboard and the
- * customer app never render in the same session.
+ * Switching shells always goes through logout — the shells never render
+ * in the same session.
  */
-export type AuthMode = 'customer' | 'rider';
+export type AuthMode = 'customer' | 'rider' | 'merchant';
 
 const STORAGE_KEY = 'islapabili_auth_mode_v1';
 
@@ -17,7 +17,7 @@ type AuthModeValue = {
   mode: AuthMode;
   setMode: (mode: AuthMode) => void;
   loaded: boolean;
-  /** True right after a rider logout, Root parks on the sign-in page. */
+  /** True right after a rider/merchant logout, Root parks on the sign-in page. */
   loggedOut: boolean;
   setLoggedOut: (value: boolean) => void;
 };
@@ -34,7 +34,7 @@ export function AuthModeProvider({ children }: PropsWithChildren) {
     void AsyncStorage.getItem(STORAGE_KEY)
       .then((raw) => {
         if (!active) return;
-        if (raw === 'rider' || raw === 'customer') setModeState(raw);
+        if (raw === 'rider' || raw === 'customer' || raw === 'merchant') setModeState(raw);
         setLoaded(true);
       })
       .catch(() => {

@@ -107,6 +107,15 @@ export function useUnreadCount(): number {
     };
   }, [client, uid, refresh, instanceId]);
 
+  // Realtime DELETE/UPDATE events can be missed on flaky sockets, which used
+  // to leave a stale badge forever. Re-read on every focus so the bell always
+  // converges to the true count when the user returns to the screen.
+  useFocusEffect(
+    useCallback(() => {
+      void refresh();
+    }, [refresh]),
+  );
+
   return unread;
 }
 
@@ -162,8 +171,11 @@ export default function NotificationsScreen({}: Props) {
     setConfirmClear(false);
     // Detach both caches so the list empties and every badge drops to zero;
     // the badge hook re-reads on the realtime DELETE event (forced refresh).
+    // Also write 0 through optimistically: if the realtime event is missed,
+    // the next non-forced badge read still sees zero instead of stale data.
     invalidate(cacheKey('notifications', id));
     invalidate(cacheKey('notifications-unread', id));
+    setEntry(cacheKey('notifications-unread', id), 0, CACHE_TTLS.unreadCount, true);
     await refresh();
     showToast({ message: 'Notifications cleared.', type: 'success' });
   };
@@ -208,7 +220,10 @@ export default function NotificationsScreen({}: Props) {
       showToast({ message: error.message, type: 'error' });
       return;
     }
-    if (uid) invalidate(cacheKey('notifications-unread', uid));
+    if (uid) {
+      invalidate(cacheKey('notifications-unread', uid));
+      setEntry(cacheKey('notifications-unread', uid), 0, CACHE_TTLS.unreadCount, true);
+    }
     await refresh();
   };
 

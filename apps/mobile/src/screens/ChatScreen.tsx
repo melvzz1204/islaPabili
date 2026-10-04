@@ -23,9 +23,10 @@ import {
   typography,
   useToast,
 } from '@isla/ui';
-import { canChat, markConversationRead, setOpenOrderId, type MessageRow } from '../messaging/chat';
+import { canChat, canStoreChat, markConversationRead, setOpenOrderId, type MessageRow } from '../messaging/chat';
 import { ChatComposer, ChatThread } from '../messaging/ChatThread';
 import { invokePush } from '../lib/push';
+import { useAuthMode } from '../lib/authMode';
 import { CACHE_TTLS, cacheKey, peekEntry, readPersistedEntry, setEntry } from '../lib/cache';
 import type { RootNavProp, RootStackScreen } from '../navigation/types';
 import { BottomNav } from '../components/BottomNav';
@@ -37,6 +38,7 @@ export default function ChatScreen({ route }: Props) {
   const { orderId } = route.params;
   const navigation = useNavigation<RootNavProp>();
   const { client, profile } = useAuth();
+  const { mode } = useAuthMode();
   const { showToast } = useToast();
   const [order, setOrder] = useState<OrderRow | null>(null);
   const [otherName, setOtherName] = useState('Chat');
@@ -66,15 +68,19 @@ export default function ChatScreen({ route }: Props) {
     const o = data as OrderRow;
     applyOrder(o);
     setEntry(key, o, CACHE_TTLS.orders, true);
-    const otherId = o.customer_id === profile?.id ? o.rider_id : o.customer_id;
+    // The store side: a merchant owner sees the customer; everyone else sees
+    // the rider/customer counterpart as before.
+    const viewerIsMerchant =
+      o.merchant_id != null && profile?.id != null && profile.id !== o.customer_id && profile.id !== o.rider_id;
+    const otherId = viewerIsMerchant ? o.customer_id : o.customer_id === profile?.id ? o.rider_id : o.customer_id;
     if (otherId) {
       const { data: person } = await client.from('profiles').select('full_name').eq('id', otherId).maybeSingle();
       const name = (person as { full_name?: string } | null)?.full_name?.trim();
-      const fallback = o.customer_id === profile?.id ? 'Your rider' : 'Customer';
+      const fallback = viewerIsMerchant ? 'Customer' : o.customer_id === profile?.id ? 'Your rider' : 'Customer';
       setOtherName(name || fallback);
       setOtherInitial((name || fallback).charAt(0).toUpperCase() || 'C');
       // Presence: show whether the rider is on duty right now.
-      if (o.customer_id === profile?.id && o.rider_id) {
+      if (!viewerIsMerchant && o.customer_id === profile?.id && o.rider_id) {
         const { data: status } = await client
           .from('rider_status')
           .select('on_duty')
@@ -178,7 +184,7 @@ export default function ChatScreen({ route }: Props) {
   const send = async (body: string) => {
     const text = body.trim();
     if (!text || !profile || sending) return;
-    if (order && !canChat(order.status)) {
+    if (order && !isChatOpen(order)) {
       showToast({ message: 'This chat is closed, the order is no longer active.', type: 'info' });
       return;
     }
@@ -198,7 +204,14 @@ export default function ChatScreen({ route }: Props) {
     await loadMessages(true);
   };
 
-  const chatOpen = order ? canChat(order.status) : true;
+  // Rider thread OR store thread (customer/store owner while the store is
+  // the active party). Anything else is read-only history.
+  const isStorePartyFor = (o: OrderRow) =>
+    o.merchant_id != null &&
+    profile?.id != null &&
+    (profile.id === o.customer_id || (profile.id !== o.customer_id && profile.id !== o.rider_id));
+  const isChatOpen = (o: OrderRow) => canChat(o.status) || (isStorePartyFor(o) && canStoreChat(o.status));
+  const chatOpen = order ? isChatOpen(order) : true;
   const online = presence === 'Online now';
 
   return (
@@ -240,7 +253,7 @@ export default function ChatScreen({ route }: Props) {
             </Text>
           </View>
         ) : null}
-        {order?.rider_id ? (
+        {order?.rider_id && mode !== 'merchant' ? (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Track on map"
@@ -291,9 +304,11 @@ export default function ChatScreen({ route }: Props) {
             <Text style={styles.closedText}>Chat closed, this order is {order?.status.replace(/_/g, ' ')}.</Text>
           </View>
         )}
-        <View style={{ paddingBottom: insets.bottom }}>
-          <BottomNav />
-        </View>
+        {mode === 'merchant' ? null : (
+          <View style={{ paddingBottom: insets.bottom }}>
+            <BottomNav />
+          </View>
+        )}
       </KeyboardAvoidingView>
     </Screen>
   );

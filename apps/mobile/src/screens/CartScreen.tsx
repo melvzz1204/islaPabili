@@ -9,6 +9,7 @@ import {
   radius,
   Screen,
   ScreenHeader,
+  shadows,
   spacing,
   typography,
 } from '@isla/ui';
@@ -40,15 +41,22 @@ export default function CartScreen({}: Props) {
     navigation.navigate('Checkout');
   };
 
+  const hasPriceless = lines.some((l) => l.price == null);
+
   return (
     <Screen
       footer={
         count > 0 ? (
           <View style={styles.footerStack}>
-            <View style={styles.footer}>
+            <View style={styles.footerBar}>
               <View style={styles.footerTotals}>
-                <Text style={styles.footerLabel}>Subtotal</Text>
+                <Text style={styles.footerLabel}>
+                  Subtotal · {count} item{count === 1 ? '' : 's'}
+                </Text>
                 <Text style={styles.footerValue}>{peso(subtotal)}</Text>
+                {hasPriceless ? (
+                  <Text style={styles.footerNote}>+ items priced by the store</Text>
+                ) : null}
               </View>
               <Button
                 title={session ? 'Checkout' : 'Log in to checkout'}
@@ -57,6 +65,7 @@ export default function CartScreen({}: Props) {
                 size="lg"
                 fullWidth={false}
                 style={styles.footerBtn}
+                icon={<AppIcon name="chevronRight" size={18} color={colors.onAccent} />}
               />
             </View>
             <BottomNav />
@@ -127,7 +136,7 @@ export default function CartScreen({}: Props) {
 
 type CartLineRowProps = {
   name: string;
-  price: number;
+  price: number | null;
   qty: number;
   photoUrl: string | null;
   onChange: (qty: number) => void;
@@ -143,10 +152,12 @@ function CartLineRow({ name, price, qty, photoUrl, onChange, onRemove }: CartLin
           <Text style={styles.lineName} numberOfLines={2}>
             {name}
           </Text>
-          <Text style={styles.lineUnit}>{peso(price)} each</Text>
+          <Text style={styles.lineUnit}>
+            {price == null ? 'Presyo sa store' : `${peso(price)} each`}
+          </Text>
           <View style={styles.lineFoot}>
             <QtyStepper qty={qty} onChange={onChange} label={name} />
-            <Text style={styles.lineTotal}>{peso(price * qty)}</Text>
+            <Text style={styles.lineTotal}>{price == null ? '—' : peso(price * qty)}</Text>
           </View>
         </View>
         <Pressable
@@ -201,16 +212,30 @@ const styles = StyleSheet.create({
   noteTitle: { ...typography.label, color: colors.primaryDeep },
   noteBody: { ...typography.caption, color: colors.primaryDeep },
 
-  footer: {
+  footerStack: { gap: 0 },
+  footerBar: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.base,
+    backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.hairline,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderLeftColor: colors.hairline,
+    borderRightColor: colors.hairline,
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.base,
+    paddingBottom: spacing.md,
+    ...shadows.card,
   },
-  footerStack: { gap: spacing.sm },
   footerTotals: { flex: 1, gap: 1 },
-  footerLabel: { ...typography.caption },
-  footerValue: { ...typography.price, fontSize: 19 },
-  footerBtn: { minWidth: 168 },
+  footerLabel: { ...typography.caption, color: colors.muted },
+  footerValue: { ...typography.price, fontSize: 23 },
+  footerNote: { ...typography.micro, color: colors.primaryDeep, fontWeight: '700' },
+  footerBtn: { flex: 1, borderRadius: radius.pill },
 
   pressed: { opacity: 0.6 },
 });

@@ -11,8 +11,29 @@ export const HOW_IT_WORKS_STEPS: {
   tint: string;
 }[] = [
   {
-    title: 'Create a pabili list',
-    body: 'Type what you need from any store in Marinduque.',
+    title: 'Browse live stores',
+    body: 'Find tindahan near you and add items to cart.',
+    icon: 'storefront',
+    medallion: { backgroundColor: colors.primaryTint },
+    tint: colors.primaryDeep,
+  },
+  {
+    title: 'Store prepares your order',
+    body: 'The store confirms prices and packs your items.',
+    icon: 'package',
+    medallion: { backgroundColor: colors.accentSoft },
+    tint: colors.accentDark,
+  },
+  {
+    title: 'Claim with your code',
+    body: 'Show your claim code at the counter. Pickup yourself or send a rider.',
+    icon: 'receipt',
+    medallion: { backgroundColor: colors.primarySoft },
+    tint: colors.primaryDeep,
+  },
+  {
+    title: 'Or send a pabili list',
+    body: 'No store? Type what you need from anywhere in Marinduque.',
     icon: 'pabili',
     medallion: { backgroundColor: colors.primaryTint },
     tint: colors.primaryDeep,
@@ -49,6 +70,7 @@ export const HOW_IT_WORKS_STEPS: {
 
 type Props = {
   onCreate: () => void;
+  onBrowse: () => void;
 };
 
 /**
@@ -56,7 +78,7 @@ type Props = {
  * (and tappable) icon timeline, big CTA plus a trust row. Shared by the
  * signed-in Home tab and the guest landing screen.
  */
-export function HowItWorks({ onCreate }: Props) {
+export function HowItWorks({ onCreate, onBrowse }: Props) {
   const [active, setActive] = useState(0);
 
   // Staggered entrance: hero, then each step, then the CTA.
@@ -121,7 +143,7 @@ export function HowItWorks({ onCreate }: Props) {
           <View style={styles.heroText}>
             <Text style={styles.heroTitle}>Pabili na, hatid pa sa pinto mo.</Text>
             <Text style={styles.heroBody}>
-              Send one list and a rider shops it across Marinduque, then delivers to your door.
+              Browse live stores across Marinduque, or send one list and a rider shops it for you.
             </Text>
           </View>
         </Card>
@@ -178,7 +200,8 @@ export function HowItWorks({ onCreate }: Props) {
 
       <Animated.View style={{ opacity: ctaA }}>
         <View style={styles.ctaWrap}>
-          <Button title="Create Pabili List" onPress={onCreate} />
+          <Button title="Browse stores" onPress={onBrowse} />
+          <Button title="Create Pabili List" variant="secondary" onPress={onCreate} />
         </View>
       </Animated.View>
     </>
@@ -223,7 +246,7 @@ const styles = StyleSheet.create({
   stepTitleActive: { color: colors.primaryDeep },
   stepBody: { ...typography.caption, color: colors.muted },
 
-  ctaWrap: { paddingTop: spacing.sm },
+  ctaWrap: { paddingTop: spacing.sm, gap: spacing.sm },
 
   pressed: { opacity: 0.7 },
 });

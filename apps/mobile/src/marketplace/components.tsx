@@ -11,7 +11,7 @@ import {
 import { useAuth } from '@isla/supabase';
 import { AppIcon, Badge, Button, colors, radius, shadows, spacing, typography } from '@isla/ui';
 import { SheetModal } from '@isla/ui';
-import { KIND_LABEL, peso, productPhotoSrc, type Merchant, type Product } from './data';
+import { KIND_LABEL, peso, productPhotoSrc, storeLogoSrc, type Merchant, type Product } from './data';
 import { useCart } from './cart';
 
 const TILE_COLORS = ['#C2410C', '#15803D', '#1D4ED8', '#9A3412', '#B45309', '#DC2626'];
@@ -95,7 +95,7 @@ export function QtyStepper({ qty, onChange, label, size = 'md' }: QtyStepperProp
         accessibilityRole="button"
         accessibilityLabel={`Increase quantity of ${label}`}
         onPress={() => onChange(qty + 1)}
-        style={({ pressed }) => [btn, pressed && styles.pressed]}
+        style={({ pressed }) => [btn, styles.stepPlus, pressed && styles.pressed]}
       >
         <AppIcon name="add" size={size === 'sm' ? 15 : 17} color={colors.onPrimary} />
       </Pressable>
@@ -139,8 +139,10 @@ type StoreCardProps = {
   onPress: () => void;
 };
 
-/** Marketplace store row: mark, name, tagline, category + town. */
+/** Marketplace store row: logo (or mark), name, tagline, category + town. */
 export function StoreCard({ merchant, onPress }: StoreCardProps) {
+  const { client } = useAuth();
+  const logo = storeLogoSrc(client, merchant.logoUrl);
   return (
     <Pressable
       accessibilityRole="button"
@@ -148,9 +150,13 @@ export function StoreCard({ merchant, onPress }: StoreCardProps) {
       onPress={onPress}
       style={({ pressed }) => [styles.storeCard, pressed && styles.cardPressed]}
     >
-      <View style={[styles.storeMark, { backgroundColor: tileColor(merchant.name) }]}>
-        <Text style={styles.storeLetter}>{merchant.name.charAt(0).toUpperCase()}</Text>
-      </View>
+      {logo ? (
+        <Image source={{ uri: logo }} style={styles.storeLogo} accessibilityLabel={`${merchant.name} logo`} />
+      ) : (
+        <View style={[styles.storeMark, { backgroundColor: tileColor(merchant.name) }]}>
+          <Text style={styles.storeLetter}>{merchant.name.charAt(0).toUpperCase()}</Text>
+        </View>
+      )}
       <View style={styles.storeInfo}>
         <Text style={styles.storeName} numberOfLines={1}>
           {merchant.name}
@@ -384,6 +390,7 @@ const styles = StyleSheet.create({
   },
   stepQty: { ...typography.subhead, fontWeight: '700', minWidth: 24, textAlign: 'center' },
   stepQtySm: { ...typography.label, minWidth: 20 },
+  stepPlus: { backgroundColor: colors.primary },
 
   // AddButton
   addBtn: {
@@ -415,6 +422,7 @@ const styles = StyleSheet.create({
     borderColor: colors.hairline,
   },
   storeMark: { width: 58, height: 58, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center' },
+  storeLogo: { width: 58, height: 58, borderRadius: radius.lg, backgroundColor: colors.surfaceSunken },
   storeLetter: { color: '#FFFFFF', fontSize: 24, fontWeight: '700' },
   storeInfo: { flex: 1, gap: 3 },
   storeName: { ...typography.subhead, fontWeight: '700' },

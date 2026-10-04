@@ -28,7 +28,10 @@ export default function LandingScreen({}: Props) {
         </Pressable>
       </View>
 
-      <HowItWorks onCreate={() => navigation.navigate('PabiliCreate')} />
+      <HowItWorks
+        onCreate={() => navigation.navigate('PabiliCreate')}
+        onBrowse={() => navigation.navigate('Market')}
+      />
     </Screen>
   );
 }

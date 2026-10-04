@@ -7,9 +7,12 @@ export type CartLine = {
   productId: string;
   merchantId: string;
   name: string;
-  price: number;
+  /** Null for free-text lines: the store confirms the price when packing. */
+  price: number | null;
   photoUrl: string | null;
   qty: number;
+  /** True for customer-typed lines (no catalog product behind them). */
+  custom: boolean;
 };
 
 const STORAGE_KEY = 'islapabili_guest_cart_v1';
@@ -20,6 +23,8 @@ type CartContextValue = {
   subtotal: number;
   loaded: boolean;
   add: (product: Product, qty?: number) => void;
+  /** Free-text line for a store: the store sets the price when packing. */
+  addCustom: (merchantId: string, name: string, qty?: number) => void;
   setQty: (productId: string, qty: number) => void;
   remove: (productId: string) => void;
   clear: () => void;
@@ -35,7 +40,7 @@ function sanitize(raw: unknown): CartLine[] {
       entry &&
       typeof entry.productId === 'string' &&
       typeof entry.name === 'string' &&
-      typeof entry.price === 'number' &&
+      (entry.price == null || typeof entry.price === 'number') &&
       typeof entry.qty === 'number' &&
       entry.qty > 0
     ) {
@@ -43,9 +48,10 @@ function sanitize(raw: unknown): CartLine[] {
         productId: entry.productId,
         merchantId: typeof entry.merchantId === 'string' ? entry.merchantId : '',
         name: entry.name,
-        price: entry.price,
+        price: typeof entry.price === 'number' ? entry.price : null,
         photoUrl: typeof entry.photoUrl === 'string' ? entry.photoUrl : null,
         qty: Math.min(Math.floor(entry.qty), 99),
+        custom: entry.custom === true,
       });
     }
   }
@@ -101,9 +107,28 @@ export function CartProvider({ children }: PropsWithChildren) {
           price: product.price,
           photoUrl: product.photoUrl,
           qty: Math.min(Math.max(qty, 1), 99),
+          custom: false,
         },
       ];
     });
+  }, []);
+
+  const addCustom = useCallback((merchantId: string, name: string, qty = 1) => {
+    const clean = name.trim();
+    if (!clean) return;
+    const id = `custom-${Date.now().toString(36)}${Math.floor(Math.random() * 0xffffff).toString(36)}`;
+    setLines((prev) => [
+      ...prev,
+      {
+        productId: id,
+        merchantId,
+        name: clean,
+        price: null,
+        photoUrl: null,
+        qty: Math.min(Math.max(qty, 1), 99),
+        custom: true,
+      },
+    ]);
   }, []);
 
   const setQty = useCallback((productId: string, qty: number) => {
@@ -124,14 +149,15 @@ export function CartProvider({ children }: PropsWithChildren) {
     () => ({
       lines,
       count: lines.reduce((n, l) => n + l.qty, 0),
-      subtotal: lines.reduce((n, l) => n + l.qty * l.price, 0),
+      subtotal: lines.reduce((n, l) => n + l.qty * (l.price ?? 0), 0),
       loaded,
       add,
+      addCustom,
       setQty,
       remove,
       clear,
     }),
-    [lines, loaded, add, setQty, remove, clear],
+    [lines, loaded, add, addCustom, setQty, remove, clear],
   );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

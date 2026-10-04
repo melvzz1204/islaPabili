@@ -32,7 +32,7 @@ module.exports = {
     ...mobile.android,
     adaptiveIcon: {
       ...mobile.android?.adaptiveIcon,
-      foregroundImage: './apps/mobile/assets/islapabili_logo.png',
+      foregroundImage: './apps/mobile/assets/adaptive-icon.png',
     },
   },
   web: {

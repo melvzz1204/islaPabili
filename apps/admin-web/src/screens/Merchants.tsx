@@ -1,18 +1,25 @@
 import { useMemo, useState } from 'react';
-import type { AdminData } from '../lib/adminData';
+import type { AdminData, MerchantApp } from '../lib/adminData';
+import { profileById } from '../lib/adminData';
 import { sumBy } from '../lib/analytics';
 import { num, peso } from '../lib/currency';
 import { formatDateTime } from '../lib/format';
-import { Badge, Card, Detail, Empty, Modal, SearchInput, Skeleton } from '../components/ui';
+import { Badge, Card, Detail, Empty, Field, Modal, SearchInput, Segmented, Skeleton } from '../components/ui';
 import { Icon } from '../components/icon';
 import { supabase } from '../lib/supabase';
 
+type Tab = 'stores' | 'applications';
+
 export function Merchants({ data, loading, reload }: { data: AdminData; loading: boolean; reload: () => void }) {
+  const [tab, setTab] = useState<Tab>('stores');
   const [q, setQ] = useState('');
   const [cat, setCat] = useState('all');
   const [sel, setSel] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [reviewId, setReviewId] = useState<string | null>(null);
   const merchant = data.merchants.find((m) => m.id === sel) ?? null;
+  const review = data.merchantApps.find((a) => a.id === reviewId) ?? null;
+  const pending = data.merchantApps.filter((a) => a.status === 'pending').length;
 
   const rows = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -44,10 +51,23 @@ export function Merchants({ data, loading, reload }: { data: AdminData; loading:
         <div>
           <p className="eyebrow">Operations · supply</p>
           <h1 className="hero-title">Merchants</h1>
-          <p className="hero-sub">{num(data.merchants.filter((m) => m.is_active).length)} active stores · {num(data.products.length)} SKUs across the island.</p>
+          <p className="hero-sub">{num(data.merchants.filter((m) => m.is_active).length)} active stores · {num(data.products.length)} SKUs · {num(pending)} applications pending.</p>
         </div>
-        <SearchInput value={q} onChange={setQ} placeholder="Search stores, towns…" />
+        {tab === 'stores' ? (
+          <SearchInput value={q} onChange={setQ} placeholder="Search stores, towns…" />
+        ) : null}
       </div>
+
+      <Segmented
+        value={tab}
+        onChange={setTab}
+        options={[
+          { key: 'stores', label: 'Stores', count: data.merchants.length },
+          { key: 'applications', label: 'Applications', count: data.merchantApps.length },
+        ]}
+      />
+
+      {tab === 'stores' ? (
       <Card>
         <div className="toolbar">
           <div className="seg seg-sm">
@@ -64,7 +84,11 @@ export function Merchants({ data, loading, reload }: { data: AdminData; loading:
             return (
               <button key={m.id} type="button" className={`store-card ${m.is_active ? '' : 'off'}`} onClick={() => setSel(m.id)}>
                 <div className="store-top">
-                  <span className="store-logo">{m.name.slice(0, 1)}</span>
+                  {m.logo_url ? (
+                    <img src={supabase.storage.from('store-logos').getPublicUrl(m.logo_url).data.publicUrl} alt="" className="store-logo-img" />
+                  ) : (
+                    <span className="store-logo">{m.name.slice(0, 1)}</span>
+                  )}
                   <span><strong>{m.name}</strong><small>{m.town} · {m.category.replace('_', ' ')}</small></span>
                   {m.is_active ? <Badge tone="ok">LIVE</Badge> : <Badge tone="neutral">PAUSED</Badge>}
                 </div>
@@ -79,10 +103,19 @@ export function Merchants({ data, loading, reload }: { data: AdminData; loading:
         </div>
         {rows.length === 0 ? <Empty icon="store" title="No stores match" body="Try a different category or search." /> : null}
       </Card>
+      ) : (
+        <StoreApplications data={data} onOpen={setReviewId} />
+      )}
 
       {merchant ? (
         <Modal title={merchant.name} subtitle={`${merchant.town} · ${merchant.category} · since ${formatDateTime(merchant.created_at)}`} onClose={() => setSel(null)} wide>
           <MerchantDetail data={data} id={merchant.id} busy={busy} onToggle={toggle} />
+        </Modal>
+      ) : null}
+
+      {review ? (
+        <Modal title={review.store_name} subtitle={`Applied ${formatDateTime(review.created_at)} · ${review.status}`} onClose={() => setReviewId(null)} wide>
+          <MerchantReviewBody app={review} data={data} onDone={() => { setReviewId(null); reload(); }} />
         </Modal>
       ) : null}
     </div>
@@ -125,6 +158,148 @@ function MerchantDetail({ data, id, busy, onToggle }: {
         )}
         {products.length > 20 ? <p className="muted">Showing 20 of {products.length}.</p> : null}
       </div>
+    </div>
+  );
+}
+
+function StoreApplications({ data, onOpen }: { data: AdminData; onOpen: (id: string) => void }) {
+  const [f, setF] = useState<'pending' | 'approved' | 'rejected' | 'all'>('pending');
+  const rows = data.merchantApps.filter((a) => f === 'all' || a.status === f);
+  const count = (s: string) => s === 'all' ? data.merchantApps.length : data.merchantApps.filter((a) => a.status === s).length;
+  return (
+    <Card
+      title="Store applications"
+      subtitle="Review the storefront, owner and permit — approve to go live"
+      action={<Segmented value={f} onChange={setF} options={(['pending', 'approved', 'rejected', 'all'] as const).map((k) => ({ key: k, label: k[0].toUpperCase() + k.slice(1), count: count(k) }))} />}
+    >
+      {rows.length === 0 ? <Empty icon="clipboard" title={`No ${f} applications`} body="New store registrations land here for review." /> : (
+        <div className="app-grid">
+          {rows.map((a) => {
+            const p = profileById(data.profiles, a.applicant_id);
+            return (
+              <button key={a.id} type="button" className="app-card" onClick={() => onOpen(a.id)}>
+                <div className="app-top">
+                  {a.logo_url ? (
+                    <img src={supabase.storage.from('store-logos').getPublicUrl(a.logo_url).data.publicUrl} alt="" className="store-logo-img sm" />
+                  ) : (
+                    <span className="avatar">{(a.store_name ?? 'S').slice(0, 1)}</span>
+                  )}
+                  <span><strong>{a.store_name}</strong><small>{a.owner_name || p?.full_name || p?.email || ''}</small></span>
+                  <Badge tone={a.status === 'pending' ? 'pending' : a.status === 'approved' ? 'ok' : 'bad'}>{a.status.toUpperCase()}</Badge>
+                </div>
+                <div className="meta-grid">
+                  <span><span className="meta-label">Town</span><span className="meta-value">{a.town}</span></span>
+                  <span><span className="meta-label">Category</span><span className="meta-value">{a.category.replace('_', ' ')}</span></span>
+                  <span><span className="meta-label">Applied</span><span className="meta-value">{formatDateTime(a.created_at)}</span></span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function MerchantReviewBody({ app, data, onDone }: { app: MerchantApp; data: AdminData; onDone: () => void }) {
+  const profile = profileById(data.profiles, app.applicant_id);
+  const [reason, setReason] = useState(app.admin_notes ?? '');
+  const [busy, setBusy] = useState<'approve' | 'reject' | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [permitUrl, setPermitUrl] = useState<string | null>(null);
+
+  const openPermit = async () => {
+    if (!app.business_permit_url) return;
+    setError(null);
+    const { data: signed, error: signError } = await supabase.storage.from('onboarding-docs').createSignedUrl(app.business_permit_url, 300);
+    if (signError) { setError(signError.message); return; }
+    if (signed?.signedUrl) {
+      setPermitUrl(signed.signedUrl);
+      window.open(signed.signedUrl, '_blank', 'noopener,noreferrer');
+    }
+  };
+
+  const decide = async (decision: 'approved' | 'rejected') => {
+    setBusy(decision === 'approved' ? 'approve' : 'reject');
+    setError(null);
+    const { error: updateError } = await supabase
+      .from('merchant_applications')
+      .update({
+        status: decision,
+        admin_notes: decision === 'rejected' ? reason.trim() || null : app.admin_notes,
+      })
+      .eq('id', app.id);
+    setBusy(null);
+    if (updateError) { setError(updateError.message); return; }
+    onDone();
+  };
+
+  return (
+    <div className="stack">
+      {error ? <p className="error" role="alert">{error}</p> : null}
+      <div className="detail-grid">
+        <Detail label="Store name" value={app.store_name} />
+        <Detail label="Owner" value={app.owner_name || profile?.full_name || '—'} />
+        <Detail label="Phone" value={app.phone || profile?.phone || '—'} />
+        <Detail label="Email" value={profile?.email || '—'} />
+        <Detail label="Town" value={app.town} />
+        <Detail label="Category" value={app.category.replace('_', ' ')} />
+        <Detail label="Address" value={app.address || '—'} />
+        <Detail label="Applied" value={formatDateTime(app.created_at)} />
+      </div>
+      {app.description ? (
+        <div className="panel-soft">
+          <h4>Store description</h4>
+          <p className="muted">{app.description}</p>
+        </div>
+      ) : null}
+      <div className="panel-soft">
+        <h4>Store logo & permit</h4>
+        <div className="doc-list">
+          <div className="doc-row">
+            <span>
+              {app.logo_url ? (
+                <img
+                  src={supabase.storage.from('store-logos').getPublicUrl(app.logo_url).data.publicUrl}
+                  alt="Store logo"
+                  style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 8, display: 'block' }}
+                />
+              ) : (
+                <span className="muted">No logo uploaded</span>
+              )}
+              <small>Shown to customers</small>
+            </span>
+            {!app.logo_url ? <Badge tone="bad">MISSING</Badge> : null}
+          </div>
+          <div className="doc-row">
+            <span><strong>Business permit</strong><small>{app.business_permit_url ? 'Attached' : 'Not provided'}</small></span>
+            {app.business_permit_url ? (
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => void openPermit()}>View</button>
+            ) : (
+              <Badge tone="neutral">OPTIONAL</Badge>
+            )}
+          </div>
+        </div>
+        {permitUrl ? <p className="muted">Permit link opened in a new tab — signed links expire in 5 min.</p> : null}
+      </div>
+      {app.status === 'pending' ? (
+        <div className="panel-soft">
+          <h4>Decision</h4>
+          <Field label="Reason (required to decline)">
+            <textarea className="input" rows={3} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Permit unreadable — please re-upload a clearer photo." />
+          </Field>
+          <div className="btn-row">
+            <button type="button" className="btn btn-primary" disabled={busy !== null} onClick={() => void decide('approved')}>
+              <Icon name="check" size={15} /> {busy === 'approve' ? 'Approving…' : 'Approve store'}
+            </button>
+            <button type="button" className="btn btn-danger" disabled={busy !== null || !reason.trim()} onClick={() => void decide('rejected')}>
+              {busy === 'reject' ? 'Sending…' : 'Decline'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <p className="muted">Decided {app.status}{app.reviewed_at ? ` on ${formatDateTime(app.reviewed_at)}` : ''}{app.admin_notes ? ` — “${app.admin_notes}”` : ''}.</p>
+      )}
     </div>
   );
 }

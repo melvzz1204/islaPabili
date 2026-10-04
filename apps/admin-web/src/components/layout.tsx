@@ -31,11 +31,12 @@ export const NAV: { section: string; items: { key: AdminTab; label: string; icon
   },
 ];
 
-export function Shell({ tab, setTab, email, pendingApps, children }: {
+export function Shell({ tab, setTab, email, pendingApps, pendingStores, children }: {
   tab: AdminTab;
   setTab: (t: AdminTab) => void;
   email: string | null;
   pendingApps: number;
+  pendingStores?: number;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -70,6 +71,9 @@ export function Shell({ tab, setTab, email, pendingApps, children }: {
                   </span>
                   {i.key === 'riders' && pendingApps > 0 ? (
                     <span className="side-badge">{pendingApps}</span>
+                  ) : null}
+                  {i.key === 'merchants' && (pendingStores ?? 0) > 0 ? (
+                    <span className="side-badge">{pendingStores}</span>
                   ) : null}
                 </button>
               ))}

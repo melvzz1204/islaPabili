@@ -40,6 +40,7 @@ import SettingsScreen from './src/screens/SettingsScreen';
 import { OtaPrompt, UpdatePrompt } from './src/components/UpdatePrompt';
 import NotificationsScreen from './src/screens/NotificationsScreen';
 import RiderGateScreen from './src/screens/RiderGateScreen';
+import MerchantGateScreen from './src/screens/MerchantGateScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -168,10 +169,10 @@ function Root() {
     void registerPushToken(client, uid);
   }, [client, session]);
 
-  // A rider logout parks on the sign-in page (not guest home) so logging
-  // back in is one tap. Any fresh login clears the flag.
+  // A rider/merchant logout parks on the sign-in page (not guest home) so
+  // logging back in is one tap. Any fresh login clears the flag.
   useEffect(() => {
-    if (wasSession.current && !session && mode === 'rider') {
+    if (wasSession.current && !session && (mode === 'rider' || mode === 'merchant')) {
       setLoggedOut(true);
     } else if (session) {
       setLoggedOut(false);
@@ -189,6 +190,18 @@ function Root() {
     return (
       <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
         <Stack.Screen name="Rider" component={RiderGateScreen} />
+        <Stack.Screen name="Notifications" component={NotificationsScreen} />
+      </Stack.Navigator>
+    );
+  }
+
+  // Merchant mode is a separate shell: store dashboard only.
+  // Switching back to customer always goes through logout.
+  if (session && mode === 'merchant') {
+    return (
+      <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
+        <Stack.Screen name="Merchant" component={MerchantGateScreen} />
+        <Stack.Screen name="Chat" component={ChatScreen} />
         <Stack.Screen name="Notifications" component={NotificationsScreen} />
       </Stack.Navigator>
     );
@@ -234,6 +247,7 @@ function Root() {
         {() => <MainTabs guest={!session} />}
       </Stack.Screen>
       <Stack.Screen name="Store" component={StoreScreen} />
+      <Stack.Screen name="Market" component={MarketScreen} />
       <Stack.Screen name="Cart" component={CartScreen} />
       <Stack.Screen name="Checkout" component={CheckoutScreen} />
       <Stack.Screen name="PabiliCreate" component={PabiliCreateScreen} />

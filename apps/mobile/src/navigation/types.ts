@@ -20,6 +20,7 @@ export type TabParamList = {
 export type RootStackParamList = {
   Tabs: NavigatorScreenParams<TabParamList>;
   Store: { merchantId: string };
+  Market: undefined;
   Cart: undefined;
   Checkout: undefined;
   Chat: { orderId: string };
@@ -29,6 +30,7 @@ export type RootStackParamList = {
   JollibeeMenu: undefined;
   Notifications: undefined;
   Rider: undefined;
+  Merchant: undefined;
   Onboarding: undefined;
   AuthHome: undefined;
   Login: undefined;

@@ -1,7 +1,7 @@
 /**
  * IslaPabili design tokens, single source of truth for the MOBILE app.
  *
- * Web (admin-web / merchant-web) reads `web-tokens.css`, so changes here
+  * Web (admin-web) reads `web-tokens.css`, so changes here
  * only re-skin mobile. Mobile follows a strict 60/30/10 delivery-app system:
  *
  * - 60% DOMINANT (neutrals): crisp white / light gray / soft cream across

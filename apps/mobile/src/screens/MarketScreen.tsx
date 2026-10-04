@@ -7,7 +7,6 @@ import { CACHE_TTLS, cacheKey } from '../lib/cache';
 import { useCachedQuery } from '../lib/useCachedQuery';
 import {
   Button,
-  Card,
   Chip,
   ChipRow,
   EmptyState,
@@ -19,9 +18,7 @@ import {
 } from '@isla/ui';
 import { fetchMerchants, type Merchant, type MerchantKind } from '../marketplace/data';
 import { CartBar, StoreCard } from '../marketplace/components';
-import type { RootNavProp, TabScreen } from '../navigation/types';
-
-type Props = TabScreen<'Shop'>;
+import type { RootNavProp } from '../navigation/types';
 
 type Filter = MerchantKind | 'all';
 
@@ -34,7 +31,7 @@ const FILTERS: { value: Filter; label: string }[] = [
   { value: 'electronics', label: 'Electronics' },
 ];
 
-export default function MarketScreen({}: Props) {
+export default function MarketScreen() {
   const navigation = useNavigation<RootNavProp>();
   const { client, session, profile } = useAuth();
   const [query, setQuery] = useState('');
@@ -117,15 +114,6 @@ export default function MarketScreen({}: Props) {
         )}
       </View>
 
-      <Card variant="tinted" style={styles.soonCard}>
-        <Text style={styles.soonTitle}>Store catalog coming soon</Text>
-        <Text style={styles.soonBody}>
-          We&apos;re still onboarding merchants. Meanwhile, send a pabili list and a rider will shop for you.
-        </Text>
-        <Button title="Create pabili list" onPress={() => navigation.navigate('PabiliCreate')} />
-      </Card>
-
-      <View pointerEvents="none" style={styles.dimmed}>
       <SearchBar
         value={query}
         onChangeText={setQuery}
@@ -229,7 +217,6 @@ export default function MarketScreen({}: Props) {
           ))}
         </View>
       )}
-      </View>
     </Screen>
   );
 }
@@ -244,11 +231,6 @@ const styles = StyleSheet.create({
   brand: { flex: 1, gap: 1 },
   brandName: { ...typography.display, fontSize: 27 },
   brandSub: { ...typography.caption },
-
-  soonCard: { gap: spacing.sm },
-  soonTitle: { ...typography.subhead, fontWeight: '700' },
-  soonBody: { ...typography.body },
-  dimmed: { opacity: 0.4, gap: spacing.md },
 
   groups: { gap: spacing.lg },
   group: { gap: spacing.sm },

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, Image, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { TOWN_CENTERS, fareBreakdownLabel, fareConfigFromDefaults, type FareConfig, TOWN_LABELS, type Town } from '@isla/shared';
@@ -44,13 +44,12 @@ const PAY_LABELS: Record<PayMethod, string> = {
 
 const PAY_DB: Record<PayMethod, DbPayment> = { cod: 'cod', gcash: 'ewallet', maya: 'ewallet' };
 
-// Self pickup is paused until stores can handle counter handoffs ,
-// rider delivery is the only live fulfillment mode.
-const FULFILLMENT_MODE = 'merchant_delivery' as const;
+// Customer picks counter pickup (no delivery fee) or rider delivery.
+type FulfillChoice = 'merchant_delivery' | 'merchant_pickup';
 
 type PlacedOrder = { id: string; orderNumber: string; merchantId: string };
 
-type SummaryLine = { name: string; qty: number; price: number };
+type SummaryLine = { name: string; qty: number; price: number | null };
 
 /** Frozen at placement (the cart is cleared) so the confirmation can itemize. */
 type OrderSummary = {
@@ -67,6 +66,7 @@ type OrderSummary = {
   town: Town;
   townLabel: string;
   address: string;
+  fulfillment: FulfillChoice;
 };
 
 type FindingRider = {
@@ -94,6 +94,7 @@ export default function CheckoutScreen({}: Props) {
   const [address, setAddress] = useState(profile?.address ?? '');
   const [town, setTown] = useState<Town | null>(profile?.home_town ?? null);
   const [pay, setPay] = useState<PayMethod>('cod');
+  const [fulfill, setFulfill] = useState<FulfillChoice>('merchant_delivery');
   const [placing, setPlacing] = useState(false);
   const [placed, setPlaced] = useState<PlacedOrder[] | null>(null);
   const [summary, setSummary] = useState<OrderSummary | null>(null);
@@ -153,7 +154,7 @@ export default function CheckoutScreen({}: Props) {
     });
   }, [lines, merchantGps, town, gps, fareConfig]);
 
-  const fee = useMemo(
+  const deliveryFee = useMemo(
     () => groupQuotes.reduce((n, g) => n + (g.quote?.fee ?? 0), 0),
     [groupQuotes],
   );
@@ -162,6 +163,8 @@ export default function CheckoutScreen({}: Props) {
     [groupQuotes],
   );
   const feeEstimated = groupQuotes.some((g) => !g.quote || g.quote.estimated);
+  // Counter pickup has no delivery fee.
+  const fee = fulfill === 'merchant_pickup' ? 0 : deliveryFee;
   const total = subtotal + fee;
 
   const pinLocation = async () => {
@@ -393,8 +396,9 @@ export default function CheckoutScreen({}: Props) {
             </View>
             <Text style={styles.confirmTitle}>Order placed!</Text>
             <Text style={styles.confirmBody}>
-              A rider will shop for your items and deliver them to you. Tap below when
-              you&apos;re ready and we&apos;ll track the handoff live.
+              {summary.fulfillment === 'merchant_pickup'
+                ? 'The store is preparing your items. When it is ready you will get a claim code. Show it at the counter to pick up.'
+                : 'The store is preparing your items. Find a rider below and we will track the handoff live.'}
             </Text>
             <View style={styles.numberRow}>
               {placed.map((p) => (
@@ -412,7 +416,7 @@ export default function CheckoutScreen({}: Props) {
                   <Text style={styles.lineName} numberOfLines={1}>
                     {l.qty}× {l.name}
                   </Text>
-                  <Text style={styles.value}>{peso(l.price * l.qty)}</Text>
+                  <Text style={styles.value}>{l.price == null ? 'Presyo sa store' : peso(l.price * l.qty)}</Text>
                 </View>
               ))}
               <View style={styles.divider} />
@@ -422,7 +426,9 @@ export default function CheckoutScreen({}: Props) {
               </View>
               <View style={styles.row}>
                 <Text style={styles.muted}>
-                  Delivery fee ({summary.distanceKm.toFixed(1)} km{summary.feeEstimated ? ', est.' : ''})
+                  {summary.fulfillment === 'merchant_pickup'
+                    ? 'Pickup at counter'
+                    : `Delivery fee (${summary.distanceKm.toFixed(1)} km${summary.feeEstimated ? ', est.' : ''})`}
                 </Text>
                 <Text style={styles.value}>{peso(summary.fee)}</Text>
               </View>
@@ -430,6 +436,11 @@ export default function CheckoutScreen({}: Props) {
                 <Text style={styles.totalLabel}>Total</Text>
                 <Text style={styles.total}>{peso(summary.total)}</Text>
               </View>
+              {summary.lines.some((l) => l.price == null) ? (
+                <Text style={styles.muted}>
+                  Some items have no price yet. The store sets them when packing, and the final receipt updates.
+                </Text>
+              ) : null}
             </Card>
           </View>
 
@@ -443,7 +454,9 @@ export default function CheckoutScreen({}: Props) {
               </View>
               <Text style={styles.muted}>
                 {summary.payLabel === PAY_LABELS.cod
-                  ? `Prepare ${peso(summary.total)} in cash for the rider, items plus delivery.`
+                  ? summary.fulfillment === 'merchant_pickup'
+                    ? `Prepare ${peso(summary.total)} in cash at the counter.`
+                    : `Prepare ${peso(summary.total)} in cash for the rider, items plus delivery.`
                   : 'Simulated e-wallet charge, no real money moves in this build.'}
               </Text>
             </Card>
@@ -451,20 +464,28 @@ export default function CheckoutScreen({}: Props) {
 
           {/* Delivery */}
           <View style={styles.section}>
-            <SectionHeader title="Deliver to" />
+            <SectionHeader title={summary.fulfillment === 'merchant_pickup' ? 'Pickup' : 'Deliver to'} />
             <Card variant="flat" style={styles.formCard}>
               <Text style={styles.lineName}>
                 {summary.name} · {summary.phone}
               </Text>
               <Text style={styles.muted}>
-                {summary.townLabel}, {summary.address}
+                {summary.fulfillment === 'merchant_pickup'
+                  ? `${summary.townLabel} · pay and claim at the store counter`
+                  : `${summary.townLabel}, ${summary.address}`}
               </Text>
             </Card>
           </View>
 
           <View style={styles.confirmActions}>
-            <Button title="Find a rider now" loading={dispatching} onPress={() => void startFinding()} />
-            <Button title="Track my orders" variant="secondary" onPress={goOrders} />
+            {summary.fulfillment === 'merchant_pickup' ? (
+              <Button title="Track my orders" onPress={goOrders} />
+            ) : (
+              <Button title="Find a rider now" loading={dispatching} onPress={() => void startFinding()} />
+            )}
+            {summary.fulfillment === 'merchant_pickup' ? null : (
+              <Button title="Track my orders" variant="secondary" onPress={goOrders} />
+            )}
             <Button title="Continue shopping" variant="ghost" onPress={goShop} />
           </View>
         </Screen>
@@ -523,11 +544,15 @@ export default function CheckoutScreen({}: Props) {
       return;
     }
     if (!phone.trim()) {
-      showToast({ message: 'Enter a contact number for the rider.', type: 'error' });
+      showToast({ message: 'Enter a contact number for order updates.', type: 'error' });
       return;
     }
-    if (!town || !address.trim()) {
-      showToast({ message: 'Add your town and delivery address.', type: 'error' });
+    if (!town) {
+      showToast({ message: 'Add your town.', type: 'error' });
+      return;
+    }
+    if (fulfill === 'merchant_delivery' && !address.trim()) {
+      showToast({ message: 'Add your delivery address.', type: 'error' });
       return;
     }
     const { data: userData } = await client.auth.getUser();
@@ -540,27 +565,27 @@ export default function CheckoutScreen({}: Props) {
     try {
       const numbers: PlacedOrder[] = [];
       for (const { merchantId, items, quote } of groupQuotes) {
-        const itemsTotal = items.reduce((n, l) => n + l.price * l.qty, 0);
-        const groupFee = quote?.fee ?? 0;
+        const itemsTotal = items.reduce((n, l) => n + (l.price ?? 0) * l.qty, 0);
+        const groupFee = fulfill === 'merchant_pickup' ? 0 : (quote?.fee ?? 0);
         const { data: order, error: orderError } = await client
           .from('orders')
           .insert({
             customer_id: uid,
             merchant_id: merchantId || null,
             town,
-            dropoff_address: address.trim(),
-            dropoff_lat: gps?.lat ?? null,
-            dropoff_lng: gps?.lng ?? null,
+            dropoff_address: fulfill === 'merchant_pickup' ? '' : address.trim(),
+            dropoff_lat: fulfill === 'merchant_pickup' ? null : (gps?.lat ?? null),
+            dropoff_lng: fulfill === 'merchant_pickup' ? null : (gps?.lng ?? null),
             dropoff_notes: `${name.trim()} · ${phone.trim()}`,
-            fulfillment_mode: FULFILLMENT_MODE,
+            fulfillment_mode: fulfill,
             status: 'awaiting_merchant',
             payment_method: PAY_DB[pay],
             est_items_total: itemsTotal,
-            distance_km: quote ? Math.round(quote.distanceKm * 100) / 100 : undefined,
-            base_fare: quote?.baseFare,
-            per_km_rate: quote ? Number(fareConfig.per_km_rate) : undefined,
-            distance_fee: quote ? Math.round(quote.distanceFee * 100) / 100 : undefined,
-            volume_surcharge: quote?.volumeSurcharge ?? 0,
+            distance_km: fulfill === 'merchant_pickup' || !quote ? undefined : Math.round(quote.distanceKm * 100) / 100,
+            base_fare: fulfill === 'merchant_pickup' ? undefined : quote?.baseFare,
+            per_km_rate: fulfill === 'merchant_pickup' || !quote ? undefined : Number(fareConfig.per_km_rate),
+            distance_fee: fulfill === 'merchant_pickup' || !quote ? undefined : Math.round(quote.distanceFee * 100) / 100,
+            volume_surcharge: fulfill === 'merchant_pickup' ? 0 : (quote?.volumeSurcharge ?? 0),
             total_delivery_fee: Math.round(groupFee * 100) / 100,
             grand_total: Math.round((itemsTotal + groupFee) * 100) / 100,
           })
@@ -577,6 +602,8 @@ export default function CheckoutScreen({}: Props) {
         );
         if (itemsError) throw itemsError;
         numbers.push({ id: order.id, orderNumber: order.order_number, merchantId });
+        // Wake the store's devices; the inbox row already fired server-side.
+        if (merchantId) void invokePush(client, order.id, 'merchant');
       }
       clear();
       setPlaced(numbers);
@@ -595,6 +622,7 @@ export default function CheckoutScreen({}: Props) {
         town,
         townLabel: TOWN_LABELS[town] ?? town,
         address: address.trim(),
+        fulfillment: fulfill,
       });
       showToast({ message: 'Order placed! Review your summary below.', type: 'success' });
     } catch (err) {
@@ -634,23 +662,32 @@ export default function CheckoutScreen({}: Props) {
     >
       <ScreenHeader title="Checkout" onBack={() => navigation.goBack()} />
 
-      {/* Fulfillment, rider delivery only; self pickup is paused for now */}
+      {/* Fulfillment: rider delivery or counter pickup */}
       <View style={styles.section}>
         <SectionHeader title="How do you want it?" />
         <View style={styles.fulfillGrid}>
-          <View style={[styles.fulfillCard, styles.fulfillCardActive]}>
-            <AppIcon name="rider" size={20} color={colors.primaryDeep} />
-            <Text style={[styles.fulfillLabel, styles.fulfillLabelActive]}>Rider delivery</Text>
-            <Text style={styles.fulfillHint}>{peso(fee)}</Text>
-          </View>
-          <View
-            style={[styles.fulfillCard, styles.fulfillCardDisabled]}
-            accessibilityLabel="Self pickup, coming soon"
+          <Pressable
+            accessibilityRole="radio"
+            accessibilityState={{ checked: fulfill === 'merchant_delivery' }}
+            accessibilityLabel={`Rider delivery, ${peso(fee)} fee`}
+            onPress={() => setFulfill('merchant_delivery')}
+            style={[styles.fulfillCard, fulfill === 'merchant_delivery' && styles.fulfillCardActive]}
           >
-            <AppIcon name="storefront" size={20} color={colors.faint} />
-            <Text style={styles.fulfillLabelDisabled}>Self pickup</Text>
-            <Badge label="Soon" status="neutral" />
-          </View>
+            <AppIcon name="rider" size={20} color={fulfill === 'merchant_delivery' ? colors.primaryDeep : colors.muted} />
+            <Text style={[styles.fulfillLabel, fulfill === 'merchant_delivery' && styles.fulfillLabelActive]}>Rider delivery</Text>
+            <Text style={styles.fulfillHint}>{peso(fee)}</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="radio"
+            accessibilityState={{ checked: fulfill === 'merchant_pickup' }}
+            accessibilityLabel="Self pickup, no delivery fee"
+            onPress={() => setFulfill('merchant_pickup')}
+            style={[styles.fulfillCard, fulfill === 'merchant_pickup' && styles.fulfillCardActive]}
+          >
+            <AppIcon name="storefront" size={20} color={fulfill === 'merchant_pickup' ? colors.primaryDeep : colors.muted} />
+            <Text style={[styles.fulfillLabel, fulfill === 'merchant_pickup' && styles.fulfillLabelActive]}>Self pickup</Text>
+            <Text style={styles.fulfillHint}>Free · show code at counter</Text>
+          </Pressable>
         </View>
       </View>
 
@@ -722,7 +759,7 @@ export default function CheckoutScreen({}: Props) {
               <Text style={styles.lineName} numberOfLines={1}>
                 {l.qty}× {l.name}
               </Text>
-              <Text style={styles.value}>{peso(l.price * l.qty)}</Text>
+              <Text style={styles.value}>{l.price == null ? 'Presyo sa store' : peso(l.price * l.qty)}</Text>
             </View>
           ))}
           <View style={styles.divider} />

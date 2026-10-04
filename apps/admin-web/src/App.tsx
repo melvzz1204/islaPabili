@@ -88,6 +88,7 @@ export default function App() {
   }
 
   const pendingApps = data.riderApps.filter((a) => a.status === 'pending').length;
+  const pendingStores = data.merchantApps.filter((a) => a.status === 'pending').length;
 
   return (
     <Shell
@@ -95,6 +96,7 @@ export default function App() {
       setTab={(tab) => setView({ name: 'app', tab })}
       email={adminEmail}
       pendingApps={pendingApps}
+      pendingStores={pendingStores}
     >
       {error ? <p className="banner-error" role="alert">{error} <button type="button" onClick={() => void reload()}>Retry</button></p> : null}
       {view.tab === 'dashboard' ? <Dashboard data={data} loading={loading} go={(t) => setView({ name: 'app', tab: t })} /> : null}

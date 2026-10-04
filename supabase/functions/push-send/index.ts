@@ -6,14 +6,14 @@
 // JWT, then push to the *recipient's* stored Expo tokens via the Expo Push
 // API (service role reads only — clients never hold privileged credentials).
 //
-// POST { order_id: string, kind: 'pabili' | 'message' | 'status',
+// POST { order_id: string, kind: 'pabili' | 'message' | 'status' | 'merchant',
 //        title?: string, body?: string }
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 
-type Kind = "pabili" | "message" | "status";
+type Kind = "pabili" | "message" | "status" | "merchant";
 
 type Body = {
   order_id?: string;
@@ -34,6 +34,11 @@ function snippet(text: string, max = 140): string {
   return t.length > max ? `${t.slice(0, max)}…` : t;
 }
 
+/** Store thread is open while the store is the active party. */
+function canStoreChatStatus(status: string): boolean {
+  return status === "awaiting_merchant" || status === "preparing" || status === "ready";
+}
+
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json(405, { error: { message: "Method not allowed." } });
 
@@ -52,8 +57,8 @@ Deno.serve(async (req) => {
     return json(400, { error: { message: "Invalid JSON body." } });
   }
   const { order_id: orderId, kind } = payload;
-  if (!orderId || (kind !== "pabili" && kind !== "message" && kind !== "status")) {
-    return json(400, { error: { message: "order_id and kind ('pabili' | 'message' | 'status') are required." } });
+  if (!orderId || (kind !== "pabili" && kind !== "message" && kind !== "status" && kind !== "merchant")) {
+    return json(400, { error: { message: "order_id and kind ('pabili' | 'message' | 'status' | 'merchant') are required." } });
   }
 
   // Caller identity from their own JWT (forwarded by functions.invoke).
@@ -68,7 +73,7 @@ Deno.serve(async (req) => {
 
   const { data: order, error: orderError } = await admin
     .from("orders")
-    .select("id, order_number, town, dropoff_address, customer_id, rider_id, total_delivery_fee, status")
+    .select("id, order_number, town, dropoff_address, customer_id, rider_id, merchant_id, total_delivery_fee, status")
     .eq("id", orderId)
     .maybeSingle();
   if (orderError || !order) return json(404, { error: { message: "Order not found." } });
@@ -78,12 +83,23 @@ Deno.serve(async (req) => {
     dropoff_address: string;
     customer_id: string;
     rider_id: string | null;
+    merchant_id: string | null;
     total_delivery_fee: number | string | null;
     status: string;
   };
   const isCustomer = o.customer_id === callerId;
   const isRider = o.rider_id === callerId;
-  if (!isCustomer && !isRider) return json(403, { error: { message: "Not an order participant." } });
+  let isOwner = false;
+  if (!isCustomer && !isRider && o.merchant_id && (kind === "message" || kind === "status")) {
+    const { data: link } = await admin
+      .from("merchant_owners")
+      .select("merchant_id")
+      .eq("merchant_id", o.merchant_id)
+      .eq("profile_id", callerId)
+      .maybeSingle();
+    isOwner = !!link;
+  }
+  if (!isCustomer && !isRider && !isOwner) return json(403, { error: { message: "Not an order participant." } });
 
   // Resolve recipients + copy from the database, not the wire.
   let recipientIds: string[] = [];
@@ -103,9 +119,27 @@ Deno.serve(async (req) => {
     if (!title) title = `New pabili · #${o.order_number}`;
     if (!body) body = `${o.town} · ${o.dropoff_address} · ₱${Number(o.total_delivery_fee ?? 0)} fee — first to accept wins.`;
   } else if (kind === "message") {
+    // Rider <-> customer wake each other (unchanged).
     const otherId = isCustomer ? o.rider_id : o.customer_id;
-    if (!otherId) return json(409, { error: { message: "No chat counterpart yet." } });
-    recipientIds = [otherId];
+    if (otherId) {
+      recipientIds = [otherId];
+    } else if (!isCustomer && !isRider && o.merchant_id) {
+      // A store owner writing the customer: only the customer wakes.
+      if (!isOwner) return json(403, { error: { message: "Not an order participant." } });
+      recipientIds = [o.customer_id];
+    } else {
+      return json(409, { error: { message: "No chat counterpart yet." } });
+    }
+    // A customer writing on a store order also wakes the store owners.
+    if (isCustomer && o.merchant_id && canStoreChatStatus(o.status)) {
+      const { data: owners } = await admin
+        .from("merchant_owners")
+        .select("profile_id")
+        .eq("merchant_id", o.merchant_id);
+      for (const r of (owners ?? []) as { profile_id: string }[]) {
+        if (!recipientIds.includes(r.profile_id)) recipientIds.push(r.profile_id);
+      }
+    }
     channelId = "isla-chat";
     const { data: sender } = await admin.from("profiles").select("full_name").eq("id", callerId).maybeSingle();
     const name = ((sender as { full_name?: string } | null)?.full_name?.trim()) || "New message";
@@ -119,11 +153,33 @@ Deno.serve(async (req) => {
     const text = (last as { body?: string } | null)?.body ?? body;
     if (!title) title = `${name} · #${o.order_number}`;
     if (!body) body = snippet(text || "Sent you a message.");
+  } else if (kind === "merchant") {
+    // A fresh store order wakes every owner of the merchant. Only the
+    // customer who placed it may trigger this.
+    if (!isCustomer) return json(403, { error: { message: "Only the customer notifies the store." } });
+    if (!o.merchant_id) return json(409, { error: { message: "Not a store order." } });
+    const { data: owners } = await admin
+      .from("merchant_owners")
+      .select("profile_id")
+      .eq("merchant_id", o.merchant_id);
+    recipientIds = [...new Set(((owners ?? []) as { profile_id: string }[]).map((r) => r.profile_id))];
+    if (!title) title = `New order · #${o.order_number}`;
+    if (!body) body = `${o.town} · ${o.dropoff_address || "counter pickup"} — open your store dashboard to accept.`;
   } else {
     // status: rider's advance pings the customer; a customer cancel pings the rider.
     const otherId = isRider ? o.customer_id : o.rider_id;
-    if (!otherId) return json(409, { error: { message: "Nobody to notify yet." } });
-    recipientIds = [otherId];
+    if (otherId) recipientIds = [otherId];
+    // A customer cancel on a store order with no rider yet still wakes the store.
+    if (isCustomer && o.merchant_id && !o.rider_id) {
+      const { data: owners } = await admin
+        .from("merchant_owners")
+        .select("profile_id")
+        .eq("merchant_id", o.merchant_id);
+      for (const r of (owners ?? []) as { profile_id: string }[]) {
+        if (!recipientIds.includes(r.profile_id)) recipientIds.push(r.profile_id);
+      }
+    }
+    if (recipientIds.length === 0) return json(409, { error: { message: "Nobody to notify yet." } });
     if (!title) title = `Order #${o.order_number}`;
     if (!body) body = `Status: ${o.status.replace(/_/g, " ")}.`;
   }

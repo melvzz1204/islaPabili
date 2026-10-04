@@ -5,13 +5,13 @@
   "description": "IslaPabili - Marinduque on-demand pabili & delivery platform (MVP v1.0)",
   "main": "apps/mobile/index.ts",
   "workspaces": [
-    "apps/*",
+    "apps/admin-web",
+    "apps/mobile",
     "packages/*"
   ],
   "scripts": {
     "dev:mobile": "npm run start --workspace @isla/mobile",
     "dev:admin": "npm run dev --workspace @isla/admin-web",
-    "dev:merchant": "npm run dev --workspace @isla/merchant-web",
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",
     "build": "turbo run build",

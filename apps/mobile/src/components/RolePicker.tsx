@@ -1,19 +1,18 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { AppIcon, Badge, colors, radius, spacing, typography, useToast, type AppIconName } from '@isla/ui';
+import { AppIcon, colors, radius, spacing, typography, type AppIconName } from '@isla/ui';
 import type { AuthMode } from '../lib/authMode';
 
 type RoleOption = {
-  value: AuthMode | 'merchant';
+  value: AuthMode;
   label: string;
   hint: string;
   icon: AppIconName;
-  disabled?: boolean;
 };
 
 const OPTIONS: RoleOption[] = [
   { value: 'customer', label: 'Customer', hint: 'Order food & pabili', icon: 'user' },
   { value: 'rider', label: 'Rider', hint: 'Deliver and earn', icon: 'rider' },
-  { value: 'merchant', label: 'Merchant store', hint: 'Sell on IslaPabili', icon: 'storefront', disabled: true },
+  { value: 'merchant', label: 'Merchant store', hint: 'Sell on IslaPabili', icon: 'storefront' },
 ];
 
 type Props = {
@@ -22,11 +21,9 @@ type Props = {
 };
 
 /**
- * "Continue as…" selector shared by the auth screens. Merchant stores are
- * still onboarding, so that option renders grayed out with a Soon badge.
+ * "Continue as…" selector shared by the auth screens.
  */
 export function RolePicker({ value, onChange }: Props) {
-  const { showToast } = useToast();
   return (
     <View style={styles.group} accessibilityRole="radiogroup" accessibilityLabel="Continue as">
       <Text style={styles.heading}>I want to continue as</Text>
@@ -36,38 +33,29 @@ export function RolePicker({ value, onChange }: Props) {
           <Pressable
             key={opt.value}
             accessibilityRole="radio"
-            accessibilityState={{ checked: selected, disabled: opt.disabled }}
-            accessibilityLabel={`${opt.label}, ${opt.hint}${opt.disabled ? ', coming soon' : ''}`}
+            accessibilityState={{ checked: selected }}
+            accessibilityLabel={`${opt.label}, ${opt.hint}`}
             onPress={() => {
-              if (opt.disabled) {
-                showToast({ message: 'Merchant stores are still onboarding.', type: 'info' });
-                return;
-              }
-              onChange(opt.value as AuthMode);
+              onChange(opt.value);
             }}
             style={({ pressed }) => [
               styles.card,
               selected && styles.cardActive,
-              opt.disabled && styles.cardDisabled,
-              pressed && !opt.disabled && styles.pressed,
+              pressed && styles.pressed,
             ]}
           >
-            <View style={[styles.icon, selected && styles.iconActive, opt.disabled && styles.iconDisabled]}>
+            <View style={[styles.icon, selected && styles.iconActive]}>
               <AppIcon name={opt.icon} size={20} color={selected ? colors.primaryDeep : colors.muted} />
             </View>
             <View style={styles.text}>
-              <Text style={[styles.label, selected && styles.labelActive, opt.disabled && styles.labelDisabled]}>
+              <Text style={[styles.label, selected && styles.labelActive]}>
                 {opt.label}
               </Text>
               <Text style={styles.hint}>{opt.hint}</Text>
             </View>
-            {opt.disabled ? (
-              <Badge label="Soon" status="neutral" />
-            ) : (
-              <View style={[styles.radio, selected && styles.radioActive]}>
-                {selected ? <View style={styles.dot} /> : null}
-              </View>
-            )}
+            <View style={[styles.radio, selected && styles.radioActive]}>
+              {selected ? <View style={styles.dot} /> : null}
+            </View>
           </Pressable>
         );
       })}

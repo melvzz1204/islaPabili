@@ -22,6 +22,7 @@ import {
 } from '@isla/ui';
 import { peso } from '../marketplace/data';
 import { ListPhotos } from '../marketplace/ListPhotos';
+import { canStoreChat } from '../messaging/chat';
 import { callRpc } from '../lib/rpc';
 import { invokePush } from '../lib/push';
 import { CACHE_TTLS, cacheKey, fetchWithCache } from '../lib/cache';
@@ -86,6 +87,15 @@ const FULFILLMENT_LABEL: Record<string, string> = {
 /** Anything in pending_dispatch with a rider-pabili shape is dispatchable. */
 const isDispatchable = (o: { is_custom_list: boolean | null; fulfillment_mode: string | null }) =>
   o.is_custom_list || o.fulfillment_mode === 'rider_pabili';
+
+/**
+ * The store never tapped accept/decline. After this long the customer can
+ * hand the list to a rider instead of waiting at the counter queue.
+ */
+const STORE_RESPONSE_TIMEOUT_MS = 10 * 60 * 1000;
+
+const isStoreSilent = (o: OrderRow) =>
+  o.status === 'awaiting_merchant' && Date.now() - new Date(o.created_at).getTime() > STORE_RESPONSE_TIMEOUT_MS;
 
 type Scope = 'active' | 'past';
 
@@ -385,12 +395,21 @@ export default function OrdersScreen({}: Props) {
                   />
                 </>
               ) : selected.status === 'awaiting_merchant' || selected.status === 'preparing' ? (
-                <Button
-                  title="Cancel order"
-                  variant="danger"
-                  loading={acting}
-                  onPress={() => void transition(selected, { status: 'cancelled' }, 'Order cancelled.')}
-                />
+                <>
+                  {isStoreSilent(selected) ? (
+                    <Button
+                      title="Let a rider shop for me"
+                      loading={acting}
+                      onPress={() => void switchToPabili(selected)}
+                    />
+                  ) : null}
+                  <Button
+                    title="Cancel order"
+                    variant="danger"
+                    loading={acting}
+                    onPress={() => void transition(selected, { status: 'cancelled' }, 'Order cancelled.')}
+                  />
+                </>
               ) : isDispatchable(selected) && selected.status === 'pending_dispatch' ? (
                 <>
                   <Button
@@ -428,6 +447,17 @@ export default function OrdersScreen({}: Props) {
                   />
                 </>
               ) : null}
+              {selected.merchant_id != null && canStoreChat(selected.status) ? (
+                <Button
+                  title="Message store"
+                  variant="secondary"
+                  onPress={() => {
+                    const orderId = selected.id;
+                    setSelected(null);
+                    navigation.navigate('Chat', { orderId });
+                  }}
+                />
+              ) : null}
               <Button title="Close" variant="secondary" onPress={() => setSelected(null)} />
             </View>
           ) : undefined
@@ -435,11 +465,21 @@ export default function OrdersScreen({}: Props) {
       >
         {selected ? (
           <View style={styles.sheetBody}>
-            {selected.fulfillment_mode === 'merchant_pickup' && selected.status === 'ready' ? (
+            {selected.merchant_id != null && selected.status === 'ready' && selected.claim_code ? (
               <Card variant="tinted" style={styles.pickupCard} padded={false}>
-                <Text style={styles.pickupHint}>Show this number at the counter</Text>
-                <Text style={styles.pickupNo}>{selected.order_number}</Text>
+                <Text style={styles.pickupHint}>
+                  {selected.fulfillment_mode === 'merchant_pickup'
+                    ? 'Show this code at the counter to claim'
+                    : 'The rider shows this code at the counter to pick up'}
+                </Text>
+                <Text style={styles.pickupNo}>{selected.claim_code}</Text>
               </Card>
+            ) : null}
+
+            {isStoreSilent(selected) ? (
+              <Text style={styles.muted}>
+                No response from the store yet (10+ min). You can hand this list to a rider below instead of waiting.
+              </Text>
             ) : null}
 
             <View style={styles.sheetTotalRow}>
@@ -460,7 +500,9 @@ export default function OrdersScreen({}: Props) {
                     {it.name}
                   </Text>
                   <Text style={styles.itemValue}>
-                    {it.estimated_price != null ? peso(Number(it.estimated_price) * it.quantity) : ''}
+                    {(it.final_price ?? it.estimated_price) != null
+                      ? peso(Number(it.final_price ?? it.estimated_price) * it.quantity)
+                      : ''}
                   </Text>
                 </View>
               ))

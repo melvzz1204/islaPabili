@@ -4,7 +4,7 @@ import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import type { Supabase } from '@isla/supabase';
 
-export type PushKind = 'pabili' | 'message' | 'status';
+export type PushKind = 'pabili' | 'message' | 'status' | 'merchant';
 
 /**
  * Registers this device for server-side wake-up pushes. Physical devices

@@ -6,6 +6,7 @@ import { useAuth, type Database } from '@isla/supabase';
 import { AppIcon, EmptyState, colors, radius, shadows, spacing, typography, useToast } from '@isla/ui';
 import { OrderMap, MARINDUQUE_CENTER, type LatLng, type MapActions } from '../maps/OrderMap';
 import { formatDistance, haversineKm } from '../lib/geo';
+import { peso } from '../marketplace/data';
 import type { RootNavProp, RootStackScreen } from '../navigation/types';
 
 type OrderRow = Database['public']['Tables']['orders']['Row'];
@@ -155,6 +156,18 @@ export default function TrackScreen({ route }: Props) {
             <Text style={styles.etaText}>{distance ?? '…'}</Text>
           </View>
         </View>
+        {order.total_delivery_fee != null ? (
+          <Text style={styles.feeLine}>
+            Delivery {peso(Number(order.total_delivery_fee))}
+            {order.distance_km != null ? ` · ${Number(order.distance_km).toFixed(1)} km from your GPS` : ''} · cash on arrival
+          </Text>
+        ) : null}
+        {order.status === 'ready' && order.claim_code ? (
+          <Text style={styles.claimLine}>
+            Claim code <Text style={styles.claimCode}>{order.claim_code}</Text>
+            {order.fulfillment_mode === 'merchant_pickup' ? ' · show at the counter' : ' · rider shows it at pickup'}
+          </Text>
+        ) : null}
         <View style={styles.actionRow}>
           <SheetAction label="Message" icon="message" primary onPress={() => navigation.navigate('Chat', { orderId })} />
           <SheetAction label="Call" icon="call" onPress={callRider} />
@@ -271,6 +284,9 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   etaText: { ...typography.micro, color: colors.primaryDeep, fontWeight: '800' },
+  feeLine: { ...typography.caption, color: colors.primaryDeep, fontWeight: '700' },
+  claimLine: { ...typography.caption, color: colors.primaryDeep },
+  claimCode: { fontWeight: '800', letterSpacing: 2 },
   actionRow: { flexDirection: 'row', gap: spacing.sm },
   action: {
     flex: 1,

@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { isAllTowns, resolveOptedTowns, TOWN_LABELS } from '@isla/shared';
 import { useAuth, type Database } from '@isla/supabase';
-import { AppIcon, Card, IconButton, Screen, colors, spacing, typography } from '@isla/ui';
+import { AppIcon, Card, IconButton, Screen, colors, radius, spacing, typography } from '@isla/ui';
 import { peso } from '../marketplace/data';
 import { CACHE_TTLS, cacheKey, fetchWithCache } from '../lib/cache';
 import { HowItWorks } from '../components/HowItWorks';
 import { useUnreadCount } from './NotificationsScreen';
 import { useUnreadMessages } from '../messaging/chat';
-import type { RootNavProp, TabScreen } from '../navigation/types';
+import { goToTab, type RootNavProp, type TabScreen } from '../navigation/types';
 
 type Props = TabScreen<'Home'>;
 type OrderRow = Database['public']['Tables']['orders']['Row'];
@@ -148,8 +148,37 @@ export default function HomeScreen({}: Props) {
         </Pressable>
       ) : null}
 
+      {/* Jollibee shortcut, opens the Jollibee menu */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Order Jollibee, open menu"
+        onPress={() => navigation.navigate('JollibeeMenu')}
+        style={({ pressed }) => [pressed && styles.pressed]}
+      >
+        <View style={styles.jollibeeTile}>
+          <Image
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            source={require('../../assets/jollibee.png')}
+            style={styles.jollibeeLogo}
+            accessibilityLabel="Jollibee logo"
+          />
+          <View style={styles.jollibeeText}>
+            <Text style={styles.jollibeeTitle}>Jollibee</Text>
+            <Text style={styles.jollibeeSub} numberOfLines={1}>
+              Chickenjoy • Spaghetti • Burgers, tap to order
+            </Text>
+          </View>
+          <View style={styles.jollibeeBadge}>
+            <Text style={styles.jollibeeBadgeText}>Order</Text>
+          </View>
+        </View>
+      </Pressable>
+
       {/* Prototype landing content: how-it-works timeline + big CTA. */}
-      <HowItWorks onCreate={() => navigation.navigate('PabiliCreate')} />
+      <HowItWorks
+        onCreate={() => navigation.navigate('PabiliCreate')}
+        onBrowse={() => goToTab(navigation, 'Shop')}
+      />
     </Screen>
   );
 }
@@ -180,6 +209,31 @@ const styles = StyleSheet.create({
   activeText: { flex: 1, gap: 1 },
   activeTitle: { ...typography.label, color: colors.primaryDeep },
   activeBody: { ...typography.caption, color: colors.primaryDeep, textTransform: 'capitalize' },
+
+  jollibeeTile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: '#D8232A',
+  },
+  jollibeeLogo: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#FFFFFF',
+  },
+  jollibeeText: { flex: 1, gap: 1 },
+  jollibeeTitle: { color: '#FFFFFF', fontSize: 20, fontWeight: '800' },
+  jollibeeSub: { color: 'rgba(255,255,255,0.85)', fontSize: 12.5 },
+  jollibeeBadge: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.xs,
+  },
+  jollibeeBadgeText: { color: '#D8232A', fontWeight: '800', fontSize: 13 },
 
   pressed: { opacity: 0.7 },
 });

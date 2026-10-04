@@ -94,6 +94,7 @@ export default function RiderHomeScreen() {
   const [statusRow, setStatusRow] = useState<RiderStatusRow | null>(null);
   const [toggling, setToggling] = useState(false);
   const [incoming, setIncoming] = useState<IncomingOffer[]>([]);
+  const [storeAddrs, setStoreAddrs] = useState<Record<string, string>>({});
   const [mine, setMine] = useState<PabiliOrder[]>([]);
   const [mineItems, setMineItems] = useState<Record<string, PabiliItem[]>>({});
   const [history, setHistory] = useState<DoneOrder[]>([]);
@@ -154,6 +155,22 @@ export default function RiderHomeScreen() {
     const itemsByOrder: Record<string, PabiliItem[]> = {};
     for (const it of itemRows ?? []) {
       (itemsByOrder[it.order_id] ??= []).push(it);
+    }
+    // Store counter addresses for flipped merchant orders, so the rider
+    // knows exactly which door to buy at.
+    const merchantIds = [...new Set(((orders ?? []) as PabiliOrder[]).map((o) => o.merchant_id).filter((id): id is string => !!id))];
+    if (merchantIds.length > 0) {
+      const { data: stores } = await client
+        .from('merchants')
+        .select('id, address')
+        .in('id', merchantIds);
+      const addrs: Record<string, string> = {};
+      for (const s of (stores ?? []) as { id: string; address: string | null }[]) {
+        if (s.address) addrs[s.id] = s.address;
+      }
+      setStoreAddrs(addrs);
+    } else {
+      setStoreAddrs({});
     }
     setIncoming(
       requests.flatMap((request) => {
@@ -451,6 +468,7 @@ export default function RiderHomeScreen() {
       ) : tab === 'requests' ? (
         <RequestsView
           incoming={incoming}
+          storeAddrs={storeAddrs}
           working={working}
           distanceTo={distanceTo}
           onRespond={(offer, decision) => void respond(offer, decision)}
@@ -495,6 +513,7 @@ export default function RiderHomeScreen() {
       {overlayOffer ? (
         <IncomingOverlay
           offer={overlayOffer}
+          storeAddr={overlayOffer.order.merchant_id ? (storeAddrs[overlayOffer.order.merchant_id] ?? null) : null}
           working={working === overlayOffer.order.id}
           onAccept={() => {
             stopVibration();
@@ -518,12 +537,14 @@ export default function RiderHomeScreen() {
 
 function IncomingOverlay({
   offer,
+  storeAddr,
   working,
   onAccept,
   onDecline,
   onViewAll,
 }: {
   offer: IncomingOffer;
+  storeAddr: string | null;
   working: boolean;
   onAccept: () => void;
   onDecline: () => void;
@@ -552,8 +573,8 @@ function IncomingOverlay({
             {TOWN_LABELS[offer.order.town]} · {offer.order.dropoff_address}
           </Text>
           {offer.order.store_name ? (
-            <Text style={styles.takeStore} numberOfLines={1}>
-              Buy at: {offer.order.store_name}
+            <Text style={styles.takeStore} numberOfLines={2}>
+              Buy at: {offer.order.store_name}{storeAddr ? ` · ${storeAddr}` : ''}
             </Text>
           ) : null}
           <View style={styles.takeItems}>
@@ -749,11 +770,13 @@ function WeeklyBars({ days }: { days: { key: string; label: string; value: numbe
 
 function RequestsView({
   incoming,
+  storeAddrs,
   working,
   distanceTo,
   onRespond,
 }: {
   incoming: IncomingOffer[];
+  storeAddrs: Record<string, string>;
   working: string | null;
   distanceTo: (lat: number | null, lng: number | null) => string | null;
   onRespond: (offer: IncomingOffer, decision: 'accepted' | 'declined') => void;
@@ -788,8 +811,9 @@ function RequestsView({
               <Badge label={`${offer.items.length} items`} status="pending" />
             </View>
             {offer.order.store_name ? (
-              <Text style={styles.storeLine} numberOfLines={1}>
+              <Text style={styles.storeLine} numberOfLines={2}>
                 Buy at: {offer.order.store_name}
+                {offer.order.merchant_id && storeAddrs[offer.order.merchant_id] ? ` · ${storeAddrs[offer.order.merchant_id]}` : ''}
               </Text>
             ) : null}
             {offer.items.slice(0, 4).map((it) => (
@@ -892,6 +916,11 @@ function DeliveriesView({
                   ? ` · ${distanceTo(o.dropoff_lat, o.dropoff_lng)} away`
                   : ''}
               </Text>
+              {o.merchant_id != null && o.claim_code ? (
+                <Text style={styles.claimLine}>
+                  Counter code <Text style={styles.claimCode}>{o.claim_code}</Text> · show it at the store to pick up
+                </Text>
+              ) : null}
               {next ? (
                 <Button
                   title={next.label}
@@ -1521,6 +1550,8 @@ const styles = StyleSheet.create({
   gpsLine: { ...typography.caption, color: colors.success, fontWeight: '600' },
   contact: { ...typography.caption, fontWeight: '600' },
   feeLine: { ...typography.caption, color: colors.primaryDeep, fontWeight: '600' },
+  claimLine: { ...typography.caption, color: colors.primaryDeep },
+  claimCode: { fontWeight: '800', letterSpacing: 2 },
 
   historyRow: {
     flexDirection: 'row',

@@ -90,6 +90,8 @@ export default function PabiliCreateScreen({ route }: Props) {
   const [itemsOpen, setItemsOpen] = useState(false);
   const [photos, setPhotos] = useState<ListPhoto[]>([]);
   const [photoBusy, setPhotoBusy] = useState(false);
+  const named = rows.filter((r) => r.name.trim());
+  const itemCount = named.reduce((n, r) => n + Math.max(1, Number.parseInt(r.qty, 10) || 1), 0);
   const [name, setName] = useState(profile?.full_name ?? '');
   const [phone, setPhone] = useState(profile?.phone ?? '');
   const [town, setTown] = useState<Town | null>(profile?.home_town ?? null);
@@ -180,7 +182,8 @@ export default function PabiliCreateScreen({ route }: Props) {
 
   /** Load the assigned rider's public card (profile + application + photo). */
   const showRiderCard = useCallback(
-    async (orderId: string, riderId: string) => {    const [{ data: profile }, { data: application }] = await Promise.all([
+    async (orderId: string, riderId: string) => {
+    const [{ data: profile }, { data: application }] = await Promise.all([
       client.from('profiles').select('full_name, phone, avatar_url').eq('id', riderId).maybeSingle(),
       client
         .from('rider_applications')
@@ -196,11 +199,49 @@ export default function PabiliCreateScreen({ route }: Props) {
         .createSignedUrl(photoPath, 3600);
       avatarUrl = signed?.signedUrl ?? null;
     }
+    // The fee is revealed (from GPS kilometer distance) now that a rider
+    // exists — never before. The row already carries the submit-time quote,
+    // which used the same GPS pin when one was granted; recompute it here so
+    // the displayed total always derives from stored coordinates. No row
+    // write: customers lose update rights once the order leaves dispatch.
+    let finalFee: number | null = null;
+    let finalKm: number | null = null;
+    let finalDetail: string | null = null;
+    try {
+      const { data: orderData } = await client
+        .from('orders')
+        .select('town, dropoff_lat, dropoff_lng')
+        .eq('id', orderId)
+        .maybeSingle();
+      const o = orderData as {
+        town: Town;
+        dropoff_lat: number | null;
+        dropoff_lng: number | null;
+      } | null;
+      if (o?.dropoff_lat != null && o?.dropoff_lng != null) {
+        const cfg = await loadFareConfig(client);
+        const q = quoteTrip({
+          pickup: TOWN_CENTERS[o.town],
+          dropoff: { lat: o.dropoff_lat, lng: o.dropoff_lng },
+          itemCount,
+          estimated: false,
+          config: cfg,
+        });
+        finalFee = q.fee;
+        finalKm = q.distanceKm;
+        finalDetail = fareBreakdownLabel(q, peso);
+      }
+    } catch {
+      // Offline hiccup: keep the submit-time quote already on screen.
+    }
     setFinding((prev) =>
       prev && prev.orderId === orderId
         ? {
             ...prev,
             phase: 'found',
+            ...(finalFee != null && finalKm != null && finalDetail != null
+              ? { fee: finalFee, distanceKm: finalKm, feeDetail: finalDetail }
+              : null),
             rider: {
               name: profile?.full_name?.trim() || 'Your rider',
               phone: profile?.phone?.trim() || '',
@@ -211,7 +252,7 @@ export default function PabiliCreateScreen({ route }: Props) {
           }
         : prev,
     );
-  }, [client]);
+  }, [client, itemCount]);
 
   // Keep the realtime handler above pointed at the latest loader.
   useEffect(() => {
@@ -289,11 +330,8 @@ export default function PabiliCreateScreen({ route }: Props) {
     goToTab(navigation, 'Orders');
   };
 
-  const named = rows.filter((r) => r.name.trim());
-  const itemCount = named.reduce((n, r) => n + Math.max(1, Number.parseInt(r.qty, 10) || 1), 0);
-  // Pre-GPS estimate: flat fallback distance with live pricing rules + load tiers.
-  const estimate = flatFallbackQuote(itemCount, fareConfig);
-  const fee = estimate.fee;
+  // No fee is shown before a rider accepts: the working quote is computed at
+  // submit (for the rider offer + receipt) and only revealed afterwards.
 
   const setRow = (index: number, patch: Partial<ListRow>) =>
     setRows((prev) => prev.map((r, i) => (i === index ? { ...r, ...patch } : r)));
@@ -561,7 +599,7 @@ export default function PabiliCreateScreen({ route }: Props) {
               <Text style={styles.stickyCount}>
                 {named.length} item{named.length === 1 ? '' : 's'} · {itemCount} pc
               </Text>
-              <Text style={styles.stickyFee}>Est. {peso(fee)} hatid</Text>
+              <Text style={styles.stickyFeeNote}>₱45 base · fee after rider accepts</Text>
             </View>
             <Button
               title="Find a rider"
@@ -577,15 +615,11 @@ export default function PabiliCreateScreen({ route }: Props) {
       }
       footerHeight={92 + BOTTOM_NAV_HEIGHT}
     >
-      {/* Hero: title + honest live estimate, no dead promises. */}
+      {/* Hero: no fee estimate until a rider accepts. */}
       <View style={styles.hero}>
         <View style={styles.heroTop}>
           <View style={styles.heroMedallion}>
             <AppIcon name="pabili" size={30} color={colors.primaryDeep} />
-          </View>
-          <View style={styles.heroFeePill}>
-            <View style={styles.heroDot} />
-            <Text style={styles.heroFeeText}>Est. {peso(fee)} hatid</Text>
           </View>
         </View>
         <Text style={styles.heroTitle}>Pabili list</Text>
@@ -745,12 +779,12 @@ export default function PabiliCreateScreen({ route }: Props) {
 
       <Card style={styles.summaryCard}>
         <View style={styles.feeRow}>
-          <Text style={styles.feeLabel}>Delivery fee (est.)</Text>
-          <Text style={styles.feeValue}>{peso(fee)}</Text>
+          <Text style={styles.feeLabel}>Delivery fee</Text>
+          <Text style={styles.feeValue}>{peso(45)} base</Text>
         </View>
-        <Text style={styles.finePrint}>{fareBreakdownLabel(estimate, peso)}, final quote pins to your GPS</Text>
         <Text style={styles.finePrint}>
-          You pay the rider in cash: item costs + {peso(fee)} delivery. Keep GPS on so the rider finds you fast.
+          No estimate until a rider accepts. The final total is computed from the real kilometer distance between
+          the store and your GPS, and shown once your rider is found. You pay cash: items + delivery.
         </Text>
       </Card>
     </Screen>
@@ -905,10 +939,10 @@ export default function PabiliCreateScreen({ route }: Props) {
                 ? `Notifying riders in ${finding.town}, first to accept wins.`
                 : `${dutyCount} rider${dutyCount === 1 ? '' : 's'} on duty in ${finding.town} · ${finding.offered} notified, first to accept wins.`}
             </Text>
-            <Text style={styles.findOrder}>
-              {finding.orderNumber} · {peso(finding.fee)} delivery ({finding.distanceKm.toFixed(1)} km)
+            <Text style={styles.findOrder}>{finding.orderNumber}</Text>
+            <Text style={styles.findFeeDetail}>
+              No fee yet — the total is computed from GPS distance once a rider accepts.
             </Text>
-            <Text style={styles.findFeeDetail}>{finding.feeDetail}</Text>
             <Button
               title="Stop finding"
               variant="danger"
@@ -943,6 +977,18 @@ export default function PabiliCreateScreen({ route }: Props) {
               <Text style={styles.findSub}>{finding.rider.phone}</Text>
             ) : null}
             <Text style={styles.findOrder}>{finding.orderNumber} · on the way to shop</Text>
+            <Card style={styles.summaryCard}>
+              <View style={styles.feeRow}>
+                <Text style={styles.feeLabel}>Delivery fee</Text>
+                <Text style={styles.feeValue}>{peso(finding.fee)}</Text>
+              </View>
+              <Text style={styles.finePrint}>
+                {finding.distanceKm.toFixed(1)} km from your GPS · {finding.feeDetail}
+              </Text>
+              <Text style={styles.finePrint}>
+                Pay the rider in cash: item costs + {peso(finding.fee)} delivery.
+              </Text>
+            </Card>
             <Button title="Track my order" onPress={() => goToTab(navigation, 'Orders')} />
           </>
         ) : finding.phase === 'stopped' ? (
@@ -1001,19 +1047,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  heroFeePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.pill,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  heroDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.success },
-  heroFeeText: { ...typography.label, fontSize: 12 },
   heroTitle: { ...typography.display, fontSize: 30 },
   heroSub: { ...typography.body, color: colors.muted },
 
@@ -1166,7 +1199,7 @@ const styles = StyleSheet.create({
   },
   stickyTotals: { flex: 1, gap: 1 },
   stickyCount: { ...typography.caption, fontWeight: '600', color: colors.text },
-  stickyFee: { ...typography.price, fontSize: 16 },
+  stickyFeeNote: { ...typography.caption, color: colors.muted },
   stickyBtn: { minWidth: 148 },
 
   gpsActions: { flexDirection: 'row', gap: spacing.sm },

@@ -1,5 +1,6 @@
 import { Image } from 'react-native';
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const LOGO = require('../../assets/islapabili_logo.png');
 
 /**

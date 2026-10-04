@@ -125,7 +125,10 @@ export type Database = {
           business_permit_url: string | null
           category: Database["public"]["Enums"]["merchant_category"]
           created_at: string
+          description: string | null
           id: string
+          logo_url: string | null
+          owner_name: string | null
           phone: string | null
           reviewed_at: string | null
           reviewed_by: string | null
@@ -142,7 +145,10 @@ export type Database = {
           business_permit_url?: string | null
           category: Database["public"]["Enums"]["merchant_category"]
           created_at?: string
+          description?: string | null
           id?: string
+          logo_url?: string | null
+          owner_name?: string | null
           phone?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
@@ -159,7 +165,10 @@ export type Database = {
           business_permit_url?: string | null
           category?: Database["public"]["Enums"]["merchant_category"]
           created_at?: string
+          description?: string | null
           id?: string
+          logo_url?: string | null
+          owner_name?: string | null
           phone?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
@@ -217,6 +226,7 @@ export type Database = {
           address: string | null
           category: Database["public"]["Enums"]["merchant_category"]
           created_at: string
+          description: string | null
           id: string
           is_active: boolean
           lat: number | null
@@ -231,6 +241,7 @@ export type Database = {
           address?: string | null
           category: Database["public"]["Enums"]["merchant_category"]
           created_at?: string
+          description?: string | null
           id?: string
           is_active?: boolean
           lat?: number | null
@@ -245,6 +256,7 @@ export type Database = {
           address?: string | null
           category?: Database["public"]["Enums"]["merchant_category"]
           created_at?: string
+          description?: string | null
           id?: string
           is_active?: boolean
           lat?: number | null
@@ -309,6 +321,7 @@ export type Database = {
         Row: {
           created_at: string
           estimated_price: number | null
+          final_price: number | null
           id: string
           name: string
           notes: string | null
@@ -320,6 +333,7 @@ export type Database = {
         Insert: {
           created_at?: string
           estimated_price?: number | null
+          final_price?: number | null
           id?: string
           name: string
           notes?: string | null
@@ -331,6 +345,7 @@ export type Database = {
         Update: {
           created_at?: string
           estimated_price?: number | null
+          final_price?: number | null
           id?: string
           name?: string
           notes?: string | null
@@ -479,6 +494,8 @@ export type Database = {
           accepted_at: string | null
           base_fare: number
           cancelled_at: string | null
+          claimed_at: string | null
+          claim_code: string | null
           completed_at: string | null
           created_at: string
           customer_id: string
@@ -520,6 +537,8 @@ export type Database = {
           accepted_at?: string | null
           base_fare?: number
           cancelled_at?: string | null
+          claimed_at?: string | null
+          claim_code?: string | null
           completed_at?: string | null
           created_at?: string
           customer_id: string
@@ -562,6 +581,8 @@ export type Database = {
           accepted_at?: string | null
           base_fare?: number
           cancelled_at?: string | null
+          claimed_at?: string | null
+          claim_code?: string | null
           completed_at?: string | null
           created_at?: string
           customer_id?: string
@@ -1101,6 +1122,10 @@ export type Database = {
       respond_pabili_request: {
         Args: { p_order_id: string; p_decision: string }
         Returns: Database["public"]["Tables"]["orders"]["Row"]
+      }
+      verify_claim_code: {
+        Args: { p_order_id: string; p_code: string }
+        Returns: boolean
       }
     }
     Enums: {

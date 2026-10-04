@@ -7,6 +7,7 @@ export type Profile = Database['public']['Tables']['profiles']['Row'];
 export type Merchant = Database['public']['Tables']['merchants']['Row'];
 export type Product = Database['public']['Tables']['products']['Row'];
 export type RiderApp = Database['public']['Tables']['rider_applications']['Row'];
+export type MerchantApp = Database['public']['Tables']['merchant_applications']['Row'];
 export type RiderStatus = Database['public']['Tables']['rider_status']['Row'];
 export type Tx = Database['public']['Tables']['transactions']['Row'];
 export type Wallet = Database['public']['Tables']['wallets']['Row'];
@@ -23,6 +24,7 @@ export type AdminData = {
   merchants: Merchant[];
   products: Product[];
   riderApps: RiderApp[];
+  merchantApps: MerchantApp[];
   riderStatus: RiderStatus[];
   transactions: Tx[];
   wallets: Wallet[];
@@ -35,7 +37,7 @@ export type AdminData = {
 };
 
 const EMPTY: AdminData = {
-  orders: [], profiles: [], merchants: [], products: [], riderApps: [],
+  orders: [], profiles: [], merchants: [], products: [], riderApps: [], merchantApps: [],
   riderStatus: [], transactions: [], wallets: [], ratings: [], vouchers: [],
   fares: [], orderItems: [], orderMessages: [], releases: [],
 };
@@ -50,7 +52,7 @@ export function useAdminData() {
     setError(null);
     try {
       const [
-        orders, profiles, merchants, products, riderApps, riderStatus,
+        orders, profiles, merchants, products, riderApps, merchantApps, riderStatus,
         transactions, wallets, ratings, vouchers, fares, orderItems, orderMessages, releases,
       ] = await Promise.all([
         supabase.from('orders').select('*').order('created_at', { ascending: false }).limit(600),
@@ -58,6 +60,7 @@ export function useAdminData() {
         supabase.from('merchants').select('*').order('created_at', { ascending: false }).limit(200),
         supabase.from('products').select('*').order('created_at', { ascending: false }).limit(1000),
         supabase.from('rider_applications').select('*').order('created_at', { ascending: false }).limit(300),
+        supabase.from('merchant_applications').select('*').order('created_at', { ascending: false }).limit(300),
         supabase.from('rider_status').select('*').limit(500),
         supabase.from('transactions').select('*').order('created_at', { ascending: false }).limit(500),
         supabase.from('wallets').select('*').limit(500),
@@ -68,7 +71,7 @@ export function useAdminData() {
         supabase.from('order_messages').select('*').order('created_at', { ascending: false }).limit(1000),
         supabase.from('app_releases').select('*').order('build_number', { ascending: false }).limit(20),
       ]);
-      const firstErr = [orders, profiles, merchants, products, riderApps, riderStatus, transactions, wallets, ratings, vouchers, fares, orderItems, orderMessages, releases]
+      const firstErr = [orders, profiles, merchants, products, riderApps, merchantApps, riderStatus, transactions, wallets, ratings, vouchers, fares, orderItems, orderMessages, releases]
         .find((r) => r.error)?.error;
       if (firstErr) throw new Error(firstErr.message);
       setData({
@@ -77,6 +80,7 @@ export function useAdminData() {
         merchants: merchants.data ?? [],
         products: products.data ?? [],
         riderApps: riderApps.data ?? [],
+        merchantApps: merchantApps.data ?? [],
         riderStatus: riderStatus.data ?? [],
         transactions: transactions.data ?? [],
         wallets: wallets.data ?? [],

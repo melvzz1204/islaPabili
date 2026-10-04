@@ -23,6 +23,20 @@ export function canChat(status: OrderRow['status']): boolean {
   return (CHATABLE_STATUSES as string[]).includes(status);
 }
 
+/**
+ * While the store is the active party (confirm/pack/ready), the customer
+ * and the store owners share the same thread instead of the rider chat.
+ */
+export const MERCHANT_CHAT_STATUSES: OrderRow['status'][] = [
+  'awaiting_merchant',
+  'preparing',
+  'ready',
+];
+
+export function canStoreChat(status: OrderRow['status']): boolean {
+  return (MERCHANT_CHAT_STATUSES as string[]).includes(status);
+}
+
 export type Conversation = {
   order: OrderRow;
   lastMessage: MessageRow | null;
