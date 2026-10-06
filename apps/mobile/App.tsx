@@ -16,7 +16,7 @@ import { consumeCheckoutReturn } from './src/lib/checkoutReturn';
 import { registerPushToken } from './src/lib/push';
 import { useConversations, useIncomingMessageAlerts } from './src/messaging/chat';
 import { useOrderUpdateAlerts } from './src/lib/orderAlerts';
-import { initNotifications } from './src/lib/notify';
+import { initNotifications, scheduleDailyCraving } from './src/lib/notify';
 import type { RootStackParamList, TabParamList } from './src/navigation/types';
 import AuthHomeScreen from './src/screens/auth/AuthHomeScreen';
 import LoginScreen from './src/screens/auth/LoginScreen';
@@ -277,6 +277,8 @@ export default function App() {
   // Notification channels + foreground banner/sound, once per launch.
   useEffect(() => {
     void initNotifications();
+    // Daily 11AM lunch-craving nudge (local-scheduled, best-effort).
+    void scheduleDailyCraving();
   }, []);
   return (
     <SafeAreaProvider>

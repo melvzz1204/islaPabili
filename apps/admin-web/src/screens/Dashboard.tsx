@@ -19,6 +19,7 @@ const RANGES: { key: RangeKey; label: string }[] = [
 
 const STATUS_COLORS: Record<string, string> = {
   completed: '#10b981',
+  delivered: '#fbbf24',
   in_transit: '#0ea5e9',
   preparing: '#8b5cf6',
   ready: '#f59e0b',

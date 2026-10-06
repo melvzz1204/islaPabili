@@ -23,6 +23,7 @@ const ACTIVE_STATUSES: ActiveStatus[] = [
   'rider_assigned',
   'items_purchased',
   'in_transit',
+  'delivered',
 ];
 
 /** Merchant-wait means placed, no merchant counter yet, the rider shops. */

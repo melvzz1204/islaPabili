@@ -12,6 +12,7 @@ export const CHATABLE_STATUSES: OrderRow['status'][] = [
   'rider_assigned',
   'items_purchased',
   'in_transit',
+  'delivered',
 ];
 
 export const CONVERSATION_STATUSES: OrderRow['status'][] = [

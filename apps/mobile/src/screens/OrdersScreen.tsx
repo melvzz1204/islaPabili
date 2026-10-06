@@ -47,6 +47,7 @@ const STATUS_META: Record<OrderStatus, StatusMeta> = {
   rider_assigned: { label: 'Rider assigned', badge: 'transit' },
   items_purchased: { label: 'Items purchased', badge: 'transit' },
   in_transit: { label: 'On the way', badge: 'transit' },
+  delivered: { label: 'Nadala na — pakicheck', badge: 'pending' },
   completed: { label: 'Delivered', badge: 'delivered' },
   cancelled: { label: 'Cancelled', badge: 'cancelled' },
   failed: { label: 'Failed', badge: 'cancelled' },
@@ -63,6 +64,7 @@ const ACTIVE_STATUSES: OrderStatus[] = [
   'rider_assigned',
   'items_purchased',
   'in_transit',
+  'delivered',
 ];
 
 /** Rider-led happy path, no merchant counter step yet, the rider shops. */
@@ -71,6 +73,7 @@ const FLOW: OrderStatus[] = [
   'rider_assigned',
   'items_purchased',
   'in_transit',
+  'delivered',
   'completed',
 ];
 
@@ -425,8 +428,20 @@ export default function OrdersScreen({}: Props) {
                   />
                 </>
               ) : null}
+              {selected.status === 'delivered' ? (
+                <>
+                  <Text style={styles.muted}>
+                    Nadala na raw ng rider. Pakicheck ang items, tapos pindutin sa baba para ma-complete.
+                  </Text>
+                  <Button
+                    title="Natanggap ko na"
+                    loading={acting}
+                    onPress={() => void transition(selected, { status: 'completed' }, 'Salamat sa pag-Pabili! Order completed.')}
+                  />
+                </>
+              ) : null}
               {selected.rider_id &&
-              ['rider_assigned', 'items_purchased', 'in_transit', 'completed'].includes(selected.status) ? (
+              ['rider_assigned', 'items_purchased', 'in_transit', 'delivered', 'completed'].includes(selected.status) ? (
                 <>
                   <Button
                     title="Track rider"

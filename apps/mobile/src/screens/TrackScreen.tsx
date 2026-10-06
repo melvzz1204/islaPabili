@@ -28,6 +28,7 @@ export default function TrackScreen({ route }: Props) {
   const [riderLive, setRiderLive] = useState<LatLng | null>(null);
   const [riderName, setRiderName] = useState('Your rider');
   const [riderPhone, setRiderPhone] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
   const mapActions = useRef<MapActions | null>(null);
 
   const loadOrder = useCallback(async () => {
@@ -93,6 +94,20 @@ export default function TrackScreen({ route }: Props) {
       return;
     }
     void Linking.openURL(`tel:${riderPhone}`);
+  };
+
+  /** Proof of receipt: only the customer tap closes a delivered order. */
+  const confirmReceipt = async () => {
+    if (!order || order.status !== 'delivered' || confirming) return;
+    setConfirming(true);
+    const { error } = await client.from('orders').update({ status: 'completed' }).eq('id', order.id);
+    setConfirming(false);
+    if (error) {
+      showToast({ message: error.message, type: 'error' });
+      return;
+    }
+    showToast({ message: 'Salamat sa pag-Pabili! Order completed.', type: 'success' });
+    await loadOrder();
   };
 
   if (!order || !order.rider_id) {
@@ -167,6 +182,23 @@ export default function TrackScreen({ route }: Props) {
             Claim code <Text style={styles.claimCode}>{order.claim_code}</Text>
             {order.fulfillment_mode === 'merchant_pickup' ? ' · show at the counter' : ' · rider shows it at pickup'}
           </Text>
+        ) : null}
+        {order.status === 'delivered' ? (
+          <View style={styles.confirmCard}>
+            <Text style={styles.confirmTitle}>Nadala na! Pakicheck 🎉</Text>
+            <Text style={styles.confirmSub}>
+              Minarkahan ng rider na delivered. Pakicheck ang items, tapos confirm sa baba.
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Natanggap ko na"
+              disabled={confirming}
+              onPress={() => void confirmReceipt()}
+              style={({ pressed }) => [styles.confirmBtn, pressed && styles.pressed, confirming && styles.confirmBtnBusy]}
+            >
+              <Text style={styles.confirmBtnLabel}>{confirming ? 'Confirming…' : 'Natanggap ko na'}</Text>
+            </Pressable>
+          </View>
         ) : null}
         <View style={styles.actionRow}>
           <SheetAction label="Message" icon="message" primary onPress={() => navigation.navigate('Chat', { orderId })} />
@@ -287,6 +319,23 @@ const styles = StyleSheet.create({
   feeLine: { ...typography.caption, color: colors.primaryDeep, fontWeight: '700' },
   claimLine: { ...typography.caption, color: colors.primaryDeep },
   claimCode: { fontWeight: '800', letterSpacing: 2 },
+  confirmCard: {
+    backgroundColor: colors.primaryTint,
+    borderRadius: radius.lg,
+    padding: spacing.base,
+    gap: spacing.xs,
+  },
+  confirmTitle: { ...typography.subhead, fontWeight: '800', color: colors.primaryDeep },
+  confirmSub: { ...typography.caption },
+  confirmBtn: {
+    backgroundColor: colors.primaryDeep,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    marginTop: spacing.xs,
+  },
+  confirmBtnBusy: { opacity: 0.6 },
+  confirmBtnLabel: { ...typography.label, fontWeight: '800', color: colors.onPrimary },
   actionRow: { flexDirection: 'row', gap: spacing.sm },
   action: {
     flex: 1,

@@ -58,6 +58,7 @@ export function statusTone(status: string): BadgeTone {
   if (['cancelled', 'failed', 'declined', 'rejected'].includes(status)) return 'bad';
   if (['pending_dispatch', 'awaiting_merchant', 'pending'].includes(status)) return 'pending';
   if (['ready', 'preparing'].includes(status)) return 'info';
+  if (['delivered', 'in_transit', 'rider_assigned', 'items_purchased'].includes(status)) return 'pending';
   return 'violet';
 }
 

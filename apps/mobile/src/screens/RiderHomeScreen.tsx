@@ -63,14 +63,15 @@ type PabiliRequest = Database['public']['Tables']['order_requests']['Row'];
 type IncomingOffer = { request: PabiliRequest; order: PabiliOrder; items: PabiliItem[] };
 type DoneOrder = { id: string; order_number: string; total_delivery_fee: number | string | null; created_at: string };
 
-const MINE_STATUSES = ['rider_assigned', 'items_purchased', 'in_transit'] as const;
+const MINE_STATUSES = ['rider_assigned', 'items_purchased', 'in_transit', 'delivered'] as const;
 
 type OrderStatus = Database['public']['Enums']['order_status'];
 
 const NEXT_STEP: Record<string, { to: OrderStatus; label: string }> = {
   rider_assigned: { to: 'items_purchased', label: 'Mark items purchased' },
   items_purchased: { to: 'in_transit', label: 'On the way' },
-  in_transit: { to: 'completed', label: 'Mark as completed' },
+  in_transit: { to: 'delivered', label: 'Mark as delivered' },
+  delivered: { to: 'in_transit', label: 'Back to on the way' },
 };
 
 type RiderTab = 'dashboard' | 'requests' | 'deliveries' | 'messages' | 'earnings' | 'settings';
@@ -364,12 +365,28 @@ export default function RiderHomeScreen() {
       return;
     }
     showToast({
-      message: next.to === 'completed' ? 'Delivered. Salamat!' : 'Status updated, customer notified.',
+      message:
+        next.to === 'delivered'
+          ? 'Nadala na! Waiting for customer to confirm receipt.'
+          : next.to === 'in_transit' && order.status === 'delivered'
+            ? 'Back on the way, customer notified.'
+            : 'Status updated, customer notified.',
       type: 'success',
     });
     // Wake the customer when their app is killed/backgrounded.
     void invokePush(client, order.id, 'status');
     await Promise.all([loadMine(), loadHistory()]);
+  };
+
+  /** Nudge a customer who has not confirmed receipt yet. Best-effort. */
+  const nudge = async (order: PabiliOrder) => {
+    setWorking(order.id);
+    await invokePush(client, order.id, 'status', {
+      title: `Nadala na · #${order.order_number}`,
+      body: 'Pakicheck ang order mo at pindutin "Natanggap ko na" para ma-complete.',
+    });
+    setWorking(null);
+    showToast({ message: 'Reminder sent to customer.', type: 'success' });
   };
 
   const handleLogout = () => {
@@ -481,6 +498,7 @@ export default function RiderHomeScreen() {
           working={working}
           distanceTo={distanceTo}
           onAdvance={(order) => void advance(order)}
+          onNudge={(order) => void nudge(order)}
           onOpenMap={(order) => setMapOrderId(order.id)}
         />
       ) : tab === 'messages' ? (
@@ -860,6 +878,7 @@ function DeliveriesView({
   working,
   distanceTo,
   onAdvance,
+  onNudge,
   onOpenMap,
 }: {
   mine: PabiliOrder[];
@@ -868,6 +887,7 @@ function DeliveriesView({
   working: string | null;
   distanceTo: (lat: number | null, lng: number | null) => string | null;
   onAdvance: (order: PabiliOrder) => void;
+  onNudge: (order: PabiliOrder) => void;
   onOpenMap: (order: PabiliOrder) => void;
 }) {
   return (
@@ -895,7 +915,10 @@ function DeliveriesView({
                     {TOWN_LABELS[o.town]} · {o.dropoff_address}
                   </Text>
                 </View>
-                <Badge label={o.status.replace(/_/g, ' ')} status="transit" />
+                <Badge
+                  label={o.status === 'delivered' ? 'Delivered · awaiting confirm' : o.status.replace(/_/g, ' ')}
+                  status={o.status === 'delivered' ? 'pending' : 'transit'}
+                />
               </View>
               {items.map((it) => (
                 <Text key={it.id} style={styles.itemLine} numberOfLines={1}>
@@ -927,6 +950,19 @@ function DeliveriesView({
                   loading={working === o.id}
                   onPress={() => onAdvance(o)}
                 />
+              ) : null}
+              {o.status === 'delivered' ? (
+                <>
+                  <Text style={styles.muted}>
+                    Waiting for customer to tap "Natanggap ko na". Nudge them if it takes a while.
+                  </Text>
+                  <Button
+                    title="Nudge customer"
+                    variant="secondary"
+                    loading={working === o.id}
+                    onPress={() => onNudge(o)}
+                  />
+                </>
               ) : null}
               <Button title="Open map" variant="secondary" onPress={() => onOpenMap(o)} />
             </Card>

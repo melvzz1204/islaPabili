@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { useAuth } from '@isla/supabase';
 import { useToast } from '@isla/ui';
-import { CHANNEL_ORDERS, blip, getSoundSettings, notifyLocal } from './notify';
+import { CHANNEL_ORDERS, blip, cancelDeliveredReminder, getSoundSettings, notifyLocal, scheduleDeliveredReminder } from './notify';
 
 /**
  * Customer order-update fanfare: every new inbox notification also fires an
@@ -21,9 +21,19 @@ export function useOrderUpdateAlerts() {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${profile.id}` },
         (payload) => {
-          const n = payload.new as { title: string; body: string; kind: string | null };
+          const n = payload.new as { title: string; body: string; kind: string | null; order_id: string | null };
           // Chat rows already banner through the message alerts.
           if (n.kind === 'message') return;
+          // Proof-of-receipt follow-ups: delivered re-nudges in 2h,
+          // completed clears any pending nudge.
+          if (n.order_id) {
+            if (n.title.startsWith('Nadala na')) {
+              const match = n.body.match(/order (\S+)/i);
+              void scheduleDeliveredReminder(n.order_id, match?.[1] ?? n.order_id.slice(0, 8));
+            } else if (n.title === 'Order completed') {
+              void cancelDeliveredReminder(n.order_id);
+            }
+          }
           showToast({ message: `${n.title}, ${n.body}`, type: 'success', duration: 4200 });
           void (async () => {
             const prefs = await getSoundSettings();

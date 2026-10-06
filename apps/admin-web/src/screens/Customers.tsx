@@ -146,7 +146,7 @@ function CustomerFile({
   const done = orders.filter((o) => o.status === 'completed').length;
   const cancelled = orders.filter((o) => o.status === 'cancelled' || o.status === 'failed').length;
   const active = orders.filter((o) =>
-    ['awaiting_merchant', 'preparing', 'ready', 'pending_dispatch', 'rider_assigned', 'items_purchased', 'in_transit'].includes(o.status),
+    ['awaiting_merchant', 'preparing', 'ready', 'pending_dispatch', 'rider_assigned', 'items_purchased', 'in_transit', 'delivered'].includes(o.status),
   ).length;
   const rating = avgRating(ratings);
   const initial = (customer.full_name || customer.username || '?').charAt(0).toUpperCase();

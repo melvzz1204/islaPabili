@@ -50,6 +50,8 @@ const STATUS_BADGE: Record<string, BadgeStatus> = {
   awaiting_merchant: 'warning',
   preparing: 'primary',
   ready: 'success',
+  in_transit: 'primary',
+  delivered: 'warning',
   declined: 'danger',
   cancelled: 'danger',
   completed: 'neutral',

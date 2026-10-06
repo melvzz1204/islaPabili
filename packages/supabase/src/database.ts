@@ -499,6 +499,8 @@ export type Database = {
           completed_at: string | null
           created_at: string
           customer_id: string
+          delivered_at: string | null
+          delivered_reminded_at: string | null
           discount_amount: number
           distance_fee: number
           distance_km: number | null
@@ -542,6 +544,8 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           customer_id: string
+          delivered_at?: string | null
+          delivered_reminded_at?: string | null
           discount_amount?: number
           distance_fee?: number
           distance_km?: number | null
@@ -586,6 +590,8 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           customer_id?: string
+          delivered_at?: string | null
+          delivered_reminded_at?: string | null
           discount_amount?: number
           distance_fee?: number
           distance_km?: number | null
@@ -1143,6 +1149,7 @@ export type Database = {
         | "rider_assigned"
         | "items_purchased"
         | "in_transit"
+        | "delivered"
         | "completed"
         | "cancelled"
         | "failed"
@@ -1304,6 +1311,7 @@ export const Constants = {
         "rider_assigned",
         "items_purchased",
         "in_transit",
+        "delivered",
         "completed",
         "cancelled",
         "failed",

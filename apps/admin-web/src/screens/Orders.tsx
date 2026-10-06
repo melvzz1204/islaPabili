@@ -10,7 +10,7 @@ import { Icon } from '../components/icon';
 import { ConversationThread } from '../components/conversation';
 import type { Order } from '../lib/adminData';
 
-const STATUSES = ['all', 'live', 'pending_dispatch', 'awaiting_merchant', 'preparing', 'ready', 'in_transit', 'completed', 'cancelled'] as const;
+const STATUSES = ['all', 'live', 'pending_dispatch', 'awaiting_merchant', 'preparing', 'ready', 'in_transit', 'delivered', 'completed', 'cancelled'] as const;
 type F = (typeof STATUSES)[number];
 
 export function Orders({ data, loading }: { data: AdminData; loading: boolean }) {
@@ -158,6 +158,7 @@ export function OrderDetail({ data, order, onChanged }: { data: AdminData; order
           ['Accepted', order.accepted_at],
           ['Purchased', order.purchased_at],
           ['In transit', order.in_transit_at],
+          ['Delivered (awaiting confirm)', (order as { delivered_at?: string | null }).delivered_at],
           ['Completed', order.completed_at],
           ['Cancelled', order.cancelled_at],
         ].filter(([, t]) => !!t).map(([k, t]) => (
