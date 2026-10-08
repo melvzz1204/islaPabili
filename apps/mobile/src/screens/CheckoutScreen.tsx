@@ -21,7 +21,7 @@ import {
   typography,
   useToast,
 } from '@isla/ui';
-import { JOLLIBEE_MERCHANT_ID, peso } from '../marketplace/data';
+import { isJollibeeMerchantName, peso } from '../marketplace/data';
 import { loadFareConfig, quoteTrip, type Gps } from '../marketplace/fare';
 import { useCart } from '../marketplace/cart';
 import { requestCheckoutReturn } from '../lib/checkoutReturn';
@@ -161,9 +161,10 @@ export default function CheckoutScreen({}: Props) {
   );
 
   // Jollibee is rider-delivery only — no counter pickup for that store.
+  // Name-based (not fixed UUID): the registered store keeps its own id.
   const hasJollibee = useMemo(
-    () => groupQuotes.some((g) => g.merchantId === JOLLIBEE_MERCHANT_ID),
-    [groupQuotes],
+    () => groupQuotes.some((g) => isJollibeeMerchantName(merchantNames[g.merchantId])),
+    [groupQuotes, merchantNames],
   );
 
   useEffect(() => {

@@ -16,7 +16,7 @@ import {
   spacing,
   typography,
 } from '@isla/ui';
-import { fetchMerchants, type Merchant, type MerchantKind } from '../marketplace/data';
+import { fetchMerchants, isJollibeeMerchantName, type Merchant, type MerchantKind } from '../marketplace/data';
 import { CartBar, StoreCard } from '../marketplace/components';
 import type { RootNavProp } from '../navigation/types';
 
@@ -209,7 +209,12 @@ export default function MarketScreen() {
                   <StoreCard
                     key={m.id}
                     merchant={m}
-                    onPress={() => navigation.navigate('Store', { merchantId: m.id })}
+                    onPress={() => {
+                      // Jollibee opens its full menu (products + photos);
+                      // every other store uses the free-text order composer.
+                      if (isJollibeeMerchantName(m.name)) navigation.navigate('JollibeeMenu');
+                      else navigation.navigate('Store', { merchantId: m.id });
+                    }}
                   />
                 ))}
               </View>

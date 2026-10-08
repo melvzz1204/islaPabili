@@ -18,10 +18,9 @@ import {
   typography,
 } from '@isla/ui';
 import {
-  JOLLIBEE_MERCHANT_ID,
   KIND_LABEL,
   categoriesOf,
-  fetchMerchant,
+  fetchJollibeeMerchant,
   fetchProducts,
   searchProducts,
   type Merchant,
@@ -42,6 +41,7 @@ export default function JollibeeMenuScreen({}: Props) {
   const { client } = useAuth();
   const { lines } = useCart();
   const [merchant, setMerchant] = useState<Merchant | null>(null);
+  const [merchantId, setMerchantId] = useState<string | null>(null);
   const [all, setAll] = useState<Product[]>([]);
   const [categoryId, setCategoryId] = useState<string | undefined>(undefined);
   const [query, setQuery] = useState('');
@@ -53,12 +53,17 @@ export default function JollibeeMenuScreen({}: Props) {
     setLoading(true);
     setError(null);
     try {
-      const [m, products] = await Promise.all([
-        fetchMerchant(client, JOLLIBEE_MERCHANT_ID),
-        fetchProducts(client, JOLLIBEE_MERCHANT_ID),
-      ]);
-      setMerchant(m);
-      setAll(products);
+      const m = await fetchJollibeeMerchant(client);
+      if (!m) {
+        setMerchant(null);
+        setMerchantId(null);
+        setAll([]);
+      } else {
+        const products = await fetchProducts(client, m.id);
+        setMerchant(m);
+        setMerchantId(m.id);
+        setAll(products);
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Could not load the Jollibee menu.');
     } finally {
@@ -70,14 +75,17 @@ export default function JollibeeMenuScreen({}: Props) {
     let active = true;
     setLoading(true);
     setError(null);
-    void Promise.all([
-      fetchMerchant(client, JOLLIBEE_MERCHANT_ID),
-      fetchProducts(client, JOLLIBEE_MERCHANT_ID),
-    ])
-      .then(([m, products]) => {
-        if (!active) return;
+    void fetchJollibeeMerchant(client)
+      .then((m) => {
+        if (!active) return null;
+        if (!m) return null;
         setMerchant(m);
-        setAll(products);
+        setMerchantId(m.id);
+        return fetchProducts(client, m.id);
+      })
+      .then((products) => {
+        if (!active) return;
+        setAll(products ?? []);
         setLoading(false);
       })
       .catch((err: unknown) => {
@@ -101,7 +109,7 @@ export default function JollibeeMenuScreen({}: Props) {
 
   /** Fallback: send what's in the cart (or a blank list) as a rider pabili errand. */
   const orderViaPabili = () => {
-    const mine = lines.filter((l) => l.merchantId === JOLLIBEE_MERCHANT_ID);
+    const mine = merchantId != null ? lines.filter((l) => l.merchantId === merchantId) : [];
     navigation.navigate('PabiliCreate', {
       store: merchant?.name ?? 'Jollibee',
       items: mine.map((l) => ({ name: l.name, qty: String(l.qty) })),

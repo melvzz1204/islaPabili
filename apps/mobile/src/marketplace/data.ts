@@ -3,9 +3,6 @@ import type { Database, Supabase } from '@isla/supabase';
 
 /** Live catalog types (Supabase) for the public guest marketplace. */
 
-/** Flagship merchant, Jollibee Boac (see supabase/seed.sql). Menu/prices/stock all come from the DB. */
-export const JOLLIBEE_MERCHANT_ID = '11111111-1111-4111-8111-111111111111';
-
 export type MerchantKind = 'pharmacy' | 'restaurant' | 'grocery' | 'retail' | 'electronics';
 
 export type Merchant = {
@@ -103,6 +100,31 @@ export async function fetchMerchant(client: Supabase, id: string): Promise<Merch
   const { data, error } = await client.from('merchants').select('*').eq('id', id).maybeSingle();
   if (error) throw new Error(error.message);
   return data && data.is_active ? toMerchant(data) : null;
+}
+
+/**
+ * Flagship check by name, not fixed UUID: the registered Jollibee store
+ * keeps its own id (seed row retired). Used for menu routing + the
+ * rider-delivery-only rule.
+ */
+export const isJollibeeMerchantName = (name: string | null | undefined): boolean =>
+  (name ?? '').toLowerCase().includes('jollibee');
+
+/**
+ * Flagship lookup by name, not fixed UUID: the registered Jollibee store
+ * keeps its own id (seed row retired), so resolve whichever active
+ * Jollibee-named merchant exists. Null when none is live.
+ */export async function fetchJollibeeMerchant(client: Supabase): Promise<Merchant | null> {
+  const { data, error } = await client
+    .from('merchants')
+    .select('*')
+    .eq('is_active', true)
+    .ilike('name', '%jollibee%')
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data ? toMerchant(data as MerchantRow) : null;
 }
 
 export async function fetchProducts(client: Supabase, merchantId: string): Promise<Product[]> {

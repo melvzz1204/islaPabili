@@ -8,6 +8,8 @@ import {
   StyleSheet,
   Text,
   View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
@@ -48,9 +50,19 @@ export default function ChatScreen({ route }: Props) {
   const [sending, setSending] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
   const insets = useSafeAreaInsets();
+  // Stick-to-bottom: auto-scroll only fires while the user is already at the
+  // latest messages. Reading history (or typing with the thread scrolled up)
+  // never gets yanked, and competing scrolls can't fight the keyboard.
+  const stickToBottom = useRef(true);
 
   const scrollToEnd = useCallback((animated = true) => {
+    if (!stickToBottom.current) return;
     scrollRef.current?.scrollToEnd({ animated });
+  }, []);
+
+  const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+    stickToBottom.current = contentSize.height - (contentOffset.y + layoutMeasurement.height) < 120;
   }, []);
 
   const loadOrder = useCallback(async () => {
@@ -171,13 +183,15 @@ export default function ChatScreen({ route }: Props) {
   }, [client, orderId, instanceId]);
 
   useEffect(() => {
-    scrollToEnd(true);
+    scrollToEnd(false);
   }, [messages.length, scrollToEnd]);
 
   // When the keyboard opens, the latest message + composer must stay visible
   // above it on both platforms (resize shrinks Android; padding lifts iOS).
+  // Non-animated: an animated scroll here races the keyboard animation and
+  // the layout-driven content-size change, which reads as flicker.
   useEffect(() => {
-    const show = Keyboard.addListener('keyboardDidShow', () => scrollToEnd(true));
+    const show = Keyboard.addListener('keyboardDidShow', () => scrollToEnd(false));
     return () => show.remove();
   }, [scrollToEnd]);
 
@@ -201,6 +215,8 @@ export default function ChatScreen({ route }: Props) {
     }
     // Wake the other side when their app is killed/backgrounded.
     void invokePush(client, orderId, 'message');
+    // Own send always reveals the latest message.
+    stickToBottom.current = true;
     await loadMessages(true);
   };
 
@@ -272,6 +288,8 @@ export default function ChatScreen({ route }: Props) {
           contentContainerStyle={styles.threadContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
+          scrollEventThrottle={16}
+          onScroll={handleScroll}
           onContentSizeChange={() => scrollToEnd(false)}
         >
           {messages.length === 0 ? (
