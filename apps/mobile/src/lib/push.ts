@@ -13,6 +13,13 @@ export type PushKind = 'pabili' | 'message' | 'status' | 'merchant';
 export async function registerPushToken(client: Supabase, userId: string): Promise<void> {
   if (Platform.OS === 'web' || !Device.isDevice) return;
   try {
+    // Killed/backgrounded pushes need an OS-level grant. Ask here too so a
+    // first-launch deny (or a refreshed Expo token) still ends up stored.
+    const current = await Notifications.getPermissionsAsync();
+    if (!current.granted) {
+      const req = await Notifications.requestPermissionsAsync();
+      if (!req.granted) return;
+    }
     const projectId = Constants.expoConfig?.extra?.eas?.projectId as string | undefined;
     if (!projectId) return;
     const { data } = await Notifications.getExpoPushTokenAsync({ projectId });

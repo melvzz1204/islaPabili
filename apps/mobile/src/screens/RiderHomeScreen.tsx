@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AppState,
   Dimensions,
   Keyboard,
   KeyboardAvoidingView,
@@ -43,6 +44,7 @@ import { canChat, markConversationRead, setOpenOrderId, useConversations, useInc
 import { ChatComposer, ChatEmptyState, ChatThread } from '../messaging/ChatThread';
 import {
   CHANNEL_ORDERS,
+  consumePendingRiderTab,
   getSoundSettings,
   notifyLocal,
   sirenVibrate,
@@ -86,7 +88,6 @@ const NEXT_STEP: Record<string, { to: OrderStatus; label: string }> = {
   rider_assigned: { to: 'items_purchased', label: 'Mark items purchased' },
   items_purchased: { to: 'in_transit', label: 'On the way' },
   in_transit: { to: 'delivered', label: 'Mark as delivered' },
-  delivered: { to: 'in_transit', label: 'Back to on the way' },
 };
 
 type RiderTab = 'dashboard' | 'requests' | 'deliveries' | 'messages' | 'earnings' | 'settings';
@@ -466,6 +467,20 @@ export default function RiderHomeScreen() {
     setMapOrderId(null);
     setTab(t);
   };
+
+  // Background-push tap (minimized/killed app): a `pabili` push opens the
+  // app onto the Requests tab so the offer is one tap away.
+  useEffect(() => {
+    const jumpToRequests = () => {
+      setMapOrderId(null);
+      setTab('requests');
+    };
+    if (consumePendingRiderTab() === 'requests') jumpToRequests();
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active' && consumePendingRiderTab() === 'requests') jumpToRequests();
+    });
+    return () => sub.remove();
+  }, []);
 
   const overlayOffer = overlayId ? (incoming.find((o) => o.request.id === overlayId) ?? null) : null;
   const dismissOverlay = () => {
@@ -1077,10 +1092,11 @@ function DeliveriesView({
               {o.status === 'delivered' ? (
                 <>
                   <Text style={styles.muted}>
-                    Waiting for customer to tap "Natanggap ko na". Nudge them if it takes a while.
+                    Nadala mo na ito. Pag pinindot ni customer ang "Natanggap ko na", saka pa lang ito
+                    lilipat sa Completed at papasok sa earnings mo.
                   </Text>
                   <Button
-                    title="Nudge customer"
+                    title="Remind customer to confirm"
                     variant="secondary"
                     loading={working === o.id}
                     onPress={() => onNudge(o)}

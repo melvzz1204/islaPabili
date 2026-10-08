@@ -233,6 +233,19 @@ export function getPromoTarget(data: unknown): PromoTarget | null {
   return { name: 'shop' };
 }
 
+/** Rider tap on a background `pabili` push lands on the Requests tab. */
+let pendingRiderTab: 'requests' | null = null;
+
+export function setPendingRiderTab(tab: 'requests'): void {
+  pendingRiderTab = tab;
+}
+
+export function consumePendingRiderTab(): 'requests' | null {
+  const t = pendingRiderTab;
+  pendingRiderTab = null;
+  return t;
+}
+
 /** Promo tap → Shop tab. Old 11AM schedules only have `{ kind: 'promo' }`, treat those as shop too. */
 export function isPromoTap(data: unknown): boolean {
   return getPromoTarget(data) !== null;

@@ -2,7 +2,7 @@ import { NavigationContainer, DarkTheme, createNavigationContainerRef, type Them
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, AppState, Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
@@ -17,7 +17,7 @@ import { consumeCheckoutReturn } from './src/lib/checkoutReturn';
 import { registerPushToken } from './src/lib/push';
 import { useConversations, useIncomingMessageAlerts } from './src/messaging/chat';
 import { useOrderUpdateAlerts } from './src/lib/orderAlerts';
-import { initNotifications, getPromoTarget, scheduleAlakSingko, scheduleDailyCraving } from './src/lib/notify';
+import { initNotifications, getPromoTarget, scheduleAlakSingko, scheduleDailyCraving, setPendingRiderTab } from './src/lib/notify';
 import type { RootStackParamList, TabParamList } from './src/navigation/types';
 import AuthHomeScreen from './src/screens/auth/AuthHomeScreen';
 import LoginScreen from './src/screens/auth/LoginScreen';
@@ -162,12 +162,21 @@ function Root() {
     };
   }, []);
 
-  // Register this device for server-side wake-up pushes, once per sign-in.
+  // Register this device for server-side wake-up pushes. Re-runs on every
+  // foreground so a refreshed (or previously denied) Expo token still lands
+  // in push_tokens — this is what wakes minimized/killed apps.
   useEffect(() => {
     const uid = session?.user?.id ?? null;
-    if (!uid || pushRegistered.current === uid) return;
+    if (!uid) {
+      pushRegistered.current = null;
+      return;
+    }
     pushRegistered.current = uid;
     void registerPushToken(client, uid);
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void registerPushToken(client, uid);
+    });
+    return () => sub.remove();
   }, [client, session]);
 
   // A rider/merchant logout parks on the sign-in page (not guest home) so
@@ -291,6 +300,31 @@ function goToPromoTarget(data: unknown) {
   }
 }
 
+/**
+ * Background-push tap from push-send (`{ orderId, kind: 'pabili' }`): a
+ * minimized/killed rider app opens straight onto the Requests tab so the
+ * offer is one tap away. The tab handoff is consumed by RiderHomeScreen.
+ */
+function goToRiderRequest() {
+  setPendingRiderTab('requests');
+  if (!navigationRef.isReady()) return;
+  try {
+    navigationRef.navigate('Rider' as never);
+  } catch {
+    // Rider shell may not be mounted (customer mode) — handoff stays pending.
+  }
+}
+
+function handlePushTap(data: unknown) {
+  if (!data || typeof data !== 'object') return;
+  const kind = (data as Record<string, unknown>).kind;
+  if (kind === 'pabili') {
+    goToRiderRequest();
+    return;
+  }
+  goToPromoTarget(data);
+}
+
 export default function App() {
   // Expo web serves a generic shell whose <title> resolves to "undefined";
   // pin a real tab title (per-screen titles can extend this later).
@@ -307,20 +341,26 @@ export default function App() {
     // Daily 5PM alak-singko pulutan nudge (local-scheduled, best-effort).
     void scheduleAlakSingko();
   }, []);
-  // Promo tap: 11AM → Shop tab, 5PM → Pabili pulutan form. Covers cold start (killed app) + taps while running.
+  // Push tap routing: promo → Shop/Pabili, rider `pabili` push → Requests tab.
+  // Covers cold start (killed app) + taps while running/minimized.
   useEffect(() => {
     if (Platform.OS === 'web') return;
     let alive = true;
+    const isRoutable = (data: unknown) => {
+      if (!data || typeof data !== 'object') return false;
+      const kind = (data as Record<string, unknown>).kind;
+      return kind === 'pabili' || getPromoTarget(data) !== null;
+    };
     // Killed-app launch: notification tap opened the app but nav wasn't ready yet.
     // Poll briefly until navigation is ready, then jump.
     void (async () => {
       try {
         const last = await Notifications.getLastNotificationResponseAsync();
         const data = last?.notification.request.content.data;
-        if (alive && data && getPromoTarget(data)) {
+        if (alive && data && isRoutable(data)) {
           for (let i = 0; i < 20 && alive; i++) {
             if (navigationRef.isReady()) {
-              goToPromoTarget(data);
+              handlePushTap(data);
               break;
             }
             await new Promise((r) => setTimeout(r, 250));
@@ -332,7 +372,7 @@ export default function App() {
     })();
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
       try {
-        goToPromoTarget(response.notification.request.content.data);
+        handlePushTap(response.notification.request.content.data);
       } catch {
         // Ignore.
       }

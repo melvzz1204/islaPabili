@@ -26,6 +26,7 @@ import {
   type AppIconName,
 } from '@isla/ui';
 import { TextField } from '../ui/TextField';
+import { AddressAutocomplete } from '../maps/AddressAutocomplete';
 import { SingleTownPicker } from '../ui/TownPicker';
 import { BottomNav, BOTTOM_NAV_HEIGHT } from '../components/BottomNav';
 import { goToTab, type RootNavProp, type RootStackScreen } from '../navigation/types';
@@ -775,7 +776,7 @@ export default function PabiliCreateScreen({ route }: Props) {
         />
         <Text style={styles.fieldLabel}>Town</Text>
         <SingleTownPicker variant="field" value={town} onChange={setTown} />
-        <TextField label="Address" placeholder="Street / barangay / landmark" value={address} onChangeText={setAddress} />
+        <AddressAutocomplete value={address} onChangeText={setAddress} />
       </Card>
 
       <Card style={styles.summaryCard}>

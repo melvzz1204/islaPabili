@@ -28,6 +28,8 @@ import { requestCheckoutReturn } from '../lib/checkoutReturn';
 import { callRpc } from '../lib/rpc';
 import { invokePush } from '../lib/push';
 import { SingleTownPicker } from '../ui/TownPicker';
+import { AddressAutocomplete } from '../maps/AddressAutocomplete';
+import { reverseGeocode } from '../maps/geocode';
 import { BottomNav, BOTTOM_NAV_HEIGHT } from '../components/BottomNav';
 import { goToTab, type RootNavProp, type RootStackScreen } from '../navigation/types';
 
@@ -176,13 +178,39 @@ export default function CheckoutScreen({}: Props) {
         return;
       }
       const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      setGps({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-      showToast({ message: 'Location pinned, delivery fee now uses real distance.', type: 'success' });
+      const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      setGps(coords);
+      // Fill the written address from the pin so the rider sees words + GPS.
+      const filled = await fillAddressFromCoords(coords.lat, coords.lng);
+      if (filled && !address.trim()) {
+        setAddress(filled);
+        showToast({ message: 'Location pinned, address filled — edit if needed.', type: 'success' });
+      } else {
+        showToast({ message: 'Location pinned, delivery fee now uses real distance.', type: 'success' });
+      }
     } catch {
       showToast({ message: 'Could not read your location.', type: 'error' });
     } finally {
       setPinning(false);
     }
+  };
+
+  /** Native reverse-geocode first (free, on-device service), Nominatim fallback. */
+  const fillAddressFromCoords = async (lat: number, lng: number): Promise<string> => {
+    try {
+      const [hit] = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
+      if (hit) {
+        const street = [hit.streetNumber, hit.street ?? hit.name].filter(Boolean).join(' ');
+        const parts = [street, hit.district, hit.city, hit.subregion, hit.region].filter(
+          (p): p is string => !!p && p.trim().length > 0,
+        );
+        const uniq = [...new Set(parts)];
+        if (uniq.length > 0) return uniq.slice(0, 4).join(', ');
+      }
+    } catch {
+      // Fall through to Nominatim.
+    }
+    return reverseGeocode(lat, lng);
   };
 
   const goShop = () => goToTab(navigation, 'Shop');
@@ -713,12 +741,18 @@ export default function CheckoutScreen({}: Props) {
             <Text style={styles.fieldLabel}>Town</Text>
             <SingleTownPicker variant="field" value={town} onChange={setTown} />
           </View>
-          <TextField
-            label="Address"
-            placeholder="Street / barangay / landmark"
+          <AddressAutocomplete
             value={address}
             onChangeText={setAddress}
             multiline
+            onPickSuggestion={(p) => {
+              const lat = Number(p.lat);
+              const lng = Number(p.lon);
+              if (Number.isFinite(lat) && Number.isFinite(lng)) {
+                setGps({ lat, lng });
+                showToast({ message: 'Address set from search, fee now uses that spot.', type: 'success' });
+              }
+            }}
           />
           <Button
             title={gps ? 'Location pinned ✓, tap to re-pin' : 'Use my exact location'}
