@@ -102,4 +102,18 @@ export const PABILI_COMBOS: PabiliCombo[] = [
       { name: 'Patis 350ml', qty: '1' },
     ],
   },
+  {
+    id: 'pulutan',
+    label: 'Pulutan',
+    hint: 'Pang-inuman set',
+    store: 'Public Market',
+    items: [
+      { name: 'Chicharon', qty: '2' },
+      { name: 'Mani 500g', qty: '1' },
+      { name: 'Sisig', qty: '1' },
+      { name: 'Lumpia', qty: '1' },
+      { name: 'Yelo 2kg', qty: '1' },
+      { name: 'Coke 1.5L', qty: '1' },
+    ],
+  },
 ];

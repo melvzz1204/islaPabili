@@ -30,7 +30,7 @@ type OrderRow = Database['public']['Tables']['orders']['Row'];
 type OrderItem = Database['public']['Tables']['order_items']['Row'];
 type MerchantRow = Database['public']['Tables']['merchants']['Row'];
 
-type HomeTab = 'orders' | 'verify' | 'store';
+type HomeTab = 'overview' | 'orders' | 'verify' | 'store';
 type InboxTab = 'new' | 'preparing' | 'ready' | 'all';
 
 const INBOX_STATUS: Record<InboxTab, string[]> = {
@@ -61,13 +61,39 @@ const statusLabel = (s: string) => s.replaceAll('_', ' ').toUpperCase();
 
 const linePrice = (it: OrderItem) => Number(it.final_price ?? it.estimated_price ?? 0);
 
+/** Orders that no longer earn (excluded from revenue stats). */
+const DEAD_STATUSES = new Set(['cancelled', 'failed', 'declined']);
+
+const sameDay = (a: Date, b: Date) =>
+  a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+
+const timeAgo = (iso: string) => {
+  const ms = Date.now() - new Date(iso).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return 'just now';
+  const mins = Math.floor(ms / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return days === 1 ? '1 day ago' : `${days} days ago`;
+};
+
+/** store-logos storage path (or absolute URL) → fetchable URL. */
+const resolveStoreImage = (client: ReturnType<typeof useAuth>['client'], path: string | null): string | null => {
+  if (!path) return null;
+  if (path.startsWith('http')) return path;
+  return client.storage.from('store-logos').getPublicUrl(path).data.publicUrl;
+};
+
 export default function MerchantHomeScreen({ merchantId }: { merchantId: string }) {
-  const [tab, setTab] = useState<HomeTab>('orders');
+  const [tab, setTab] = useState<HomeTab>('overview');
   return (
     <Screen>
       <ScreenHeader title="My store" />
       <SegmentedTabs<HomeTab>
         segments={[
+          { value: 'overview', label: 'Overview' },
           { value: 'orders', label: 'Orders' },
           { value: 'verify', label: 'Verify' },
           { value: 'store', label: 'Store' },
@@ -75,10 +101,222 @@ export default function MerchantHomeScreen({ merchantId }: { merchantId: string 
         value={tab}
         onChange={setTab}
       />
+      {tab === 'overview' ? <MerchantOverview merchantId={merchantId} onGoOrders={() => setTab('orders')} /> : null}
       {tab === 'orders' ? <MerchantOrders merchantId={merchantId} /> : null}
       {tab === 'verify' ? <MerchantVerify merchantId={merchantId} /> : null}
       {tab === 'store' ? <MerchantStore merchantId={merchantId} /> : null}
     </Screen>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Overview: hero + analytics + needs-action                           */
+/* ------------------------------------------------------------------ */
+
+function StatCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <View style={styles.stat}>
+      <Text style={styles.statValue}>{value}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
+      {hint ? <Text style={styles.statHint}>{hint}</Text> : null}
+    </View>
+  );
+}
+
+function MerchantOverview({ merchantId, onGoOrders }: { merchantId: string; onGoOrders: () => void }) {
+  const { client } = useAuth();
+  const { showToast } = useToast();
+  const [store, setStore] = useState<MerchantRow | null>(null);
+  const [orders, setOrders] = useState<OrderRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [toggling, setToggling] = useState(false);
+
+  const load = useCallback(async () => {
+    const [{ data: m, error: mErr }, { data: o, error: oErr }] = await Promise.all([
+      client.from('merchants').select('*').eq('id', merchantId).maybeSingle(),
+      client
+        .from('orders')
+        .select('*')
+        .eq('merchant_id', merchantId)
+        .order('created_at', { ascending: false })
+        .limit(100),
+    ]);
+    if (mErr) setLoadError(mErr.message);
+    else setStore((m ?? null) as MerchantRow | null);
+    if (oErr) setLoadError((prev) => prev ?? oErr.message);
+    else {
+      setOrders((o ?? []) as OrderRow[]);
+      if (!mErr) setLoadError(null);
+    }
+    setLoading(false);
+  }, [client, merchantId]);
+
+  useEffect(() => {
+    void load();
+    const channel = client
+      .channel(`orders-merchant-overview-${merchantId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'orders', filter: `merchant_id=eq.${merchantId}` },
+        () => {
+          void load();
+        },
+      )
+      .subscribe();
+    return () => {
+      void client.removeChannel(channel);
+    };
+  }, [client, merchantId, load]);
+
+  const stats = useMemo(() => {
+    const now = new Date();
+    const todayOrders = orders.filter((o) => sameDay(new Date(o.created_at), now));
+    const revenue = todayOrders
+      .filter((o) => !DEAD_STATUSES.has(o.status))
+      .reduce((sum, o) => sum + Number(o.grand_total ?? 0), 0);
+    const pending = orders.filter((o) => o.status === 'awaiting_merchant');
+    const done = orders.filter((o) => o.status === 'completed').length;
+    const rate = orders.length > 0 ? Math.round((done / orders.length) * 100) : 0;
+    const days = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(now);
+      d.setDate(now.getDate() - (6 - i));
+      const count = orders.filter((o) => sameDay(new Date(o.created_at), d)).length;
+      return { key: d.toISOString().slice(0, 10), label: 'SMTWTFS'[d.getDay()] ?? '', count };
+    });
+    const max = Math.max(1, ...days.map((d) => d.count));
+    const attention = [...pending]
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+      .slice(0, 3);
+    return { todayOrders: todayOrders.length, revenue, pending: pending.length, rate, days, max, attention };
+  }, [orders]);
+
+  const toggleLive = async () => {
+    if (!store) return;
+    setToggling(true);
+    try {
+      const next = !store.is_active;
+      const { error } = await client.from('merchants').update({ is_active: next }).eq('id', merchantId);
+      if (error) throw new Error(error.message);
+      setStore({ ...store, is_active: next });
+      showToast({
+        message: next ? 'Store is live. Customers can order again.' : 'Store paused. New orders are blocked until you go live.',
+        type: next ? 'success' : 'info',
+      });
+    } catch (err) {
+      showToast({ message: err instanceof Error ? err.message : 'Could not change status.', type: 'error' });
+    } finally {
+      setToggling(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.section}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (loadError && !store && orders.length === 0) {
+    return (
+      <View style={styles.section}>
+        <EmptyState
+          title="Could not load dashboard"
+          message={loadError}
+          action={<Button title="Try again" onPress={() => { setLoading(true); void load(); }} />}
+        />
+      </View>
+    );
+  }
+
+  const logoSrc = resolveStoreImage(client, store?.logo_url ?? null);
+
+  return (
+    <View style={styles.section}>
+      <Card variant="tinted">
+        <View style={styles.heroRow}>
+          {logoSrc ? (
+            <Image source={{ uri: logoSrc }} style={styles.heroLogo} />
+          ) : (
+            <View style={styles.heroLogoEmpty}>
+              <Text style={styles.logoLetter}>{(store?.name ?? 'S').slice(0, 1).toUpperCase()}</Text>
+            </View>
+          )}
+          <View style={styles.logoText}>
+            <Text style={styles.orderNumber}>{store?.name ?? 'My store'}</Text>
+            <Text style={styles.cardSub}>
+              {store ? `${store.town} · ${String(store.category).replace('_', ' ')}` : 'Store dashboard'}
+            </Text>
+          </View>
+          <Badge label={store?.is_active ? 'Live' : 'Paused'} status={store?.is_active ? 'success' : 'neutral'} />
+        </View>
+        <View style={styles.cardActions}>
+          <Button
+            title={toggling ? 'Working…' : store?.is_active ? 'Pause store' : 'Go live'}
+            variant={store?.is_active ? 'secondary' : 'primary'}
+            onPress={() => void toggleLive()}
+            disabled={toggling || !store}
+          />
+          <Button
+            title={stats.pending > 0 ? `Review ${stats.pending} new order${stats.pending === 1 ? '' : 's'}` : 'View orders'}
+            variant="secondary"
+            onPress={onGoOrders}
+          />
+        </View>
+      </Card>
+
+      <View style={styles.statGrid}>
+        <StatCard label="Today" value={String(stats.todayOrders)} hint="orders" />
+        <StatCard label="Revenue today" value={peso(stats.revenue)} hint="excl. cancelled" />
+        <StatCard label="Needs action" value={String(stats.pending)} hint="awaiting accept" />
+        <StatCard label="Completed" value={`${stats.rate}%`} hint="of last 100" />
+      </View>
+
+      <Card>
+        <Text style={styles.detailTitle}>Last 7 days</Text>
+        <View style={styles.bars}>
+          {stats.days.map((d) => (
+            <View key={d.key} style={styles.barCol}>
+              <Text style={styles.barCount}>{d.count}</Text>
+              <View style={styles.barTrack}>
+                <View
+                  style={[
+                    styles.barFill,
+                    d.count > 0 ? { height: `${Math.max(8, Math.round((d.count / stats.max) * 100))}%` } : { height: 3 },
+                  ]}
+                />
+              </View>
+              <Text style={styles.barLabel}>{d.label}</Text>
+            </View>
+          ))}
+        </View>
+      </Card>
+
+      {stats.attention.length > 0 ? (
+        <Card>
+          <Text style={styles.detailTitle}>Needs your confirmation</Text>
+          <Text style={styles.cardSub}>Oldest first — accept so the kitchen can start.</Text>
+          {stats.attention.map((o) => (
+            <View key={o.id} style={styles.attentionRow}>
+              <View style={styles.itemText}>
+                <Text style={styles.itemName}>{o.order_number}</Text>
+                <Text style={styles.cardSub}>
+                  {timeAgo(o.created_at)} · {peso(Number(o.grand_total))}
+                </Text>
+              </View>
+              <Button title="Review" variant="secondary" onPress={onGoOrders} />
+            </View>
+          ))}
+        </Card>
+      ) : (
+        <EmptyState
+          compact
+          title="All caught up"
+          message="New customer orders will pop up here the moment they arrive."
+        />
+      )}
+    </View>
   );
 }
 
@@ -92,6 +330,9 @@ function MerchantOrders({ merchantId }: { merchantId: string }) {
   const [inbox, setInbox] = useState<InboxTab>('new');
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<OrderRow | null>(null);
 
   const load = useCallback(async () => {
@@ -100,9 +341,15 @@ function MerchantOrders({ merchantId }: { merchantId: string }) {
       .select('*')
       .eq('merchant_id', merchantId)
       .order('created_at', { ascending: false })
-      .limit(50);
-    if (!error) setOrders(data ?? []);
+      .limit(100);
+    if (error) {
+      setLoadError(error.message);
+    } else {
+      setOrders((data ?? []) as OrderRow[]);
+      setLoadError(null);
+    }
     setLoading(false);
+    setRefreshing(false);
   }, [client, merchantId]);
 
   useEffect(() => {
@@ -132,7 +379,14 @@ function MerchantOrders({ merchantId }: { merchantId: string }) {
     [orders],
   );
 
-  const visible = inbox === 'all' ? orders : orders.filter((o) => INBOX_STATUS[inbox]?.includes(o.status));
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const scoped = inbox === 'all' ? orders : orders.filter((o) => INBOX_STATUS[inbox]?.includes(o.status));
+    if (!q) return scoped;
+    return scoped.filter((o) =>
+      `${o.order_number} ${o.dropoff_address ?? ''}`.toLowerCase().includes(q),
+    );
+  }, [orders, inbox, query]);
 
   const refreshSelected = useCallback(
     async (id: string) => {
@@ -155,19 +409,58 @@ function MerchantOrders({ merchantId }: { merchantId: string }) {
         value={inbox}
         onChange={setInbox}
       />
+      <TextField
+        placeholder="Search order no. or address…"
+        value={query}
+        onChangeText={setQuery}
+        returnKeyType="search"
+      />
+      <View style={styles.toolbarRow}>
+        <Text style={styles.cardSub}>
+          {visible.length} of {orders.length} order{orders.length === 1 ? '' : 's'}
+        </Text>
+        <Button
+          title={refreshing ? 'Refreshing…' : 'Refresh'}
+          variant="ghost"
+          onPress={() => { setRefreshing(true); void load(); }}
+          disabled={refreshing || loading}
+        />
+      </View>
+      {loadError ? (
+        <Card variant="tinted">
+          <Text style={styles.orderNumber}>Could not load orders</Text>
+          <Text style={styles.cardSub}>{loadError}</Text>
+          <View style={styles.cardActions}>
+            <Button
+              title="Try again"
+              variant="secondary"
+              onPress={() => { setRefreshing(true); void load(); }}
+              disabled={refreshing}
+            />
+          </View>
+        </Card>
+      ) : null}
       {loading ? (
         <ActivityIndicator size="large" color={colors.primary} />
       ) : visible.length === 0 ? (
         <EmptyState
-          title="Nothing here"
-          message={inbox === 'all' ? 'New customer orders appear here instantly.' : `No ${inbox} orders right now.`}
+          title={query.trim() ? 'No matches' : 'Nothing here'}
+          message={
+            query.trim()
+              ? `No orders match "${query.trim()}" in this tab.`
+              : inbox === 'all'
+                ? 'New customer orders appear here instantly.'
+                : `No ${inbox} orders right now.`
+          }
         />
       ) : (
         visible.map((o) => (
           <Card key={o.id}>
             <View style={styles.cardHead}>
               <View style={styles.cardTitle}>
-                <Text style={styles.orderNumber}>{o.order_number}</Text>
+                <Text style={styles.orderNumber}>
+                  {o.order_number} <Text style={styles.timeAgo}>· {timeAgo(o.created_at)}</Text>
+                </Text>
                 <Text style={styles.cardSub}>
                   {(FULFILLMENT_LABEL[o.fulfillment_mode] ?? o.fulfillment_mode) + ' · ' + peso(Number(o.grand_total))}
                 </Text>
@@ -513,6 +806,7 @@ function MerchantStore({ merchantId }: { merchantId: string }) {
   const [address, setAddress] = useState('');
   const [description, setDescription] = useState('');
   const [logoUri, setLogoUri] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
 
@@ -542,9 +836,20 @@ function MerchantStore({ merchantId }: { merchantId: string }) {
 
   const changeLogo = async () => {
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'] });
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        showToast({ message: 'Allow photo access to change your store photo.', type: 'error' });
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
       const asset = result.canceled ? null : result.assets[0];
       if (!asset || !profile) return;
+      setUploading(true);
       let body: FormData | ArrayBuffer;
       if (Platform.OS === 'web') {
         const form = new FormData();
@@ -563,9 +868,25 @@ function MerchantStore({ merchantId }: { merchantId: string }) {
       if (data) void data;
       const { data: url } = client.storage.from('store-logos').getPublicUrl(path);
       setLogoUri(`${url.publicUrl}?t=${Date.now()}`);
-      showToast({ message: 'Store logo updated.', type: 'success' });
+      showToast({ message: 'Store photo updated. Customers see it right away.', type: 'success' });
     } catch (err) {
       showToast({ message: err instanceof Error ? err.message : 'Logo upload failed.', type: 'error' });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const removeLogo = async () => {
+    setUploading(true);
+    try {
+      const { error } = await client.from('merchants').update({ logo_url: null }).eq('id', merchantId);
+      if (error) throw new Error(error.message);
+      setLogoUri(null);
+      showToast({ message: 'Store photo removed.', type: 'info' });
+    } catch (err) {
+      showToast({ message: err instanceof Error ? err.message : 'Could not remove photo.', type: 'error' });
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -649,20 +970,36 @@ function MerchantStore({ merchantId }: { merchantId: string }) {
         />
       </Card>
       <Card variant="tinted">
-        <View style={styles.logoRow}>
+        <Text style={styles.orderNumber}>Store photo</Text>
+        <Text style={styles.cardSub}>
+          This is what customers see in the shop list. Bright storefront or best-seller photos sell more.
+        </Text>
+        <View style={styles.photoWrap}>
           {logoUri ? (
-            <Image source={{ uri: logoUri }} style={styles.logo} />
+            <Image source={{ uri: logoUri }} style={styles.photo} />
           ) : (
-            <View style={styles.logoEmpty}>
-              <Text style={styles.logoLetter}>{name.slice(0, 1).toUpperCase()}</Text>
+            <View style={styles.photoEmpty}>
+              <Text style={styles.photoLetter}>{(name || 'S').slice(0, 1).toUpperCase()}</Text>
+              <Text style={styles.cardSub}>No photo yet</Text>
             </View>
           )}
-          <View style={styles.logoText}>
-            <Text style={styles.orderNumber}>{name}</Text>
-            <Text style={styles.cardSub}>Your store logo for customers</Text>
-          </View>
+          {uploading ? (
+            <View style={styles.photoOverlay}>
+              <ActivityIndicator size="large" color={colors.onPrimary} />
+            </View>
+          ) : null}
         </View>
-        <Button title="Change logo" variant="secondary" onPress={() => void changeLogo()} />
+        <View style={styles.cardActions}>
+          <Button
+            title={uploading ? 'Uploading…' : logoUri ? 'Change photo' : 'Add photo'}
+            variant="secondary"
+            onPress={() => void changeLogo()}
+            disabled={uploading}
+          />
+          {logoUri ? (
+            <Button title="Remove" variant="ghost" onPress={() => void removeLogo()} disabled={uploading} />
+          ) : null}
+        </View>
       </Card>
       <TextField label="Store name" value={name} onChangeText={setName} />
       <TextField label="Contact number" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
@@ -713,4 +1050,63 @@ const styles = StyleSheet.create({
   },
   logoLetter: { ...typography.title, color: colors.primaryDeep },
   logoText: { flex: 1, gap: 2 },
+  heroRow: { flexDirection: 'row', gap: spacing.md, alignItems: 'center', marginBottom: spacing.sm },
+  heroLogo: { width: 72, height: 72, borderRadius: radius.lg },
+  heroLogoEmpty: {
+    width: 72,
+    height: 72,
+    borderRadius: radius.lg,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  stat: {
+    flexGrow: 1,
+    flexBasis: '47%',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.hairline,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    gap: 2,
+  },
+  statValue: { ...typography.title, fontSize: 22, fontWeight: '800' },
+  statLabel: { ...typography.label, fontWeight: '700' },
+  statHint: { ...typography.caption, color: colors.muted },
+  bars: { flexDirection: 'row', gap: spacing.xs, alignItems: 'stretch', marginTop: spacing.sm },
+  barCol: { flex: 1, alignItems: 'center', gap: 4 },
+  barCount: { ...typography.caption, fontWeight: '700' },
+  barTrack: {
+    height: 72,
+    width: '100%',
+    borderRadius: radius.sm,
+    backgroundColor: colors.surfaceSunken,
+    justifyContent: 'flex-end',
+    overflow: 'hidden',
+  },
+  barFill: { width: '100%', backgroundColor: colors.primary, borderRadius: radius.sm },
+  barLabel: { ...typography.caption, color: colors.muted },
+  attentionRow: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center' },
+  toolbarRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  timeAgo: { ...typography.caption, color: colors.muted, fontWeight: '400' },
+  photoWrap: { marginTop: spacing.sm, marginBottom: spacing.sm },
+  photo: { width: '100%', height: 200, borderRadius: radius.lg },
+  photoEmpty: {
+    width: '100%',
+    height: 200,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surfaceSunken,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  photoLetter: { ...typography.title, fontSize: 44, color: colors.primaryDeep },
+  photoOverlay: {
+    ...StyleSheet.absoluteFill,
+    borderRadius: radius.lg,
+    backgroundColor: colors.overlay,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

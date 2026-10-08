@@ -1,10 +1,11 @@
-import { NavigationContainer, DarkTheme, type Theme } from '@react-navigation/native';
+import { NavigationContainer, DarkTheme, createNavigationContainerRef, type Theme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Notifications from 'expo-notifications';
 import { isNoTowns, resolveOptedTowns } from '@isla/shared';
 import { AuthProvider, useAuth } from '@isla/supabase';
 import { AppIcon, colors, radius, spacing, typography } from '@isla/ui';
@@ -16,7 +17,7 @@ import { consumeCheckoutReturn } from './src/lib/checkoutReturn';
 import { registerPushToken } from './src/lib/push';
 import { useConversations, useIncomingMessageAlerts } from './src/messaging/chat';
 import { useOrderUpdateAlerts } from './src/lib/orderAlerts';
-import { initNotifications, scheduleDailyCraving } from './src/lib/notify';
+import { initNotifications, getPromoTarget, scheduleAlakSingko, scheduleDailyCraving } from './src/lib/notify';
 import type { RootStackParamList, TabParamList } from './src/navigation/types';
 import AuthHomeScreen from './src/screens/auth/AuthHomeScreen';
 import LoginScreen from './src/screens/auth/LoginScreen';
@@ -266,6 +267,30 @@ function Root() {
   );
 }
 
+export const navigationRef = createNavigationContainerRef<RootStackParamList>();
+
+function goToPromoTarget(data: unknown) {
+  if (!navigationRef.isReady()) return;
+  const target = getPromoTarget(data);
+  if (!target) return;
+  try {
+    if (target.name === 'pabili-pulutan') {
+      // 5PM: straight to pre-filled pulutan Pabili form.
+      navigationRef.navigate('PabiliCreate', { comboId: target.comboId } as never);
+    } else {
+      // 11AM: Shop tab.
+      navigationRef.navigate('Tabs', { screen: 'Shop' } as never);
+    }
+  } catch {
+    // Rider/merchant shells lack these routes — fall back to Shop tab.
+    try {
+      navigationRef.navigate('Tabs', { screen: 'Shop' } as never);
+    } catch {
+      // Best-effort only.
+    }
+  }
+}
+
 export default function App() {
   // Expo web serves a generic shell whose <title> resolves to "undefined";
   // pin a real tab title (per-screen titles can extend this later).
@@ -279,6 +304,43 @@ export default function App() {
     void initNotifications();
     // Daily 11AM lunch-craving nudge (local-scheduled, best-effort).
     void scheduleDailyCraving();
+    // Daily 5PM alak-singko pulutan nudge (local-scheduled, best-effort).
+    void scheduleAlakSingko();
+  }, []);
+  // Promo tap: 11AM → Shop tab, 5PM → Pabili pulutan form. Covers cold start (killed app) + taps while running.
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    let alive = true;
+    // Killed-app launch: notification tap opened the app but nav wasn't ready yet.
+    // Poll briefly until navigation is ready, then jump.
+    void (async () => {
+      try {
+        const last = await Notifications.getLastNotificationResponseAsync();
+        const data = last?.notification.request.content.data;
+        if (alive && data && getPromoTarget(data)) {
+          for (let i = 0; i < 20 && alive; i++) {
+            if (navigationRef.isReady()) {
+              goToPromoTarget(data);
+              break;
+            }
+            await new Promise((r) => setTimeout(r, 250));
+          }
+        }
+      } catch {
+        // Tap routing is best-effort.
+      }
+    })();
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      try {
+        goToPromoTarget(response.notification.request.content.data);
+      } catch {
+        // Ignore.
+      }
+    });
+    return () => {
+      alive = false;
+      sub.remove();
+    };
   }, []);
   return (
     <SafeAreaProvider>
@@ -286,7 +348,7 @@ export default function App() {
         <AuthProvider client={supabase}>
           <AuthModeProvider>
             <CartProvider>
-              <NavigationContainer theme={navigationTheme}>
+              <NavigationContainer ref={navigationRef} theme={navigationTheme}>
                 <Root />
                 <OtaPrompt />
                 <UpdatePrompt />

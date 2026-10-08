@@ -64,6 +64,7 @@ const COMBO_ART: Record<string, { icon: AppIconName; bg: string; fg: string }> =
   sinigang: { icon: 'categoryFood', bg: '#FDEBD7', fg: colors.primaryDeep },
   adobo: { icon: 'categoryFood', bg: '#FDE5E5', fg: '#991B1B' },
   tinola: { icon: 'categoryFood', bg: '#E4F5E9', fg: '#14532D' },
+  pulutan: { icon: 'categoryFood', bg: '#FDE5E5', fg: '#991B1B' },
 };
 
 const comboArt = (id: string) =>

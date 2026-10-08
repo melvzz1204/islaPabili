@@ -4,7 +4,7 @@ import { profileById } from '../lib/adminData';
 import { sumBy } from '../lib/analytics';
 import { num, peso } from '../lib/currency';
 import { formatDateTime } from '../lib/format';
-import { Badge, Card, Detail, Empty, Field, Modal, SearchInput, Segmented, Skeleton } from '../components/ui';
+import { Badge, Card, Detail, Empty, Field, Modal, SearchInput, Segmented, Skeleton, statusTone } from '../components/ui';
 import { Icon } from '../components/icon';
 import { supabase } from '../lib/supabase';
 
@@ -157,6 +157,31 @@ function MerchantDetail({ data, id, busy, onToggle }: {
           </ul>
         )}
         {products.length > 20 ? <p className="muted">Showing 20 of {products.length}.</p> : null}
+      </div>
+      <div className="panel-soft">
+        <h4>Recent orders ({orders.length})</h4>
+        {orders.length === 0 ? <p className="muted">No orders for this store in the loaded window yet.</p> : (
+          <div className="table-wrap">
+            <table className="table">
+              <thead><tr><th>Order</th><th>Date</th><th>Customer</th><th>Status</th><th>Total</th></tr></thead>
+              <tbody>
+                {orders.slice(0, 20).map((o) => {
+                  const c = profileById(data.profiles, o.customer_id);
+                  return (
+                    <tr key={o.id}>
+                      <td><strong>{o.order_number}</strong><small>{o.fulfillment_mode?.replace(/_/g, ' ') ?? ''}</small></td>
+                      <td>{formatDateTime(o.created_at)}</td>
+                      <td>{c?.full_name || c?.username || '—'}<small>{c?.phone ?? ''}</small></td>
+                      <td><Badge tone={statusTone(o.status)}>{o.status.replace(/_/g, ' ').toUpperCase()}</Badge></td>
+                      <td><strong>{peso(Number(o.grand_total ?? 0))}</strong></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {orders.length > 20 ? <p className="muted">Showing 20 of {orders.length}.</p> : null}
       </div>
     </div>
   );

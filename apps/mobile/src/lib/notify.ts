@@ -125,12 +125,14 @@ export async function notifyLocal(alert: LocalAlert): Promise<void> {
   }
 }
 
-// --- Daily 11AM craving promo + delivered reminders ---------------------------
+// --- Daily 11AM craving promo + 5PM alak-singko + delivered reminders --------
 // Local-scheduled (works without server cron): the 11AM lunch nudge fires
-// every day at 11:00 local time, and a delivered order re-nudges the
-// customer 2h later if they have not tapped "Natanggap ko na".
+// every day at 11:00 local time, the 5PM alak-singko nudge fires every day
+// at 17:00 local time, and a delivered order re-nudges the customer 2h
+// later if they have not tapped "Natanggap ko na".
 
 const CRAVING_ID_KEY = 'isla-craving-sched-id';
+const ALAK_SINGKO_ID_KEY = 'isla-alak-singko-sched-id-v2';
 const DELIVERED_REMINDER_KEY = 'isla-delivered-reminders';
 
 const CRAVING_COPY: { title: string; body: string }[] = [
@@ -151,16 +153,17 @@ export async function scheduleDailyCraving(): Promise<void> {
     if (existing) return;
     const day = Math.floor(Date.now() / 86400000);
     const copy = CRAVING_COPY[day % CRAVING_COPY.length]!;
+    const data = { kind: 'promo', target: 'shop' };
     let id: string | null = null;
     try {
       id = await Notifications.scheduleNotificationAsync({
-        content: { title: copy.title, body: copy.body, sound: 'default', data: { kind: 'promo' } },
+        content: { title: copy.title, body: copy.body, sound: 'default', data },
         trigger: { type: Notifications.SchedulableTriggerInputTypes.DAILY, hour: 11, minute: 0 },
       });
     } catch {
       // Older SDKs accept the legacy calendar shape.
       id = await Notifications.scheduleNotificationAsync({
-        content: { title: copy.title, body: copy.body, sound: 'default', data: { kind: 'promo' } },
+        content: { title: copy.title, body: copy.body, sound: 'default', data },
         trigger: { hour: 11, minute: 0, repeats: true } as never,
       });
     }
@@ -168,6 +171,71 @@ export async function scheduleDailyCraving(): Promise<void> {
   } catch {
     // Promo nudge is best-effort.
   }
+}
+
+const ALAK_SINGKO_COPY: { title: string; body: string }[] = [
+  { title: 'Alak-singko na! 🍻', body: 'Alak-singko na magpabili ka na ng pulutan, hatid pa sa bahay nyo.' },
+  { title: 'Alak-singko na! 🍢', body: 'Pulutan + malamig, hatid sa bahay nyo. Magpabili ka na!' },
+  { title: '5PM na, shot na? 🥃', body: 'Alak-singko na magpabili ka na ng pulutan, hatid pa sa bahay nyo.' },
+  { title: 'Pang-inuman check 👀', body: 'Kulang ba pulutan nyo? Isang tap lang, rider na bahala maghatid.' },
+  { title: 'Alak-singko na! 🍻', body: 'Tawagin na tropa — pulutan coming right up. Pabili na sa IslaPabili!' },
+  { title: 'Haponan + pulutan? 🐟', body: 'Alak-singko na magpabili ka na ng pulutan, hatid pa sa bahay nyo.' },
+  { title: 'Weekday wind-down 🍺', body: 'Pagod sa work? Magpabili ng pulutan, relax ka na lang sa bahay.' },
+];
+
+/** Daily 17:00 local-time alak-singko nudge, ad-style. Idempotent per install. */
+export async function scheduleAlakSingko(): Promise<void> {
+  if (Platform.OS === 'web') return;
+  try {
+    // v1 scheduled with target=shop — migrate once to pabili-pulutan so the
+    // 5PM tap lands straight on the pre-filled pulutan Pabili form.
+    const legacy = await AsyncStorage.getItem('isla-alak-singko-sched-id');
+    if (legacy) {
+      await Notifications.cancelScheduledNotificationAsync(legacy).catch(() => undefined);
+      await AsyncStorage.removeItem('isla-alak-singko-sched-id');
+    }
+    const existing = await AsyncStorage.getItem(ALAK_SINGKO_ID_KEY);
+    if (existing) return;
+    const day = Math.floor(Date.now() / 86400000);
+    const copy = ALAK_SINGKO_COPY[day % ALAK_SINGKO_COPY.length]!;
+    const data = { kind: 'promo', target: 'pabili-pulutan', comboId: 'pulutan' };
+    let id: string | null = null;
+    try {
+      id = await Notifications.scheduleNotificationAsync({
+        content: { title: copy.title, body: copy.body, sound: 'default', data },
+        trigger: { type: Notifications.SchedulableTriggerInputTypes.DAILY, hour: 17, minute: 0 },
+      });
+    } catch {
+      // Older SDKs accept the legacy calendar shape.
+      id = await Notifications.scheduleNotificationAsync({
+        content: { title: copy.title, body: copy.body, sound: 'default', data },
+        trigger: { hour: 17, minute: 0, repeats: true } as never,
+      });
+    }
+    if (id) await AsyncStorage.setItem(ALAK_SINGKO_ID_KEY, id);
+  } catch {
+    // Promo nudge is best-effort.
+  }
+}
+
+export type PromoTarget =
+  | { name: 'shop' }
+  | { name: 'pabili-pulutan'; comboId: string };
+
+/** Promo tap routing. Old schedules with just `{ kind: 'promo' }` fall back to shop. */
+export function getPromoTarget(data: unknown): PromoTarget | null {
+  if (!data || typeof data !== 'object') return null;
+  const d = data as Record<string, unknown>;
+  if (d.kind !== 'promo') return null;
+  if (d.target === 'pabili-pulutan') {
+    return { name: 'pabili-pulutan', comboId: typeof d.comboId === 'string' ? d.comboId : 'pulutan' };
+  }
+  return { name: 'shop' };
+}
+
+/** Promo tap → Shop tab. Old 11AM schedules only have `{ kind: 'promo' }`, treat those as shop too. */
+export function isPromoTap(data: unknown): boolean {
+  return getPromoTarget(data) !== null;
 }
 
 async function readDeliveredReminders(): Promise<Record<string, string>> {
