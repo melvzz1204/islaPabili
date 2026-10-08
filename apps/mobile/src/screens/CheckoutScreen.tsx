@@ -21,14 +21,13 @@ import {
   typography,
   useToast,
 } from '@isla/ui';
-import { peso } from '../marketplace/data';
+import { JOLLIBEE_MERCHANT_ID, peso } from '../marketplace/data';
 import { loadFareConfig, quoteTrip, type Gps } from '../marketplace/fare';
 import { useCart } from '../marketplace/cart';
 import { requestCheckoutReturn } from '../lib/checkoutReturn';
 import { callRpc } from '../lib/rpc';
 import { invokePush } from '../lib/push';
 import { SingleTownPicker } from '../ui/TownPicker';
-import { AddressAutocomplete } from '../maps/AddressAutocomplete';
 import { reverseGeocode } from '../maps/geocode';
 import { BottomNav, BOTTOM_NAV_HEIGHT } from '../components/BottomNav';
 import { goToTab, type RootNavProp, type RootStackScreen } from '../navigation/types';
@@ -160,6 +159,16 @@ export default function CheckoutScreen({}: Props) {
     () => groupQuotes.reduce((n, g) => n + (g.quote?.fee ?? 0), 0),
     [groupQuotes],
   );
+
+  // Jollibee is rider-delivery only — no counter pickup for that store.
+  const hasJollibee = useMemo(
+    () => groupQuotes.some((g) => g.merchantId === JOLLIBEE_MERCHANT_ID),
+    [groupQuotes],
+  );
+
+  useEffect(() => {
+    if (hasJollibee) setFulfill('merchant_delivery');
+  }, [hasJollibee]);
   const distanceKm = useMemo(
     () => groupQuotes.reduce((n, g) => Math.max(n, g.quote?.distanceKm ?? 0), 0),
     [groupQuotes],
@@ -485,7 +494,7 @@ export default function CheckoutScreen({}: Props) {
                   ? summary.fulfillment === 'merchant_pickup'
                     ? `Prepare ${peso(summary.total)} in cash at the counter.`
                     : `Prepare ${peso(summary.total)} in cash for the rider, items plus delivery.`
-                  : 'Simulated e-wallet charge, no real money moves in this build.'}
+                  : 'E-wallet payment selected.'}
               </Text>
             </Card>
           </View>
@@ -707,14 +716,20 @@ export default function CheckoutScreen({}: Props) {
           </Pressable>
           <Pressable
             accessibilityRole="radio"
-            accessibilityState={{ checked: fulfill === 'merchant_pickup' }}
-            accessibilityLabel="Self pickup, no delivery fee"
-            onPress={() => setFulfill('merchant_pickup')}
-            style={[styles.fulfillCard, fulfill === 'merchant_pickup' && styles.fulfillCardActive]}
+            accessibilityState={{ checked: fulfill === 'merchant_pickup', disabled: hasJollibee }}
+            accessibilityLabel={hasJollibee ? 'Self pickup, not available for Jollibee' : 'Self pickup, no delivery fee'}
+            onPress={() => {
+              if (!hasJollibee) setFulfill('merchant_pickup');
+            }}
+            style={[
+              styles.fulfillCard,
+              fulfill === 'merchant_pickup' && styles.fulfillCardActive,
+              hasJollibee && styles.fulfillCardDisabled,
+            ]}
           >
             <AppIcon name="storefront" size={20} color={fulfill === 'merchant_pickup' ? colors.primaryDeep : colors.muted} />
-            <Text style={[styles.fulfillLabel, fulfill === 'merchant_pickup' && styles.fulfillLabelActive]}>Self pickup</Text>
-            <Text style={styles.fulfillHint}>Free · show code at counter</Text>
+            <Text style={[styles.fulfillLabel, fulfill === 'merchant_pickup' && styles.fulfillLabelActive, hasJollibee && styles.fulfillLabelDisabled]}>Self pickup</Text>
+            <Text style={styles.fulfillHint}>{hasJollibee ? 'Rider delivery only' : 'Free · show code at counter'}</Text>
           </Pressable>
         </View>
       </View>
@@ -741,18 +756,12 @@ export default function CheckoutScreen({}: Props) {
             <Text style={styles.fieldLabel}>Town</Text>
             <SingleTownPicker variant="field" value={town} onChange={setTown} />
           </View>
-          <AddressAutocomplete
+          <TextField
+            label="Address"
+            placeholder="Street / barangay / landmark"
             value={address}
             onChangeText={setAddress}
             multiline
-            onPickSuggestion={(p) => {
-              const lat = Number(p.lat);
-              const lng = Number(p.lon);
-              if (Number.isFinite(lat) && Number.isFinite(lng)) {
-                setGps({ lat, lng });
-                showToast({ message: 'Address set from search, fee now uses that spot.', type: 'success' });
-              }
-            }}
           />
           <Button
             title={gps ? 'Location pinned ✓, tap to re-pin' : 'Use my exact location'}
@@ -778,7 +787,9 @@ export default function CheckoutScreen({}: Props) {
             onChange={setPay}
             options={(Object.keys(PAY_LABELS) as PayMethod[]).map((m) => ({
               value: m,
-              label: m === 'cod' ? PAY_LABELS[m] : `${PAY_LABELS[m]} (simulated)`,
+              label: PAY_LABELS[m],
+              caption: m === 'cod' ? 'Pay in cash' : 'Coming soon',
+              disabled: m !== 'cod',
             }))}
           />
         </Card>

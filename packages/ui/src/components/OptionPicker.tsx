@@ -4,9 +4,11 @@ import { AppIcon } from '../icons';
 import { colors, radius, spacing, typography } from '../tokens';
 import { SheetModal } from './SheetModal';
 
+type Option<T extends string> = { value: T; label: string; caption?: string; disabled?: boolean };
+
 type OptionPickerProps<T extends string> = {
   value: T | null;
-  options: readonly { value: T; label: string; caption?: string }[];
+  options: readonly Option<T>[];
   onChange: (value: T) => void;
   /** `list` for inline chips, `sheet` for a tappable field that opens a sheet. */
   variant?: 'list' | 'field';
@@ -37,11 +39,20 @@ export function OptionPicker<T extends string>({
           <Pressable
             key={opt.value}
             accessibilityRole="button"
-            accessibilityState={{ selected: active }}
-            onPress={() => onChange(opt.value)}
-            style={({ pressed }) => [styles.chip, active && styles.chipActive, pressed && styles.pressed]}
+            accessibilityState={{ selected: active, disabled: !!opt.disabled }}
+            onPress={() => {
+              if (!opt.disabled) onChange(opt.value);
+            }}
+            style={({ pressed }) => [
+              styles.chip,
+              active && styles.chipActive,
+              opt.disabled && styles.chipDisabled,
+              pressed && !opt.disabled && styles.pressed,
+            ]}
           >
-            <Text style={[styles.chipLabel, active && styles.chipLabelActive]}>{opt.label}</Text>
+            <Text style={[styles.chipLabel, active && styles.chipLabelActive, opt.disabled && styles.chipLabelDisabled]}>
+              {opt.label}
+            </Text>
           </Pressable>
         );
       })}
@@ -56,7 +67,7 @@ function FieldPicker<T extends string>({
   placeholder,
 }: {
   value: T | null;
-  options: readonly { value: T; label: string; caption?: string }[];
+  options: readonly Option<T>[];
   onChange: (value: T) => void;
   placeholder: string;
 }) {
@@ -92,16 +103,26 @@ function FieldPicker<T extends string>({
             <Pressable
               key={opt.value}
               accessibilityRole="button"
-              accessibilityLabel={opt.label}
-              accessibilityState={{ selected: isCurrent }}
+              accessibilityLabel={opt.disabled ? `${opt.label}, unavailable` : opt.label}
+              accessibilityState={{ selected: isCurrent, disabled: !!opt.disabled }}
               onPress={() => {
+                if (opt.disabled) return;
                 onChange(opt.value);
                 setOpen(false);
               }}
-              style={({ pressed }) => [styles.optionRow, isCurrent && styles.optionRowActive, pressed && styles.pressed]}
+              style={({ pressed }) => [
+                styles.optionRow,
+                isCurrent && styles.optionRowActive,
+                opt.disabled && styles.optionRowDisabled,
+                pressed && !opt.disabled && styles.pressed,
+              ]}
             >
               <View style={styles.optionText}>
-                <Text style={[styles.optionLabel, isCurrent && styles.optionLabelActive]}>{opt.label}</Text>
+                <Text
+                  style={[styles.optionLabel, isCurrent && styles.optionLabelActive, opt.disabled && styles.optionLabelDisabled]}
+                >
+                  {opt.label}
+                </Text>
                 {opt.caption ? <Text style={styles.fieldCaption}>{opt.caption}</Text> : null}
               </View>
               {isCurrent ? <AppIcon name="check" size={18} color={colors.primary} /> : null}
@@ -127,6 +148,8 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: colors.text, borderColor: colors.text },
   chipLabel: { ...typography.label, color: colors.body },
   chipLabelActive: { color: colors.onPrimary },
+  chipDisabled: { backgroundColor: colors.surfaceSunken, borderColor: colors.hairline },
+  chipLabelDisabled: { color: colors.faint },
 
   fieldText: { flex: 1, gap: 2 },
   field: {
@@ -160,5 +183,7 @@ const styles = StyleSheet.create({
   optionText: { flex: 1, gap: 1 },
   optionLabel: { ...typography.body, color: colors.body },
   optionLabelActive: { color: colors.primaryDeep, fontWeight: '700' },
+  optionRowDisabled: { backgroundColor: colors.surfaceSunken, borderColor: colors.hairline },
+  optionLabelDisabled: { color: colors.faint },
   pressed: { opacity: 0.7 },
 });
