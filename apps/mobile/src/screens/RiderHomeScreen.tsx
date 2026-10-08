@@ -61,7 +61,22 @@ type PabiliItem = Database['public']['Tables']['order_items']['Row'];
 type PabiliRequest = Database['public']['Tables']['order_requests']['Row'];
 
 type IncomingOffer = { request: PabiliRequest; order: PabiliOrder; items: PabiliItem[] };
-type DoneOrder = { id: string; order_number: string; total_delivery_fee: number | string | null; created_at: string };
+type DoneOrder = {
+  id: string;
+  order_number: string;
+  total_delivery_fee: number | string | null;
+  tip_amount: number | string | null;
+  grand_total: number | string | null;
+  town: string;
+  dropoff_address: string | null;
+  dropoff_notes: string | null;
+  fulfillment_mode: string;
+  merchant_id: string | null;
+  claim_code: string | null;
+  delivered_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+};
 
 const MINE_STATUSES = ['rider_assigned', 'items_purchased', 'in_transit', 'delivered'] as const;
 
@@ -218,7 +233,9 @@ export default function RiderHomeScreen() {
     if (!profile) return;
     const { data, error } = await client
       .from('orders')
-      .select('id, order_number, total_delivery_fee, created_at')
+      .select(
+        'id, order_number, total_delivery_fee, tip_amount, grand_total, town, dropoff_address, dropoff_notes, fulfillment_mode, merchant_id, claim_code, delivered_at, completed_at, created_at',
+      )
       .eq('rider_id', profile.id)
       .eq('status', 'completed')
       .order('created_at', { ascending: false })
@@ -457,7 +474,7 @@ export default function RiderHomeScreen() {
   };
 
   return (
-    <Screen footer={<RiderTabBar tab={tab} onChange={changeTab} requestCount={incoming.length} />} footerHeight={RIDER_BAR_HEIGHT}>
+      <Screen footer={<RiderTabBar tab={tab} onChange={changeTab} requestCount={incoming.length} deliveryCount={mine.length} />} footerHeight={RIDER_BAR_HEIGHT}>
       {mapOrderId ? (
         <RiderTrackView
           order={mine.find((o) => o.id === mapOrderId) ?? null}
@@ -869,6 +886,111 @@ function RequestsView({
   );
 }
 
+// --- Completed delivery details ---------------------------------------------
+
+function HistoryDetailSheet({ order, onClose }: { order: DoneOrder | null; onClose: () => void }) {
+  const { client } = useAuth();
+  const [items, setItems] = useState<PabiliItem[]>([]);
+  const [loadingItems, setLoadingItems] = useState(false);
+
+  useEffect(() => {
+    if (!order) return;
+    let active = true;
+    setLoadingItems(true);
+    void client
+      .from('order_items')
+      .select('*')
+      .eq('order_id', order.id)
+      .then(({ data }) => {
+        if (!active) return;
+        setItems((data ?? []) as PabiliItem[]);
+        setLoadingItems(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [client, order]);
+
+  const fee = Number(order?.total_delivery_fee ?? 0);
+  const tip = Number(order?.tip_amount ?? 0);
+
+  return (
+    <SheetModal
+      visible={order != null}
+      title={order ? `#${order.order_number}` : ''}
+      subtitle={order ? `Completed · ${new Date(order.created_at).toLocaleString()}` : undefined}
+      onClose={onClose}
+    >
+      {order ? (
+        <View style={styles.detailBody}>
+          <View style={styles.detailRow}>
+            <Badge label="Done" status="delivered" />
+            <Text style={styles.muted}>{order.fulfillment_mode.replace(/_/g, ' ')}</Text>
+          </View>
+          <View>
+            <Text style={styles.detailLabel}>Drop-off</Text>
+            <Text style={styles.detailValue}>
+              {TOWN_LABELS[order.town as Town] ?? order.town}
+              {order.dropoff_address ? ` · ${order.dropoff_address}` : ''}
+            </Text>
+          </View>
+          <View>
+            <Text style={styles.detailLabel}>Customer</Text>
+            <Text style={styles.detailValue}>{order.dropoff_notes || 'No notes left'}</Text>
+          </View>
+          {order.claim_code ? (
+            <View>
+              <Text style={styles.detailLabel}>Counter code</Text>
+              <Text style={styles.claimCode}>{order.claim_code}</Text>
+            </View>
+          ) : null}
+          <View>
+            <Text style={styles.detailLabel}>Items ({items.length})</Text>
+            {loadingItems ? (
+              <Text style={styles.muted}>Loading items…</Text>
+            ) : items.length === 0 ? (
+              <Text style={styles.muted}>No item lines on this order.</Text>
+            ) : (
+              items.map((it) => (
+                <Text key={it.id} style={styles.itemLine} numberOfLines={2}>
+                  {it.quantity}× {it.name}
+                </Text>
+              ))
+            )}
+          </View>
+          <View style={styles.payoutBox}>
+            <View style={styles.payoutRow}>
+              <Text style={styles.muted}>Delivery fee</Text>
+              <Text style={styles.detailValue}>{peso(fee)}</Text>
+            </View>
+            {tip > 0 ? (
+              <View style={styles.payoutRow}>
+                <Text style={styles.muted}>Tip</Text>
+                <Text style={styles.detailValue}>+{peso(tip)}</Text>
+              </View>
+            ) : null}
+            <View style={styles.payoutRow}>
+              <Text style={styles.detailValue}>You earned</Text>
+              <Text style={styles.historyFee}>+{peso(fee + tip)}</Text>
+            </View>
+          </View>
+          {order.delivered_at || order.completed_at ? (
+            <Text style={styles.muted}>
+              {[order.delivered_at ? `Delivered ${new Date(order.delivered_at).toLocaleString()}` : null,
+                order.completed_at ? `Confirmed ${new Date(order.completed_at).toLocaleString()}` : null]
+                .filter(Boolean)
+                .join(' · ')}
+            </Text>
+          ) : null}
+          <Button title="Close" variant="secondary" onPress={onClose} />
+        </View>
+      ) : (
+        <></>
+      )}
+    </SheetModal>
+  );
+}
+
 // --- Deliveries ---------------------------------------------------------------
 
 function DeliveriesView({
@@ -890,6 +1012,7 @@ function DeliveriesView({
   onNudge: (order: PabiliOrder) => void;
   onOpenMap: (order: PabiliOrder) => void;
 }) {
+  const [selected, setSelected] = useState<DoneOrder | null>(null);
   return (
     <View style={styles.tabBody}>
       <View style={styles.greetRow}>
@@ -975,16 +1098,24 @@ function DeliveriesView({
           <Text style={styles.muted}>Finished deliveries show up here.</Text>
         ) : (
           history.slice(0, 20).map((o) => (
-            <View key={o.id} style={styles.historyRow}>
+            <Pressable
+              key={o.id}
+              onPress={() => setSelected(o)}
+              accessibilityRole="button"
+              accessibilityLabel={`View delivery ${o.order_number}`}
+              style={({ pressed }) => [styles.historyRow, pressed && styles.pressed]}
+            >
               <View style={styles.historyText}>
                 <Text style={styles.historyNo}>#{o.order_number}</Text>
                 <Text style={styles.muted}>{new Date(o.created_at).toLocaleDateString()}</Text>
               </View>
               <Text style={styles.historyFee}>+{peso(Number(o.total_delivery_fee ?? 0))}</Text>
-            </View>
+              <AppIcon name="chevronRight" size={18} color={colors.faint} />
+            </Pressable>
           ))
         )}
       </View>
+      <HistoryDetailSheet order={selected} onClose={() => setSelected(null)} />
     </View>
   );
 }
@@ -1359,6 +1490,7 @@ function RiderTrackView({
 
 function EarningsView({ stats, history }: { stats: Stats; history: DoneOrder[] }) {
   const avg = stats.deliveries > 0 ? stats.totalEarned / stats.deliveries : 0;
+  const [selected, setSelected] = useState<DoneOrder | null>(null);
   return (
     <View style={styles.tabBody}>
       <View style={styles.greetRow}>
@@ -1389,16 +1521,24 @@ function EarningsView({ stats, history }: { stats: Stats; history: DoneOrder[] }
           <Text style={styles.muted}>Completed payouts list here with their fees.</Text>
         ) : (
           history.map((o) => (
-            <View key={o.id} style={styles.historyRow}>
+            <Pressable
+              key={o.id}
+              onPress={() => setSelected(o)}
+              accessibilityRole="button"
+              accessibilityLabel={`View payout ${o.order_number}`}
+              style={({ pressed }) => [styles.historyRow, pressed && styles.pressed]}
+            >
               <View style={styles.historyText}>
                 <Text style={styles.historyNo}>#{o.order_number}</Text>
                 <Text style={styles.muted}>{new Date(o.created_at).toLocaleString()}</Text>
               </View>
               <Text style={styles.historyFee}>+{peso(Number(o.total_delivery_fee ?? 0))}</Text>
-            </View>
+              <AppIcon name="chevronRight" size={18} color={colors.faint} />
+            </Pressable>
           ))
         )}
       </View>
+      <HistoryDetailSheet order={selected} onClose={() => setSelected(null)} />
     </View>
   );
 }
@@ -1466,10 +1606,12 @@ function RiderTabBar({
   tab,
   onChange,
   requestCount,
+  deliveryCount,
 }: {
   tab: RiderTab;
   onChange: (tab: RiderTab) => void;
   requestCount: number;
+  deliveryCount: number;
 }) {
   const { conversations } = useConversations('rider');
   const unreadMessages = conversations.filter((c) => c.unread).length;
@@ -1477,13 +1619,20 @@ function RiderTabBar({
     <View style={[styles.bar, shadows.sticky]}>
       {TABS.map((t) => {
         const active = tab === t.value;
-        const badge = t.value === 'requests' ? requestCount : t.value === 'messages' ? unreadMessages : 0;
+        const badge =
+          t.value === 'requests'
+            ? requestCount
+            : t.value === 'deliveries'
+              ? deliveryCount
+              : t.value === 'messages'
+                ? unreadMessages
+                : 0;
         return (
           <Pressable
             key={t.value}
             accessibilityRole="tab"
             accessibilityState={{ selected: active }}
-            accessibilityLabel={t.label}
+            accessibilityLabel={badge > 0 ? `${t.label}, ${badge} active` : t.label}
             onPress={() => onChange(t.value)}
             style={({ pressed }) => [styles.tabItem, pressed && styles.pressed]}
           >
@@ -1604,6 +1753,17 @@ const styles = StyleSheet.create({
   historyText: { flex: 1, gap: 1 },
   historyNo: { ...typography.label, fontWeight: '700' },
   historyFee: { ...typography.price, fontSize: 15, color: colors.successDark },
+  detailBody: { gap: spacing.md, paddingBottom: spacing.sm },
+  detailRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  detailLabel: { ...typography.caption, color: colors.muted, fontWeight: '700', textTransform: 'uppercase' },
+  detailValue: { ...typography.body, fontWeight: '600' },
+  payoutBox: {
+    gap: spacing.xs,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceSunken,
+    padding: spacing.md,
+  },
+  payoutRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
 
   earnHero: { backgroundColor: colors.primaryDeep, borderWidth: 0, gap: spacing.xs },
   earnTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
