@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   isAllTowns,
   isNoTowns,
@@ -8,7 +8,7 @@ import {
   townSelectionLabel,
   type Town,
 } from '@isla/shared';
-import { signOut as supabaseSignOut, useAuth } from '@isla/supabase';
+import { signOut as supabaseSignOut, resolveProviderAvatar, useAuth } from '@isla/supabase';
 import {
   AppIcon,
   Button,
@@ -54,6 +54,37 @@ export default function ProfileScreen({ navigation }: Props) {
   const displayName =
     profile?.full_name || profile?.username || email.split('@')[0] || 'IslaPabili shopper';
   const phone = profile?.phone ?? '';
+  // Provider picture straight from the auth session (Google preferred over
+  // expiring Facebook lookaside URLs — see resolveProviderAvatar) as
+  // fallback, so OAuth users see their photo even if the profiles.avatar_url
+  // sync hasn't landed yet (e.g. migration not pushed).
+  const metaAvatar = resolveProviderAvatar(session?.user);
+  const avatarUrl = profile?.avatar_url || metaAvatar || null;
+  // A stored avatar_url can go stale (expired provider URL, truncated
+  // value). If the image fails to load, fall back to the initial and clear
+  // the bad value once (guarded, so a still-broken provider URL can't cause
+  // a clear → re-sync loop) so the next refresh re-syncs from Google/FB.
+  const [avatarBroken, setAvatarBroken] = useState(false);
+  const clearedAvatars = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    setAvatarBroken(false);
+  }, [avatarUrl]);
+  const handleAvatarError = () => {
+    setAvatarBroken(true);
+    if (
+      profile &&
+      profile.avatar_url &&
+      profile.avatar_url === avatarUrl &&
+      !clearedAvatars.current.has(avatarUrl)
+    ) {
+      clearedAvatars.current.add(avatarUrl);
+      void client
+        .from('profiles')
+        .update({ avatar_url: null })
+        .eq('id', profile.id)
+        .then(() => refreshProfile());
+    }
+  };
   const initial = displayName.trim().charAt(0).toUpperCase() || 'I';
 
   const openTownEditor = () => {
@@ -112,9 +143,17 @@ export default function ProfileScreen({ navigation }: Props) {
 
       <Card style={styles.identityCard} variant="flat">
         <View style={styles.identityRow}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initial}</Text>
-          </View>
+          {avatarUrl && !avatarBroken ? (
+            <Image
+              source={{ uri: avatarUrl }}
+              style={styles.avatarImage}
+              onError={handleAvatarError}
+            />
+          ) : (
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>{initial}</Text>
+            </View>
+          )}
           <View style={styles.identityText}>
             <Text style={styles.name} numberOfLines={1}>
               {displayName}
@@ -264,6 +303,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarText: { ...typography.heading, color: colors.onPrimary },
+  avatarImage: {
+    width: 56,
+    height: 56,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceSunken,
+  },
   identityText: { flex: 1, gap: 1 },
   name: { ...typography.subhead, fontWeight: '700' },
   detail: { ...typography.caption },

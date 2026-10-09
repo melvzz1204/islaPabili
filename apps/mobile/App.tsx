@@ -141,7 +141,7 @@ function LoadingGate() {
 }
 
 function Root() {
-  const { client, session, loading, profile, profileLoading } = useAuth();
+  const { client, session, loading, profile, profileLoading, profileLoaded } = useAuth();
   const { mode, loaded: modeLoaded, loggedOut, setLoggedOut } = useAuthMode();
   const wasSession = useRef(false);
   const pushRegistered = useRef<string | null>(null);
@@ -190,7 +190,7 @@ function Root() {
     wasSession.current = !!session;
   }, [session, mode, setLoggedOut]);
 
-  if (loading || !modeLoaded || (session && profileLoading) || (!session && welcomeSeen === null)) {
+  if (loading || !modeLoaded || (session && (!profileLoaded || profileLoading)) || (!session && welcomeSeen === null)) {
     return <LoadingGate />;
   }
 
@@ -241,9 +241,11 @@ function Root() {
   const toCheckout = Boolean(session) && consumeCheckoutReturn();
 
   // Onboarding always wins: a half-finished profile blocks checkout validation.
-  if (session) {
+  // profileLoaded guarantees we only show it when the profile is confirmed
+  // incomplete — never as a flash while the profile is still fetching.
+  if (session && profileLoaded) {
     // resolveOptedTowns falls back to home_town for pre-migration rows.
-    if (profile?.phone == null || isNoTowns(resolveOptedTowns(profile))) {
+    if (profile == null || profile.phone == null || isNoTowns(resolveOptedTowns(profile))) {
       return <OnboardingScreen />;
     }
   }

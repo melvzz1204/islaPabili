@@ -109,6 +109,44 @@ export async function verifyPhoneOtp(
   return { error: message(error) };
 }
 
+export type ProviderIdentity = {
+  provider?: string;
+  identity_data?: Record<string, unknown> | null;
+};
+
+export type AvatarUser = {
+  user_metadata?: Record<string, unknown> | null;
+  identities?: ProviderIdentity[] | null;
+};
+
+/**
+ * Best profile picture for an auth user.
+ *
+ * Prefers long-lived URLs (Google `lh3.googleusercontent.com`) over expiring
+ * ones (Facebook `platform-lookaside.fbsbx.com` lookaside URLs go stale and
+ * often refuse to load inside React Native's image loader). Linked accounts
+ * (Google + Facebook on one user) resolve to the Google photo.
+ */
+export function resolveProviderAvatar(user: AvatarUser | null | undefined): string | null {
+  if (!user) return null;
+  const pick = (obj: Record<string, unknown> | undefined | null): string | null => {
+    if (!obj) return null;
+    const v = obj.avatar_url ?? obj.picture;
+    return typeof v === 'string' && v.startsWith('https://') ? v : null;
+  };
+  const identities = user.identities ?? [];
+  const ordered = [
+    ...identities.filter((i) => i?.provider === 'google'),
+    ...identities.filter((i) => i?.provider !== 'google'),
+  ];
+  const candidates = [...ordered.map((i) => pick(i?.identity_data)), pick(user.user_metadata)];
+  return (
+    candidates.find((u) => u && !u.includes('platform-lookaside.fbsbx.com')) ??
+    candidates.find((u) => !!u) ??
+    null
+  );
+}
+
 export async function signOut(client: Supabase): Promise<void> {
   // The revoke call can hang (offline / unreachable backend) — never let it
   // block logout UX. Cap it, then clear the local session regardless.
