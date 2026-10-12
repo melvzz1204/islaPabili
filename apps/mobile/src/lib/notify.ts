@@ -132,6 +132,8 @@ export async function notifyLocal(alert: LocalAlert): Promise<void> {
 // later if they have not tapped "Natanggap ko na".
 
 const CRAVING_ID_KEY = 'isla-craving-sched-id';
+const MORNING_ID_KEY = 'isla-morning-sched-id';
+const MERIENDA_ID_KEY = 'isla-merienda-sched-id';
 const ALAK_SINGKO_ID_KEY = 'isla-alak-singko-sched-id-v2';
 const DELIVERED_REMINDER_KEY = 'isla-delivered-reminders';
 
@@ -171,6 +173,67 @@ export async function scheduleDailyCraving(): Promise<void> {
   } catch {
     // Promo nudge is best-effort.
   }
+}
+
+const MORNING_COPY: { title: string; body: string }[] = [
+  { title: 'Nakabili ka na ba ng lulutuin for lunch? 🧺', body: 'Magpabili ka na ng rekado — hatid bago mag-tanghali.' },
+  { title: 'Mainit ang panahon ☀️', body: 'Wag ka na lumabas — magpabili ka na lang, rider ang bahala!' },
+  { title: 'Anong gusto mong kainin mamayang lunch? Jollibee? 🍗', body: 'Pabili na — mainit-init pa pagdating sa bahay nyo.' },
+  { title: 'Pamalengke ng maaga? 🐟', body: 'Fresh isda at gulay, isang tap lang — hindi ka na pipila sa init.' },
+  { title: 'Good morning! Almusal check ☕', body: 'Pandesal, kape o tapsilog — magpabili ka na ng umagahan.' },
+  { title: 'Kulang ba rekado mo? 🧄', body: 'Sibuyas, bawang, sili — pahabol bago ka magluto ng lunch.' },
+  { title: 'Baon for school o work? 🎒', body: 'Ihanda na ng maaga — magpabili ka na, hatid on time.' },
+];
+
+const MERIENDA_COPY: { title: string; body: string }[] = [
+  { title: 'Meryenda time! 🍩', body: 'Anong merienda mo? Pabili ka na — mainit-init pa pagdating.' },
+  { title: 'May lulutuin ka ba mamayang dinner? 🍲', body: 'Mamalengke na ng maaga, iwas siksikan mamayang hapon.' },
+  { title: 'Pagod ka siguro sa trabaho 😮‍💨', body: 'Deserve mo ang masarap na pagkain — wag ka na lumabas, ako na bahala!' },
+  { title: 'Banana cue o turon? 🍌', body: 'Classic merienda cravings, hatid sa bahay nyo. Pabili na!' },
+  { title: 'Halo-halo weather? 🍧', body: 'Mainit pa rin — magpabili ng pangpalamig ngayong merienda!' },
+  { title: 'Tinapay at palaman run 🥖', body: 'Pang-merienda ngayon, pang-agahan bukas — isang tap lang.' },
+  { title: 'Panghimagas check 🍮', body: 'Leche flan, minatamis o prutas — pangtapos ng araw, hatid sa yo.' },
+];
+
+async function scheduleDailyPromo(
+  storageKey: string,
+  copy: { title: string; body: string }[],
+  hour: number,
+): Promise<void> {
+  if (Platform.OS === 'web') return;
+  try {
+    const existing = await AsyncStorage.getItem(storageKey);
+    if (existing) return;
+    const day = Math.floor(Date.now() / 86400000);
+    const item = copy[day % copy.length]!;
+    const data = { kind: 'promo', target: 'shop' };
+    let id: string | null = null;
+    try {
+      id = await Notifications.scheduleNotificationAsync({
+        content: { title: item.title, body: item.body, sound: 'default', data },
+        trigger: { type: Notifications.SchedulableTriggerInputTypes.DAILY, hour, minute: 0 },
+      });
+    } catch {
+      // Older SDKs accept the legacy calendar shape.
+      id = await Notifications.scheduleNotificationAsync({
+        content: { title: item.title, body: item.body, sound: 'default', data },
+        trigger: { hour, minute: 0, repeats: true } as never,
+      });
+    }
+    if (id) await AsyncStorage.setItem(storageKey, id);
+  } catch {
+    // Promo nudge is best-effort.
+  }
+}
+
+/** Daily 9:00 local-time morning nudge (lunch prep + errands). Idempotent per install. */
+export async function scheduleMorningPromo(): Promise<void> {
+  return scheduleDailyPromo(MORNING_ID_KEY, MORNING_COPY, 9);
+}
+
+/** Daily 15:00 local-time merienda nudge. Idempotent per install. */
+export async function scheduleMeriendaPromo(): Promise<void> {
+  return scheduleDailyPromo(MERIENDA_ID_KEY, MERIENDA_COPY, 15);
 }
 
 const ALAK_SINGKO_COPY: { title: string; body: string }[] = [

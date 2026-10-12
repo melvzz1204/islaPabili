@@ -17,11 +17,12 @@ schemas in `packages/shared`) and enforces business rules.
 | `webhook-ewallet`   | GCash / Maya payment confirmation webhook (record-only for MVP).        |
 | `voucher-validate`  | Redeem/validate promo vouchers at checkout.                             |
 | `reminder-send`     | Re-nudge customers with orders stuck in `delivered` (no auto-complete). |
-| `promo-craving`     | Daily 11:00AM lunch-craving broadcast to all customers (ad-style).      |
+| `promo-craving`     | Daily promo broadcasts to all customers (ad-style). Slots: `morning` 9AM, `lunch` 11AM, `merienda` 3PM. |
 
 ## Scheduled jobs (cron)
 
-`reminder-send` (hourly) and `promo-craving` (daily 11:00 Asia/Manila) are
+`reminder-send` (hourly) and `promo-craving` (daily 9AM/11AM/3PM Asia/Manila,
+via `slot: morning|lunch|merienda`) are
 invoked by Supabase cron with a shared `CRON_SECRET` (set via
 `supabase secrets set CRON_SECRET=...`, header `x-cron-secret`). Both also
 accept an admin JWT for manual runs from the dashboard.
@@ -53,7 +54,37 @@ select cron.schedule(
       'Content-Type', 'application/json',
       'x-cron-secret', '<CRON_SECRET>'
     ),
-    body := '{}'::jsonb
+    body := '{"slot":"lunch"}'::jsonb
+  );
+  $$
+);
+
+select cron.schedule(
+  'promo-morning-9am',
+  '0 1 * * *', -- 09:00 Asia/Manila (UTC+8)
+  $$
+  select net.http_post(
+    url := 'https://<project-ref>.supabase.co/functions/v1/promo-craving',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'x-cron-secret', '<CRON_SECRET>'
+    ),
+    body := '{"slot":"morning"}'::jsonb
+  );
+  $$
+);
+
+select cron.schedule(
+  'promo-merienda-3pm',
+  '0 7 * * *', -- 15:00 Asia/Manila (UTC+8)
+  $$
+  select net.http_post(
+    url := 'https://<project-ref>.supabase.co/functions/v1/promo-craving',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'x-cron-secret', '<CRON_SECRET>'
+    ),
+    body := '{"slot":"merienda"}'::jsonb
   );
   $$
 );

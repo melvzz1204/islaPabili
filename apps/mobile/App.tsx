@@ -18,7 +18,7 @@ import { registerPushToken } from './src/lib/push';
 import { useConversations, useIncomingMessageAlerts } from './src/messaging/chat';
 import { useUnreadStoreCount } from './src/messaging/storeChat';
 import { useOrderUpdateAlerts } from './src/lib/orderAlerts';
-import { initNotifications, getPromoTarget, scheduleAlakSingko, scheduleDailyCraving, setPendingRiderTab } from './src/lib/notify';
+import { initNotifications, getPromoTarget, scheduleAlakSingko, scheduleDailyCraving, scheduleMeriendaPromo, scheduleMorningPromo, setPendingRiderTab } from './src/lib/notify';
 import type { RootStackParamList, TabParamList } from './src/navigation/types';
 import AuthHomeScreen from './src/screens/auth/AuthHomeScreen';
 import LoginScreen from './src/screens/auth/LoginScreen';
@@ -340,8 +340,12 @@ export default function App() {
   // Notification channels + foreground banner/sound, once per launch.
   useEffect(() => {
     void initNotifications();
+    // Daily 9AM morning nudge (local-scheduled, best-effort).
+    void scheduleMorningPromo();
     // Daily 11AM lunch-craving nudge (local-scheduled, best-effort).
     void scheduleDailyCraving();
+    // Daily 3PM merienda nudge (local-scheduled, best-effort).
+    void scheduleMeriendaPromo();
     // Daily 5PM alak-singko pulutan nudge (local-scheduled, best-effort).
     void scheduleAlakSingko();
   }, []);
