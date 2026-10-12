@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -20,7 +20,7 @@ import {
   typography,
   useToast,
 } from '@isla/ui';
-import { ChatComposer, ChatThread } from '../messaging/ChatThread';
+import { ChatComposer, ChatThread, conversationColor } from '../messaging/ChatThread';
 import {
   fetchStoreThread,
   sendStoreMessage,
@@ -29,6 +29,7 @@ import {
   type StoreMessageRow,
 } from '../messaging/storeChat';
 import { fetchMerchant } from '../marketplace/data';
+import { fetchStorePresence, fetchUserPresence, presenceLabel, type Presence } from '../messaging/chat';
 import { useAuthMode } from '../lib/authMode';
 import { BottomNav } from '../components/BottomNav';
 import type { RootNavProp, RootStackScreen } from '../navigation/types';
@@ -52,6 +53,30 @@ export default function StoreChatScreen({ route }: Props) {
 
   const threadCustomerId = customerId ?? profile?.id ?? '';
   const viewerIsMerchant = mode === 'merchant';
+  // Per-conversation Messenger accent, stable for this merchant+customer pair.
+  const accent = useMemo(() => conversationColor(`${merchantId}:${threadCustomerId}`), [merchantId, threadCustomerId]);
+  // Counterpart presence: the customer (merchant view) or the store's owners
+  // (customer view). Falls back to the static subtitle when unknown.
+  const [presence, setPresence] = useState<Presence | null>(null);
+  useEffect(() => {
+    let active = true;
+    const refreshPresence = async () => {
+      const lastActive = viewerIsMerchant
+        ? threadCustomerId
+          ? await fetchUserPresence(client, threadCustomerId)
+          : null
+        : await fetchStorePresence(client, merchantId);
+      if (active) setPresence(lastActive ? presenceLabel(lastActive) : null);
+    };
+    void refreshPresence();
+    const timer = setInterval(() => {
+      void refreshPresence();
+    }, 60000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [client, merchantId, threadCustomerId, viewerIsMerchant]);
 
   const load = useCallback(async () => {
     if (!threadCustomerId) return;
@@ -137,19 +162,22 @@ export default function StoreChatScreen({ route }: Props) {
           >
             <AppIcon name="back" size={20} color={colors.text} />
           </Pressable>
-          <View style={styles.avatar}>
+          <View style={[styles.avatar, { backgroundColor: accent.main }]}>
             <Text style={styles.avatarText}>{(viewerIsMerchant ? otherName : storeName).charAt(0).toUpperCase() || 'S'}</Text>
+            {presence ? (
+              <View style={[styles.presenceDot, presence.online && styles.presenceOnline]} />
+            ) : null}
           </View>
           <View style={styles.headerText}>
             <Text style={styles.headerName} numberOfLines={1}>
               {viewerIsMerchant ? otherName : storeName}
             </Text>
             <Text style={styles.headerSub} numberOfLines={1}>
-              Ask before ordering · no order yet
+              {presence ? presence.text : 'Ask before ordering · no order yet'}
             </Text>
           </View>
-          <View style={styles.orderChip}>
-            <Text style={styles.orderChipText} numberOfLines={1}>
+          <View style={[styles.orderChip, { backgroundColor: accent.soft }]}>
+            <Text style={[styles.orderChipText, { color: accent.deep }]} numberOfLines={1}>
               Inquiry
             </Text>
           </View>
@@ -167,11 +195,16 @@ export default function StoreChatScreen({ route }: Props) {
               </Text>
             </View>
           ) : (
-            <ChatThread messages={messages} myId={profile?.id ?? ''} />
+            <ChatThread
+              messages={messages}
+              myId={profile?.id ?? ''}
+              accent={accent}
+              theirInitial={(viewerIsMerchant ? otherName : storeName).charAt(0) || 'S'}
+            />
           )}
         </ScrollView>
 
-        <ChatComposer onSend={(body) => send(body)} sending={sending} placeholder={`Message ${viewerIsMerchant ? 'customer' : storeName}…`} />
+        <ChatComposer onSend={(body) => send(body)} sending={sending} placeholder={`Message ${viewerIsMerchant ? 'customer' : storeName}…`} accent={accent} />
         {mode === 'merchant' ? null : <BottomNav />}
       </KeyboardAvoidingView>
     </Screen>
@@ -207,6 +240,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarText: { ...typography.heading, color: colors.onPrimary },
+  presenceDot: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 13,
+    height: 13,
+    borderRadius: 7,
+    backgroundColor: colors.faint,
+    borderWidth: 2.5,
+    borderColor: colors.surface,
+  },
+  presenceOnline: { backgroundColor: colors.success },
   headerText: { flex: 1, gap: 0 },
   headerName: { ...typography.subhead, fontWeight: '700' },
   headerSub: { ...typography.micro, color: colors.muted },

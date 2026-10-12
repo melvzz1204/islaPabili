@@ -4,7 +4,6 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useCallback, useMemo } from 'react';
 import { useAuth } from '@isla/supabase';
 import {
-  AppIcon,
   Badge,
   Card,
   EmptyState,
@@ -15,6 +14,7 @@ import {
   typography,
 } from '@isla/ui';
 import { useConversations } from '../messaging/chat';
+import { ThreadAvatar, conversationColor } from '../messaging/ChatThread';
 import {
   toStoreConversations,
   useUnreadStoreCount,
@@ -161,12 +161,14 @@ export default function MessagesScreen({}: Props) {
                 <Card
                   key={c.merchantId}
                   variant="flat"
-                  style={styles.card}
+                  style={[styles.card, c.unread && { backgroundColor: conversationColor(c.merchantId).soft }]}
                   onPress={() => navigation.navigate('StoreChat', { merchantId: c.merchantId })}
                 >
-                  <View style={styles.avatarStore}>
-                    <AppIcon name="storefront" size={22} color={colors.primaryDeep} />
-                  </View>
+                  <ThreadAvatar
+                    initial={c.merchantName}
+                    accent={conversationColor(c.merchantId)}
+                    size={46}
+                  />
                   <View style={styles.body}>
                     <View style={styles.topRow}>
                       <Text style={styles.name} numberOfLines={1}>
@@ -187,7 +189,7 @@ export default function MessagesScreen({}: Props) {
                         : 'Ask about stock, price, or availability.'}
                     </Text>
                   </View>
-                  {c.unread ? <View style={styles.dot} /> : null}
+                  {c.unread ? <View style={[styles.dot, { backgroundColor: conversationColor(c.merchantId).main }]} /> : null}
                 </Card>
               ))}
             </View>
@@ -200,12 +202,14 @@ export default function MessagesScreen({}: Props) {
                 <Card
                   key={order.id}
                   variant="flat"
-                  style={styles.card}
+                  style={[styles.card, unread && { backgroundColor: conversationColor(order.id).soft }]}
                   onPress={() => navigation.navigate('Chat', { orderId: order.id })}
                 >
-                  <View style={styles.avatar}>
-                    <AppIcon name="rider" size={22} color={colors.primaryDeep} />
-                  </View>
+                  <ThreadAvatar
+                    initial={order.rider_id ? (riderNames[order.rider_id] ?? 'Your rider') : '?'}
+                    accent={conversationColor(order.id)}
+                    size={46}
+                  />
                   <View style={styles.body}>
                     <View style={styles.topRow}>
                       <Text style={styles.name} numberOfLines={1}>
@@ -226,7 +230,7 @@ export default function MessagesScreen({}: Props) {
                         : 'Say hello to coordinate delivery.'}
                     </Text>
                   </View>
-                  {unread ? <View style={styles.dot} /> : null}
+                  {unread ? <View style={[styles.dot, { backgroundColor: conversationColor(order.id).main }]} /> : null}
                   {order.status === 'completed' ? <Badge label="Done" status="delivered" /> : null}
                 </Card>
               ))}
@@ -246,22 +250,6 @@ const styles = StyleSheet.create({
   section: { gap: spacing.sm },
   sectionTitle: { ...typography.label, color: colors.muted, textTransform: 'uppercase' },
   card: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md },
-  avatar: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: colors.primaryTint,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarStore: {
-    width: 46,
-    height: 46,
-    borderRadius: 14,
-    backgroundColor: colors.primaryTint,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   body: { flex: 1, gap: 2 },
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
   name: { ...typography.subhead, fontWeight: '700', flex: 1 },

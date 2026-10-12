@@ -25,8 +25,8 @@ import {
   typography,
   useToast,
 } from '@isla/ui';
-import { canChat, canStoreChat, markConversationRead, setOpenOrderId, type MessageRow } from '../messaging/chat';
-import { ChatComposer, ChatThread } from '../messaging/ChatThread';
+import { canChat, canStoreChat, fetchUserPresence, markConversationRead, presenceLabel, setOpenOrderId, type MessageRow, type Presence } from '../messaging/chat';
+import { ChatComposer, ChatThread, conversationColor } from '../messaging/ChatThread';
 import { invokePush } from '../lib/push';
 import { useAuthMode } from '../lib/authMode';
 import { CACHE_TTLS, cacheKey, peekEntry, readPersistedEntry, setEntry } from '../lib/cache';
@@ -45,11 +45,13 @@ export default function ChatScreen({ route }: Props) {
   const [order, setOrder] = useState<OrderRow | null>(null);
   const [otherName, setOtherName] = useState('Chat');
   const [otherInitial, setOtherInitial] = useState('C');
-  const [presence, setPresence] = useState<string | null>(null);
+  const [presence, setPresence] = useState<Presence>({ text: 'Active now', online: false });
   const [messages, setMessages] = useState<MessageRow[]>([]);
   const [sending, setSending] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
   const insets = useSafeAreaInsets();
+  // Per-conversation Messenger accent, stable for this order.
+  const accent = useMemo(() => conversationColor(orderId), [orderId]);
   // Stick-to-bottom: auto-scroll only fires while the user is already at the
   // latest messages. Reading history (or typing with the thread scrolled up)
   // never gets yanked, and competing scrolls can't fight the keyboard.
@@ -91,18 +93,20 @@ export default function ChatScreen({ route }: Props) {
       const fallback = viewerIsMerchant ? 'Customer' : o.customer_id === profile?.id ? 'Your rider' : 'Customer';
       setOtherName(name || fallback);
       setOtherInitial((name || fallback).charAt(0).toUpperCase() || 'C');
-      // Presence: show whether the rider is on duty right now.
-      if (!viewerIsMerchant && o.customer_id === profile?.id && o.rider_id) {
+      // Presence: rider on duty reads as online; otherwise last app activity
+      // ("Active now" green dot, else "Active Xm/Xh ago").
+      const isRiderCounterpart = !viewerIsMerchant && o.customer_id === profile?.id && o.rider_id;
+      let onDuty: boolean | null = null;
+      if (isRiderCounterpart && o.rider_id) {
         const { data: status } = await client
           .from('rider_status')
           .select('on_duty')
           .eq('rider_id', o.rider_id)
           .maybeSingle();
-        const onDuty = (status as { on_duty?: boolean } | null)?.on_duty;
-        setPresence(onDuty ? 'Online now' : 'Away');
-      } else {
-        setPresence(null);
+        onDuty = (status as { on_duty?: boolean } | null)?.on_duty ?? null;
       }
+      const lastActive = otherId ? await fetchUserPresence(client, otherId) : null;
+      setPresence(presenceLabel(lastActive, { onDuty }));
     }
   }, [client, orderId, profile?.id]);
 
@@ -139,6 +143,15 @@ export default function ChatScreen({ route }: Props) {
     void loadOrder();
     void loadMessages();
   }, [loadOrder, loadMessages]);
+
+  // Presence goes stale (last-active text), so re-read it every minute while
+  // the thread stays open.
+  useEffect(() => {
+    const timer = setInterval(() => {
+      void loadOrder();
+    }, 60000);
+    return () => clearInterval(timer);
+  }, [loadOrder]);
 
   // Mute the global message banner while this thread is on screen.
   useEffect(() => {
@@ -228,7 +241,7 @@ export default function ChatScreen({ route }: Props) {
     (profile.id === o.customer_id || (profile.id !== o.customer_id && profile.id !== o.rider_id));
   const isChatOpen = (o: OrderRow) => canChat(o.status) || (isStorePartyFor(o) && canStoreChat(o.status));
   const chatOpen = order ? isChatOpen(order) : true;
-  const online = presence === 'Online now';
+  const online = presence.online;
 
   return (
     <Screen scroll={false} keyboard={false} background={colors.chatCanvas} contentStyle={styles.fill}>
@@ -250,7 +263,7 @@ export default function ChatScreen({ route }: Props) {
         >
           <AppIcon name="back" size={20} color={colors.text} />
         </Pressable>
-        <View style={styles.avatar}>
+        <View style={[styles.avatar, { backgroundColor: accent.main }]}>
           <Text style={styles.avatarText}>{otherInitial}</Text>
           {chatOpen ? <View style={[styles.presenceDot, online && styles.presenceOnline]} /> : null}
         </View>
@@ -259,12 +272,12 @@ export default function ChatScreen({ route }: Props) {
             {otherName}
           </Text>
           <Text style={styles.headerSub} numberOfLines={1}>
-            {chatOpen ? (presence ?? 'Active now') : `Chat closed · ${order?.status.replace(/_/g, ' ') ?? ''}`}
+            {chatOpen ? presence.text : `Chat closed · ${order?.status.replace(/_/g, ' ') ?? ''}`}
           </Text>
         </View>
         {order ? (
-          <View style={styles.orderChip}>
-            <Text style={styles.orderChipText} numberOfLines={1}>
+          <View style={[styles.orderChip, { backgroundColor: accent.soft }]}>
+            <Text style={[styles.orderChipText, { color: accent.deep }]} numberOfLines={1}>
               #{order.order_number}
             </Text>
           </View>
@@ -310,12 +323,12 @@ export default function ChatScreen({ route }: Props) {
               ) : null}
             </View>
           ) : (
-            <ChatThread messages={messages} myId={profile?.id ?? ''} />
+            <ChatThread messages={messages} myId={profile?.id ?? ''} accent={accent} theirInitial={otherInitial} />
           )}
         </ScrollView>
 
         {chatOpen ? (
-          <ChatComposer onSend={(body) => send(body)} sending={sending} />
+          <ChatComposer onSend={(body) => send(body)} sending={sending} accent={accent} />
         ) : (
           <View style={styles.closed}>
             <AppIcon name="lock" size={15} color={colors.muted} />

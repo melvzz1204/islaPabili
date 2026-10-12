@@ -28,6 +28,7 @@ import {
 import { TextField } from '../ui/TextField';
 import { peso } from '../marketplace/data';
 import { canStoreChat, useMerchantOrderChats, type Conversation } from '../messaging/chat';
+import { ThreadAvatar, conversationColor } from '../messaging/ChatThread';
 import { useMerchantInquiries, useMerchantMessageAlerts, type StoreConversation } from '../messaging/storeChat';
 import { useMerchantOrderAlerts } from '../lib/orderAlerts';
 import { useUnreadCount } from './NotificationsScreen';
@@ -260,7 +261,8 @@ function MerchantMessages({
   orderChats: Conversation[];
 }) {
   const navigation = useNavigation<RootNavProp>();
-  const { profile } = useAuth();
+  const { client, profile } = useAuth();
+  const [customerNames, setCustomerNames] = useState<Record<string, string>>({});
   const orderThreads = useMemo(
     () =>
       [...orderChats]
@@ -268,6 +270,23 @@ function MerchantMessages({
         .sort((a, b) => ((b.lastMessage?.created_at ?? '') < (a.lastMessage?.created_at ?? '') ? -1 : 1)),
     [orderChats],
   );
+  useEffect(() => {
+    const ids = [...new Set(orderThreads.map((c) => c.order.customer_id).filter(Boolean))];
+    if (ids.length === 0) return;
+    let active = true;
+    void (async () => {
+      const { data } = await client.from('profiles').select('id, full_name').in('id', ids);
+      if (!active) return;
+      const map: Record<string, string> = {};
+      for (const row of (data ?? []) as { id: string; full_name: string }[]) {
+        map[row.id] = row.full_name?.trim() || 'Customer';
+      }
+      setCustomerNames(map);
+    })();
+    return () => {
+      active = false;
+    };
+  }, [client, orderThreads]);
   if (inquiries.length === 0 && orderThreads.length === 0) {
     return (
       <EmptyState
@@ -283,19 +302,27 @@ function MerchantMessages({
         <View style={styles.section}>
           <Text style={styles.detailTitle}>Order chats</Text>
           <Card variant="flat" style={styles.listCard} padded={false}>
-            {orderThreads.map((c, i) => (
+            {orderThreads.map((c, i) => {
+              const accent = conversationColor(c.order.id);
+              const name = customerNames[c.order.customer_id] ?? 'Customer';
+              return (
               <Pressable
                 key={c.order.id}
                 accessibilityRole="button"
                 accessibilityLabel={`Open chat for order ${c.order.order_number}`}
                 onPress={() => navigation.navigate('Chat', { orderId: c.order.id })}
-                style={({ pressed }) => [styles.threadRow, pressed && styles.pressed]}
+                style={({ pressed }) => [
+                  styles.threadRow,
+                  c.unread && { backgroundColor: accent.soft },
+                  pressed && styles.pressed,
+                ]}
               >
+                <ThreadAvatar initial={name} accent={accent} size={40} />
                 <View style={styles.itemText}>
                   <Text style={styles.itemName} numberOfLines={1}>
-                    {c.unread ? '● ' : ''}Order #{c.order.order_number}
+                    {name} · #{c.order.order_number}
                   </Text>
-                  <Text style={styles.cardSub} numberOfLines={1}>
+                  <Text style={[styles.cardSub, c.unread && { color: colors.text, fontWeight: '700' }]} numberOfLines={1}>
                     {c.lastMessage
                       ? `${c.lastMessage.sender_id === profile?.id ? 'You: ' : ''}${c.lastMessage.body}`
                       : ''}
@@ -307,9 +334,11 @@ function MerchantMessages({
                     {c.lastMessage ? timeAgo(c.lastMessage.created_at) : ''}
                   </Text>
                 </View>
+                {c.unread ? <View style={[styles.dot, { backgroundColor: accent.main }]} /> : null}
                 {i < orderThreads.length - 1 || inquiries.length > 0 ? <View style={styles.threadDivider} /> : null}
               </Pressable>
-            ))}
+              );
+            })}
           </Card>
         </View>
       ) : null}
@@ -317,19 +346,26 @@ function MerchantMessages({
         <View style={styles.section}>
           <Text style={styles.detailTitle}>Customer questions (no order yet)</Text>
           <Card variant="flat" style={styles.listCard} padded={false}>
-            {inquiries.map((c) => (
+            {inquiries.map((c) => {
+              const accent = conversationColor(`${merchantId}:${c.customerId}`);
+              return (
               <Pressable
                 key={c.customerId}
                 accessibilityRole="button"
                 accessibilityLabel={`Open questions from ${c.customerName}`}
                 onPress={() => navigation.navigate('StoreChat', { merchantId, customerId: c.customerId })}
-                style={({ pressed }) => [styles.threadRow, pressed && styles.pressed]}
+                style={({ pressed }) => [
+                  styles.threadRow,
+                  c.unread && { backgroundColor: accent.soft },
+                  pressed && styles.pressed,
+                ]}
               >
+                <ThreadAvatar initial={c.customerName} accent={accent} size={40} />
                 <View style={styles.itemText}>
                   <Text style={styles.itemName} numberOfLines={1}>
-                    {c.unread ? '● ' : ''}{c.customerName}
+                    {c.customerName}
                   </Text>
-                  <Text style={styles.cardSub} numberOfLines={1}>
+                  <Text style={[styles.cardSub, c.unread && { color: colors.text, fontWeight: '700' }]} numberOfLines={1}>
                     {c.lastMessage
                       ? `${c.lastMessage.sender_id === profile?.id ? 'You: ' : ''}${c.lastMessage.body}`
                       : ''}
@@ -338,8 +374,10 @@ function MerchantMessages({
                 <Text style={styles.threadTime}>
                   {c.lastMessage ? timeAgo(c.lastMessage.created_at) : ''}
                 </Text>
+                {c.unread ? <View style={[styles.dot, { backgroundColor: accent.main }]} /> : null}
               </Pressable>
-            ))}
+              );
+            })}
           </Card>
         </View>
       ) : null}
@@ -1288,6 +1326,7 @@ const styles = StyleSheet.create({
   threadSide: { alignItems: 'flex-end', gap: 4 },
   threadDivider: { height: 1, backgroundColor: colors.hairline, marginLeft: spacing.base },
   threadTime: { ...typography.micro, color: colors.faint },
+  dot: { width: 9, height: 9, borderRadius: 5, backgroundColor: colors.primary },
   section: { gap: spacing.md, paddingBottom: spacing.xxl },
   cardHead: { flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start' },
   cardTitle: { flex: 1, gap: 2 },

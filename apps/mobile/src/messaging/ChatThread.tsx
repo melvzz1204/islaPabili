@@ -1,8 +1,35 @@
-import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Animated, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppIcon, colors, radius, shadows, spacing, typography } from '@isla/ui';
 
 export type ChatMessage = { id: string; body: string; created_at: string; sender_id: string };
+
+export type ConversationAccent = { main: string; soft: string; deep: string };
+
+/**
+ * Messenger-style per-conversation theme. A stable hash of the thread key
+ * (order id / merchant+customer pair) picks one of eight saturated colors,
+ * so every chat is instantly recognizable. The same accent drives the
+ * header avatar, own bubbles, send button, list avatars, and unread dots.
+ */
+const ACCENTS: ConversationAccent[] = [
+  { main: '#0084FF', soft: '#E7F3FF', deep: '#0068C8' }, // Messenger blue
+  { main: '#7B61FF', soft: '#EFEBFF', deep: '#5A3EE0' }, // purple
+  { main: '#D63384', soft: '#FBE9F2', deep: '#A42363' }, // magenta
+  { main: '#E53935', soft: '#FDECEA', deep: '#B3261E' }, // red
+  { main: '#EF6C00', soft: '#FFF1E0', deep: '#B75300' }, // orange
+  { main: '#009688', soft: '#DFF2EF', deep: '#00695C' }, // teal
+  { main: '#43A047', soft: '#E7F4E8', deep: '#2E7B32' }, // green
+  { main: '#3949AB', soft: '#E8EBFA', deep: '#283593' }, // indigo
+];
+
+export function conversationColor(key: string): ConversationAccent {
+  let hash = 0;
+  for (let i = 0; i < key.length; i++) {
+    hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
+  }
+  return ACCENTS[hash % ACCENTS.length] ?? ACCENTS[0]!;
+}
 
 export function dayLabel(iso: string): string {
   const d = new Date(iso);
@@ -20,8 +47,68 @@ export function clock(iso: string): string {
   return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
-/** Day dividers + grouped bubbles with tails, ticks and inline timestamps. */
-export function ChatThread({ messages, myId }: { messages: ChatMessage[]; myId: string }) {
+/** Messenger-like circular avatar: white initial on the conversation accent. */
+export function ThreadAvatar({
+  initial,
+  accent,
+  size = 40,
+}: {
+  initial: string;
+  accent: ConversationAccent;
+  size?: number;
+}) {
+  return (
+    <View
+      style={[
+        styles.avatar,
+        { width: size, height: size, borderRadius: size / 2, backgroundColor: accent.main },
+      ]}
+    >
+      <Text style={[styles.avatarText, { fontSize: size * 0.42 }]}>
+        {(initial.trim().charAt(0) || '?').toUpperCase()}
+      </Text>
+    </View>
+  );
+}
+
+/** One-shot fade-and-rise so new messages land smoothly (native driver). */
+function AnimatedRow({ children }: { children: ReactNode }) {
+  const anim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(anim, { toValue: 1, duration: 170, useNativeDriver: true }).start();
+  }, [anim]);
+  return (
+    <Animated.View
+      style={{
+        opacity: anim,
+        transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }],
+      }}
+    >
+      {children}
+    </Animated.View>
+  );
+}
+
+const GROUP_WINDOW_MS = 5 * 60 * 1000;
+const BUBBLE_RADIUS = 18;
+const GROUP_RADIUS = 5;
+
+/**
+ * Messenger thread: day dividers as plain centered text, grouped bubbles
+ * with flattened facing corners, counterpart avatar on the last message of
+ * each incoming group, and a small timestamp under each group.
+ */
+export function ChatThread({
+  messages,
+  myId,
+  accent,
+  theirInitial = '?',
+}: {
+  messages: ChatMessage[];
+  myId: string;
+  accent: ConversationAccent;
+  theirInitial?: string;
+}) {
   let lastDay = '';
   return (
     <>
@@ -33,16 +120,15 @@ export function ChatThread({ messages, myId }: { messages: ChatMessage[]; myId: 
         const prev = messages[i - 1];
         const next = messages[i + 1];
         const groupedPrev =
-          !!prev && prev.sender_id === m.sender_id && +new Date(m.created_at) - +new Date(prev.created_at) < 5 * 60 * 1000;
+          !!prev && prev.sender_id === m.sender_id && +new Date(m.created_at) - +new Date(prev.created_at) < GROUP_WINDOW_MS;
         const groupedNext =
-          !!next && next.sender_id === m.sender_id && +new Date(next.created_at) - +new Date(m.created_at) < 5 * 60 * 1000;
+          !!next && next.sender_id === m.sender_id && +new Date(next.created_at) - +new Date(m.created_at) < GROUP_WINDOW_MS;
+        const groupLast = !groupedNext;
         return (
-          <View key={m.id}>
+          <AnimatedRow key={m.id}>
             {showDay ? (
               <View style={styles.dayRow}>
-                <View style={styles.dayPill}>
-                  <Text style={styles.dayText}>{day}</Text>
-                </View>
+                <Text style={styles.dayText}>{day}</Text>
               </View>
             ) : null}
             <View
@@ -52,24 +138,35 @@ export function ChatThread({ messages, myId }: { messages: ChatMessage[]; myId: 
                 groupedPrev ? styles.rowGrouped : styles.rowFresh,
               ]}
             >
-              <View
-                style={[
-                  styles.bubble,
-                  mine ? styles.bubbleMine : styles.bubbleTheirs,
-                  mine && !groupedNext && styles.tailMine,
-                  !mine && !groupedNext && styles.tailTheirs,
-                ]}
-              >
-                <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{m.body}</Text>
-                {!groupedNext ? (
-                  <View style={styles.metaRow}>
-                    <Text style={[styles.bubbleTime, mine && styles.bubbleTimeMine]}>{clock(m.created_at)}</Text>
-                    {mine ? <AppIcon name="check" size={12} color="rgba(255,255,255,0.8)" /> : null}
+              {!mine ? (
+                <View style={styles.theirAvatarSlot}>
+                  {groupLast ? <ThreadAvatar initial={theirInitial} accent={accent} size={28} /> : null}
+                </View>
+              ) : null}
+              <View style={styles.bubbleCol}>
+                <View
+                  style={[
+                    styles.bubble,
+                    mine
+                      ? { backgroundColor: accent.main }
+                      : { backgroundColor: colors.surfaceSunken },
+                    mine && groupedPrev && { borderTopRightRadius: GROUP_RADIUS },
+                    mine && groupedNext && { borderBottomRightRadius: GROUP_RADIUS },
+                    !mine && groupedPrev && { borderTopLeftRadius: GROUP_RADIUS },
+                    !mine && groupedNext && { borderBottomLeftRadius: GROUP_RADIUS },
+                  ]}
+                >
+                  <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{m.body}</Text>
+                </View>
+                {groupLast ? (
+                  <View style={[styles.metaRow, mine ? styles.metaMine : styles.metaTheirs]}>
+                    <Text style={styles.bubbleTime}>{clock(m.created_at)}</Text>
+                    {mine ? <AppIcon name="check" size={12} color="rgba(255,255,255,0.85)" /> : null}
                   </View>
                 ) : null}
               </View>
             </View>
-          </View>
+          </AnimatedRow>
         );
       })}
     </>
@@ -97,10 +194,12 @@ export function ChatComposer({
   onSend,
   sending,
   placeholder = 'Write a message…',
+  accent,
 }: {
   onSend: (body: string) => Promise<void> | void;
   sending: boolean;
   placeholder?: string;
+  accent: ConversationAccent;
 }) {
   const [draft, setDraft] = useState('');
   const submit = () => {
@@ -129,6 +228,7 @@ export function ChatComposer({
         disabled={!draft.trim() || sending}
         style={({ pressed }) => [
           styles.send,
+          { backgroundColor: accent.main },
           !draft.trim() && styles.sendIdle,
           sending && styles.sendDisabled,
           pressed && styles.pressed,
@@ -141,36 +241,29 @@ export function ChatComposer({
 }
 
 const styles = StyleSheet.create({
+  avatar: { alignItems: 'center', justifyContent: 'center', ...shadows.card },
+  avatarText: { color: colors.onPrimary, fontWeight: '800' },
   dayRow: { alignItems: 'center', marginVertical: spacing.sm },
-  dayPill: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 5,
-    ...shadows.card,
-  },
-  dayText: { ...typography.micro, color: colors.muted, fontWeight: '700' },
-  row: { flexDirection: 'row' },
+  dayText: { ...typography.micro, color: colors.faint, fontWeight: '600' },
+  row: { flexDirection: 'row', alignItems: 'flex-end' },
   rowMine: { justifyContent: 'flex-end' },
   rowTheirs: { justifyContent: 'flex-start' },
   rowFresh: { marginTop: spacing.sm },
   rowGrouped: { marginTop: 3 },
+  theirAvatarSlot: { width: 32, alignItems: 'center', justifyContent: 'flex-end', marginRight: 5 },
+  bubbleCol: { maxWidth: '78%', gap: 2 },
   bubble: {
-    maxWidth: '80%',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: radius.lg,
-    gap: 3,
+    borderRadius: BUBBLE_RADIUS,
+    ...shadows.card,
   },
-  bubbleMine: { backgroundColor: colors.primaryDeep, ...shadows.card },
-  bubbleTheirs: { backgroundColor: colors.surface, ...shadows.card },
-  tailMine: { borderBottomRightRadius: radius.xs },
-  tailTheirs: { borderBottomLeftRadius: radius.xs },
   bubbleText: { ...typography.body, color: colors.text },
   bubbleTextMine: { color: colors.onPrimary },
-  metaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 3 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 4 },
+  metaMine: { justifyContent: 'flex-end' },
+  metaTheirs: { justifyContent: 'flex-start' },
   bubbleTime: { ...typography.micro, fontSize: 10, color: colors.faint },
-  bubbleTimeMine: { color: 'rgba(255,255,255,0.75)' },
 
   emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.sm, padding: spacing.xl },
   emptyIcon: {
@@ -209,12 +302,11 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
     ...shadows.card,
   },
-  sendIdle: { backgroundColor: colors.primary },
+  sendIdle: { opacity: 0.45 },
   sendDisabled: { opacity: 0.5 },
   pressed: { opacity: 0.7 },
 });

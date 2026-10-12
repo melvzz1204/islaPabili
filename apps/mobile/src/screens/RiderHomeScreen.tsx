@@ -40,8 +40,8 @@ import {
 } from '@isla/ui';
 import { peso } from '../marketplace/data';
 import { ListPhotos } from '../marketplace/ListPhotos';
-import { canChat, markConversationRead, setOpenOrderId, useConversations, useIncomingMessageAlerts, type MessageRow } from '../messaging/chat';
-import { ChatComposer, ChatEmptyState, ChatThread } from '../messaging/ChatThread';
+import { canChat, fetchUserPresence, markConversationRead, presenceLabel, setOpenOrderId, useConversations, useIncomingMessageAlerts, type MessageRow, type Presence } from '../messaging/chat';
+import { ChatComposer, ChatEmptyState, ChatThread, conversationColor } from '../messaging/ChatThread';
 import {
   CHANNEL_ORDERS,
   consumePendingRiderTab,
@@ -1199,6 +1199,28 @@ function RiderMessagesView({
 
   const open = conversations.find((c) => c.order.id === openId)?.order ?? null;
 
+  // Customer presence for the open thread header (green dot + last-active).
+  const [threadPresence, setThreadPresence] = useState<Presence>({ text: '', online: false });
+  useEffect(() => {
+    if (!open) {
+      setThreadPresence({ text: '', online: false });
+      return;
+    }
+    let active = true;
+    const refreshPresence = async () => {
+      const lastActive = await fetchUserPresence(client, open.customer_id);
+      if (active) setThreadPresence(presenceLabel(lastActive));
+    };
+    void refreshPresence();
+    const timer = setInterval(() => {
+      void refreshPresence();
+    }, 60000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [client, open]);
+
   const loadThread = useCallback(
     async (orderId: string) => {
       const { data } = await client
@@ -1274,6 +1296,7 @@ function RiderMessagesView({
   if (open) {
     const customer = customerNames[open.customer_id] ?? 'Customer';
     const chatOpen = canChat(open.status);
+    const accent = conversationColor(open.id);
     return (
       <KeyboardAvoidingView
         style={[styles.tabBody, styles.threadCanvas, styles.threadAvoid]}
@@ -1290,16 +1313,16 @@ function RiderMessagesView({
           >
             <AppIcon name="back" size={20} color={colors.text} />
           </Pressable>
-          <View style={styles.threadAvatar}>
+          <View style={[styles.threadAvatar, { backgroundColor: accent.main }]}>
             <Text style={styles.threadAvatarText}>{customer.charAt(0).toUpperCase()}</Text>
-            {chatOpen ? <View style={[styles.presenceDot, styles.presenceOnline]} /> : null}
+            <View style={[styles.presenceDot, threadPresence.online && styles.presenceOnline]} />
           </View>
           <View style={styles.greetText}>
             <Text style={styles.threadName} numberOfLines={1}>
               {customer}
             </Text>
             <Text style={styles.muted} numberOfLines={1}>
-              #{open.order_number} · {open.status.replace(/_/g, ' ')}
+              {threadPresence.text || `#${open.order_number} · ${open.status.replace(/_/g, ' ')}`}
             </Text>
           </View>
         </View>
@@ -1314,11 +1337,11 @@ function RiderMessagesView({
           {messages.length === 0 ? (
             <ChatEmptyState orderNumber={open.order_number} />
           ) : (
-            <ChatThread messages={messages} myId={profile?.id ?? ''} />
+            <ChatThread messages={messages} myId={profile?.id ?? ''} accent={accent} theirInitial={customer.charAt(0)} />
           )}
         </ScrollView>
         {chatOpen ? (
-          <ChatComposer onSend={(body) => send(body)} sending={sending} placeholder="Write to customer…" />
+          <ChatComposer onSend={(body) => send(body)} sending={sending} placeholder="Write to customer…" accent={accent} />
         ) : (
           <Text style={styles.muted}>Chat closed, this order is {open.status.replace(/_/g, ' ')}.</Text>
         )}
@@ -1349,6 +1372,7 @@ function RiderMessagesView({
       ) : (
         conversations.map(({ order, lastMessage, unread }) => {
           const customer = customerNames[order.customer_id] ?? 'Customer';
+          const accent = conversationColor(order.id);
           return (
             <Pressable
               key={order.id}
@@ -1357,10 +1381,13 @@ function RiderMessagesView({
               onPress={() => onOpenChange(order.id)}
               style={({ pressed }) => [pressed && styles.pressed]}
             >
-              <Card variant={unread ? 'tinted' : 'flat'} style={styles.msgCard}>
-                <View style={styles.msgAvatar}>
-                  <Text style={styles.msgInitial}>{customer.charAt(0).toUpperCase()}</Text>
-                  {unread ? <View style={styles.msgDot} /> : null}
+              <Card
+                variant={unread ? 'tinted' : 'flat'}
+                style={[styles.msgCard, unread && { backgroundColor: accent.soft, borderColor: accent.soft }]}
+              >
+                <View style={[styles.msgAvatar, { backgroundColor: accent.main }]}>
+                  <Text style={[styles.msgInitial, { color: colors.onPrimary }]}>{customer.charAt(0).toUpperCase()}</Text>
+                  {unread ? <View style={[styles.msgDot, { backgroundColor: accent.main }]} /> : null}
                 </View>
                 <View style={styles.greetText}>
                   <View style={styles.msgTopRow}>

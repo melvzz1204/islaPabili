@@ -4,6 +4,7 @@ import { useAuth, type Database } from '@isla/supabase';
 import { useToast } from '@isla/ui';
 import { CHANNEL_CHAT, blip, getSoundSettings, notifyLocal } from '../lib/notify';
 import { CACHE_TTLS, cacheKey, fetchWithCache, peekEntry, readPersistedEntry } from '../lib/cache';
+import { callRpc } from '../lib/rpc';
 
 export type OrderRow = Database['public']['Tables']['orders']['Row'];
 export type MessageRow = Database['public']['Tables']['order_messages']['Row'];
@@ -36,6 +37,65 @@ export const MERCHANT_CHAT_STATUSES: OrderRow['status'][] = [
 
 export function canStoreChat(status: OrderRow['status']): boolean {
   return (MERCHANT_CHAT_STATUSES as string[]).includes(status);
+}
+
+// --- Presence (Messenger-style online status) --------------------------------
+// Activity source: push_tokens.updated_at, refreshed on every app foreground.
+// Cross-user reads go through the contact-guarded presence_for /
+// store_presence RPCs (0048); under ~3 minutes counts as online.
+
+export type Presence = { text: string; online: boolean };
+
+/** Last-activity timestamp (ISO) of a chat contact, or null when unknown. */
+export async function fetchUserPresence(
+  client: Parameters<typeof callRpc>[0],
+  userId: string,
+): Promise<string | null> {
+  try {
+    const { data } = await callRpc<string>(client, 'presence_for', { p_user_id: userId });
+    return data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Last-activity timestamp (ISO) across a store's owners, or null. */
+export async function fetchStorePresence(
+  client: Parameters<typeof callRpc>[0],
+  merchantId: string,
+): Promise<string | null> {
+  try {
+    const { data } = await callRpc<string>(client, 'store_presence', { p_merchant_id: merchantId });
+    return data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export function presenceLabel(
+  lastActiveIso: string | null,
+  opts?: { onDuty?: boolean | null },
+): Presence {
+  if (opts?.onDuty) return { text: 'Active now', online: true };
+  if (!lastActiveIso) return { text: 'Away', online: false };
+  const ms = Date.now() - new Date(lastActiveIso).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return { text: 'Active now', online: true };
+  if (ms < 3 * 60 * 1000) return { text: 'Active now', online: true };
+  const mins = Math.floor(ms / 60000);
+  if (mins < 60) return { text: `Active ${mins}m ago`, online: false };
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return { text: `Active ${hours}h ago`, online: false };
+  const d = new Date(lastActiveIso);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+  const sameDay = (a: Date, b: Date) =>
+    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  if (sameDay(d, yesterday)) return { text: 'Active yesterday', online: false };
+  return {
+    text: `Active ${d.toLocaleDateString([], { month: 'short', day: 'numeric' })}`,
+    online: false,
+  };
 }
 
 export type Conversation = {
