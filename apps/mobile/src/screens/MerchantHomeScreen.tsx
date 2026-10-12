@@ -1,37 +1,43 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Image, Platform, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { File as FileHandle } from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
 import { useNavigation } from '@react-navigation/native';
 import { signOut, useAuth, type Database } from '@isla/supabase';
 import {
+  AppIcon,
   AuthHeader,
   Badge,
   Button,
   Card,
   EmptyState,
+  IconButton,
   Screen,
   ScreenHeader,
   SegmentedTabs,
   SheetModal,
   colors,
   radius,
+  shadows,
   spacing,
   typography,
   useToast,
+  type AppIconName,
   type BadgeStatus,
 } from '@isla/ui';
 import { TextField } from '../ui/TextField';
 import { peso } from '../marketplace/data';
-import { canStoreChat } from '../messaging/chat';
-import { toStoreConversations, type StoreMessageRow } from '../messaging/storeChat';
+import { canStoreChat, useMerchantOrderChats, type Conversation } from '../messaging/chat';
+import { useMerchantInquiries, useMerchantMessageAlerts, type StoreConversation } from '../messaging/storeChat';
+import { useMerchantOrderAlerts } from '../lib/orderAlerts';
+import { useUnreadCount } from './NotificationsScreen';
 import type { RootNavProp } from '../navigation/types';
 
 type OrderRow = Database['public']['Tables']['orders']['Row'];
 type OrderItem = Database['public']['Tables']['order_items']['Row'];
 type MerchantRow = Database['public']['Tables']['merchants']['Row'];
 
-type HomeTab = 'overview' | 'orders' | 'verify' | 'store';
+type HomeTab = 'overview' | 'orders' | 'messages' | 'verify' | 'store';
 type InboxTab = 'new' | 'preparing' | 'ready' | 'all';
 
 const INBOX_STATUS: Record<InboxTab, string[]> = {
@@ -87,26 +93,257 @@ const resolveStoreImage = (client: ReturnType<typeof useAuth>['client'], path: s
   return client.storage.from('store-logos').getPublicUrl(path).data.publicUrl;
 };
 
-export default function MerchantHomeScreen({ merchantId }: { merchantId: string }) {
-  const [tab, setTab] = useState<HomeTab>('overview');
+export default function MerchantHomeScreen({
+  merchantId,
+  initialTab,
+}: {
+  merchantId: string;
+  initialTab?: HomeTab;
+}) {
+  const [tab, setTab] = useState<HomeTab>(initialTab ?? 'overview');
+  // Follow notification deep-links (e.g. bell order tap → Orders tab).
+  useEffect(() => {
+    if (initialTab) setTab(initialTab);
+  }, [initialTab]);
+  // Live toast banner for incoming customer messages, anywhere in the shell.
+  useMerchantMessageAlerts(merchantId);
+  // Live toast + sound for incoming orders ("New order …"), same fanfare as
+  // the customer order updates.
+  useMerchantOrderAlerts();
+  const newCount = useNewOrderCount(merchantId);
+  const { conversations: inquiries } = useMerchantInquiries(merchantId);
+  const { conversations: orderChats } = useMerchantOrderChats(merchantId);
+  const inquiryUnread = inquiries.filter((c) => c.unread).length;
+  const orderUnread = orderChats.filter((c) => c.unread).length;
+  const messageUnread = inquiryUnread + orderUnread;
   return (
-    <Screen>
-      <ScreenHeader title="My store" />
-      <SegmentedTabs<HomeTab>
-        segments={[
-          { value: 'overview', label: 'Overview' },
-          { value: 'orders', label: 'Orders' },
-          { value: 'verify', label: 'Verify' },
-          { value: 'store', label: 'Store' },
-        ]}
-        value={tab}
-        onChange={setTab}
-      />
+    <Screen
+      footer={
+        <MerchantTabBar
+          tab={tab}
+          onChange={setTab}
+          newCount={newCount}
+          messageUnread={messageUnread}
+        />
+      }
+      footerHeight={MERCHANT_BAR_HEIGHT}
+    >
+      <ScreenHeader title="My store" right={<MerchantHeaderActions />} />
       {tab === 'overview' ? <MerchantOverview merchantId={merchantId} onGoOrders={() => setTab('orders')} /> : null}
       {tab === 'orders' ? <MerchantOrders merchantId={merchantId} /> : null}
+      {tab === 'messages' ? (
+        <MerchantMessages merchantId={merchantId} inquiries={inquiries} orderChats={orderChats} />
+      ) : null}
       {tab === 'verify' ? <MerchantVerify merchantId={merchantId} /> : null}
       {tab === 'store' ? <MerchantStore merchantId={merchantId} /> : null}
     </Screen>
+  );
+}
+
+const MERCHANT_TABS: { value: HomeTab; label: string; icon: AppIconName }[] = [
+  { value: 'overview', label: 'Home', icon: 'home' },
+  { value: 'orders', label: 'Orders', icon: 'receipt' },
+  { value: 'messages', label: 'Messages', icon: 'message' },
+  { value: 'verify', label: 'Verify', icon: 'shield' },
+  { value: 'store', label: 'Store', icon: 'storefront' },
+];
+
+const MERCHANT_BAR_HEIGHT = 76;
+
+/** Live count of unconfirmed orders for the Orders tab badge. */
+function useNewOrderCount(merchantId: string): number {
+  const { client } = useAuth();
+  const [count, setCount] = useState(0);
+  const load = useCallback(async () => {
+    try {
+      const { count } = await client
+        .from('orders')
+        .select('id', { count: 'exact', head: true })
+        .eq('merchant_id', merchantId)
+        .eq('status', 'awaiting_merchant');
+      setCount(count ?? 0);
+    } catch {
+      // Offline: keep last count.
+    }
+  }, [client, merchantId]);
+
+  useEffect(() => {
+    void load();
+    const channel = client
+      .channel(`merchant-tabcount-${merchantId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'orders', filter: `merchant_id=eq.${merchantId}` },
+        () => void load(),
+      )
+      .subscribe();
+    return () => {
+      void client.removeChannel(channel);
+    };
+  }, [client, merchantId, load]);
+
+  return count;
+}
+
+function MerchantTabBar({
+  tab,
+  onChange,
+  newCount,
+  messageUnread,
+}: {
+  tab: HomeTab;
+  onChange: (tab: HomeTab) => void;
+  newCount: number;
+  messageUnread: number;
+}) {
+  return (
+    <View style={[styles.bar, shadows.sticky]}>
+      {MERCHANT_TABS.map((t) => {
+        const active = tab === t.value;
+        const badge = t.value === 'orders' ? newCount : t.value === 'messages' ? messageUnread : 0;
+        return (
+          <Pressable
+            key={t.value}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: active }}
+            accessibilityLabel={badge > 0 ? `${t.label}, ${badge} unread` : t.label}
+            onPress={() => onChange(t.value)}
+            style={({ pressed }) => [styles.tabItem, pressed && styles.pressed]}
+          >
+            <View style={styles.iconWrap}>
+              <AppIcon name={t.icon} size={22} color={active ? colors.primary : colors.faint} />
+              {badge > 0 ? (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{badge > 9 ? '9+' : badge}</Text>
+                </View>
+              ) : null}
+            </View>
+            <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{t.label}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Header actions: messages + notifications (like customer/rider)          */
+/* ------------------------------------------------------------------ */
+
+function MerchantHeaderActions() {
+  const navigation = useNavigation<RootNavProp>();
+  const notifUnread = useUnreadCount();
+  return (
+    <View style={styles.headerActions}>
+      <IconButton
+        icon="bell"
+        label={notifUnread > 0 ? `Notifications, ${notifUnread} unread` : 'Notifications'}
+        onPress={() => navigation.navigate('Notifications')}
+        tone="soft"
+        badge={notifUnread}
+      />
+    </View>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Messages tab: order chats + pre-order inquiries, each tappable       */
+/* ------------------------------------------------------------------ */
+
+function MerchantMessages({
+  merchantId,
+  inquiries,
+  orderChats,
+}: {
+  merchantId: string;
+  inquiries: StoreConversation[];
+  orderChats: Conversation[];
+}) {
+  const navigation = useNavigation<RootNavProp>();
+  const { profile } = useAuth();
+  const orderThreads = useMemo(
+    () =>
+      [...orderChats]
+        .filter((c) => c.lastMessage)
+        .sort((a, b) => ((b.lastMessage?.created_at ?? '') < (a.lastMessage?.created_at ?? '') ? -1 : 1)),
+    [orderChats],
+  );
+  if (inquiries.length === 0 && orderThreads.length === 0) {
+    return (
+      <EmptyState
+        title="No messages yet"
+        message="Customer questions and order chats will appear here."
+        icon="message"
+      />
+    );
+  }
+  return (
+    <View style={styles.section}>
+      {orderThreads.length > 0 ? (
+        <View style={styles.section}>
+          <Text style={styles.detailTitle}>Order chats</Text>
+          <Card variant="flat" style={styles.listCard} padded={false}>
+            {orderThreads.map((c, i) => (
+              <Pressable
+                key={c.order.id}
+                accessibilityRole="button"
+                accessibilityLabel={`Open chat for order ${c.order.order_number}`}
+                onPress={() => navigation.navigate('Chat', { orderId: c.order.id })}
+                style={({ pressed }) => [styles.threadRow, pressed && styles.pressed]}
+              >
+                <View style={styles.itemText}>
+                  <Text style={styles.itemName} numberOfLines={1}>
+                    {c.unread ? '● ' : ''}Order #{c.order.order_number}
+                  </Text>
+                  <Text style={styles.cardSub} numberOfLines={1}>
+                    {c.lastMessage
+                      ? `${c.lastMessage.sender_id === profile?.id ? 'You: ' : ''}${c.lastMessage.body}`
+                      : ''}
+                  </Text>
+                </View>
+                <View style={styles.threadSide}>
+                  <Badge label={statusLabel(c.order.status)} status={STATUS_BADGE[c.order.status] ?? 'neutral'} />
+                  <Text style={styles.threadTime}>
+                    {c.lastMessage ? timeAgo(c.lastMessage.created_at) : ''}
+                  </Text>
+                </View>
+                {i < orderThreads.length - 1 || inquiries.length > 0 ? <View style={styles.threadDivider} /> : null}
+              </Pressable>
+            ))}
+          </Card>
+        </View>
+      ) : null}
+      {inquiries.length > 0 ? (
+        <View style={styles.section}>
+          <Text style={styles.detailTitle}>Customer questions (no order yet)</Text>
+          <Card variant="flat" style={styles.listCard} padded={false}>
+            {inquiries.map((c) => (
+              <Pressable
+                key={c.customerId}
+                accessibilityRole="button"
+                accessibilityLabel={`Open questions from ${c.customerName}`}
+                onPress={() => navigation.navigate('StoreChat', { merchantId, customerId: c.customerId })}
+                style={({ pressed }) => [styles.threadRow, pressed && styles.pressed]}
+              >
+                <View style={styles.itemText}>
+                  <Text style={styles.itemName} numberOfLines={1}>
+                    {c.unread ? '● ' : ''}{c.customerName}
+                  </Text>
+                  <Text style={styles.cardSub} numberOfLines={1}>
+                    {c.lastMessage
+                      ? `${c.lastMessage.sender_id === profile?.id ? 'You: ' : ''}${c.lastMessage.body}`
+                      : ''}
+                  </Text>
+                </View>
+                <Text style={styles.threadTime}>
+                  {c.lastMessage ? timeAgo(c.lastMessage.created_at) : ''}
+                </Text>
+              </Pressable>
+            ))}
+          </Card>
+        </View>
+      ) : null}
+    </View>
   );
 }
 
@@ -400,7 +637,6 @@ function MerchantOrders({ merchantId }: { merchantId: string }) {
 
   return (
     <View style={styles.section}>
-      <MerchantInquiries merchantId={merchantId} />
       <SegmentedTabs<InboxTab>
         segments={[
           { value: 'new', label: 'New', badge: counts.new },
@@ -515,85 +751,6 @@ function MerchantOrders({ merchantId }: { merchantId: string }) {
         )}
       </SheetModal>
     </View>
-  );
-}
-
-function MerchantInquiries({ merchantId }: { merchantId: string }) {
-  const navigation = useNavigation<RootNavProp>();
-  const { client, profile } = useAuth();
-  const [rows, setRows] = useState<StoreMessageRow[]>([]);
-  const [names, setNames] = useState<Record<string, string>>({});
-
-  const load = useCallback(async () => {
-    try {
-      const { data } = await client
-        .from('store_messages')
-        .select('*')
-        .eq('merchant_id', merchantId)
-        .order('created_at', { ascending: false })
-        .limit(100);
-      const list = (data ?? []) as StoreMessageRow[];
-      setRows(list);
-      const ids = [...new Set(list.map((r) => r.customer_id))];
-      if (ids.length > 0) {
-        const { data: people } = await client.from('profiles').select('id, full_name').in('id', ids);
-        const map: Record<string, string> = {};
-        for (const p of (people ?? []) as { id: string; full_name: string }[]) {
-          map[p.id] = p.full_name?.trim() || 'Customer';
-        }
-        setNames(map);
-      }
-    } catch {
-      // Offline: keep stale rows.
-    }
-  }, [client, merchantId]);
-
-  useEffect(() => {
-    void load();
-    const channel = client
-      .channel(`store-inquiries-${merchantId}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'store_messages', filter: `merchant_id=eq.${merchantId}` },
-        () => void load(),
-      )
-      .subscribe();
-    return () => {
-      void client.removeChannel(channel);
-    };
-  }, [client, merchantId, load]);
-
-  const items = useMemo(
-    () => (profile ? toStoreConversations(rows, profile.id, names, { counterpart: 'customer' }) : []),
-    [rows, names, profile],
-  );
-  if (items.length === 0) return null;
-  const unreadCount = items.filter((i) => i.unread).length;
-
-  return (
-    <Card variant="tinted">
-      <Text style={styles.detailTitle}>
-        Customer questions{unreadCount > 0 ? ` · ${unreadCount} new` : ''} (no order yet)
-      </Text>
-      <Text style={styles.cardSub}>Answer stock/price questions — these shoppers have not ordered yet.</Text>
-      {items.slice(0, 5).map((c) => (
-        <View key={c.customerId} style={styles.attentionRow}>
-          <View style={styles.itemText}>
-            <Text style={styles.itemName} numberOfLines={1}>
-              {c.unread ? '● ' : ''}{c.customerName}
-            </Text>
-            <Text style={styles.cardSub} numberOfLines={1}>
-              {c.lastMessage ? `${c.lastMessage.sender_id === profile?.id ? 'You: ' : ''}${c.lastMessage.body}` : ''}
-            </Text>
-          </View>
-          <Button
-            title="Reply"
-            variant="secondary"
-            onPress={() => navigation.navigate('StoreChat', { merchantId, customerId: c.customerId })}
-          />
-        </View>
-      ))}
-    </Card>
   );
 }
 
@@ -1100,6 +1257,37 @@ function MerchantStore({ merchantId }: { merchantId: string }) {
 }
 
 const styles = StyleSheet.create({
+  headerActions: { flexDirection: 'row', gap: spacing.sm },
+  bar: {
+    height: MERCHANT_BAR_HEIGHT,
+    flexDirection: 'row',
+    backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.hairline,
+  },
+  tabItem: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 2 },
+  iconWrap: { position: 'relative', alignItems: 'center', justifyContent: 'center' },
+  badge: {
+    position: 'absolute',
+    top: -6,
+    right: -14,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    paddingHorizontal: 4,
+    backgroundColor: colors.danger,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeText: { ...typography.micro, fontSize: 10, fontWeight: '700', color: colors.onPrimary },
+  tabLabel: { ...typography.micro, fontSize: 10.5, fontWeight: '600', color: colors.faint },
+  tabLabelActive: { color: colors.primary },
+  pressed: { opacity: 0.7 },
+  listCard: { padding: 0, overflow: 'hidden' },
+  threadRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.base },
+  threadSide: { alignItems: 'flex-end', gap: 4 },
+  threadDivider: { height: 1, backgroundColor: colors.hairline, marginLeft: spacing.base },
+  threadTime: { ...typography.micro, color: colors.faint },
   section: { gap: spacing.md, paddingBottom: spacing.xxl },
   cardHead: { flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start' },
   cardTitle: { flex: 1, gap: 2 },

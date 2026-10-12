@@ -8,8 +8,6 @@ import { peso } from '../marketplace/data';
 import { CACHE_TTLS, cacheKey, fetchWithCache } from '../lib/cache';
 import { HowItWorks } from '../components/HowItWorks';
 import { useUnreadCount } from './NotificationsScreen';
-import { useUnreadMessages } from '../messaging/chat';
-import { useUnreadStoreCount } from '../messaging/storeChat';
 import { goToTab, type RootNavProp, type TabScreen } from '../navigation/types';
 
 type Props = TabScreen<'Home'>;
@@ -36,9 +34,6 @@ export default function HomeScreen({}: Props) {
   const navigation = useNavigation<RootNavProp>();
   const { client, profile } = useAuth();
   const unread = useUnreadCount();
-  const unreadMessages = useUnreadMessages('customer');
-  const unreadStores = useUnreadStoreCount();
-  const unreadMessagesTotal = unreadMessages + unreadStores;
   const [activeOrder, setActiveOrder] = useState<OrderRow | null>(null);
 
   const firstName = profile?.full_name?.split(' ')[0] || 'there';
@@ -111,13 +106,6 @@ export default function HomeScreen({}: Props) {
           </View>
         </View>
         <View style={styles.headerActions}>
-          <IconButton
-            icon="message"
-            label={unreadMessagesTotal > 0 ? `Messages, ${unreadMessagesTotal} unread` : 'Messages'}
-            onPress={() => navigation.navigate('Messages')}
-            tone="soft"
-            badge={unreadMessagesTotal}
-          />
           <IconButton
             icon="bell"
             label={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}

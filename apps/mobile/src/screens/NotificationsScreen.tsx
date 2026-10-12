@@ -52,11 +52,15 @@ export function useUnreadCount(): number {
         }
       }
       try {
+        // Chat messages (kind 'message') live in the message badges, not the
+        // bell — the bell counts order updates, promos, and review results.
+        // kind is nullable (pre-0020 rows), so nulls must pass explicitly.
         const { count } = await client
           .from('notifications')
           .select('id', { count: 'exact', head: true })
           .eq('user_id', uid)
-          .eq('is_read', false);
+          .eq('is_read', false)
+          .or('kind.neq.message,kind.is.null');
         const next = count ?? 0;
         setUnread(next);
         setEntry(countKey, next, CACHE_TTLS.unreadCount, true);
@@ -126,7 +130,11 @@ export default function NotificationsScreen({}: Props) {
   const { mode } = useAuthMode();
   // The rider shell has no customer tabs: no BottomNav footer there, and
   // taps land back on the rider dashboard (threads live in its Messages tab).
+  // Same for the merchant shell: no Tabs route, so no BottomNav and taps land
+  // on the merchant dashboard (its Orders tab holds the order).
   const isRider = mode === 'rider';
+  const isMerchant = mode === 'merchant';
+  const noTabs = isRider || isMerchant;
   const uid = session?.user.id ?? null;
 
   // Cache-first inbox (30s TTL, offline fallback).
@@ -144,6 +152,7 @@ export default function NotificationsScreen({}: Props) {
         .from('notifications')
         .select('*')
         .eq('user_id', id)
+        .or('kind.neq.message,kind.is.null')
         .order('created_at', { ascending: false })
         .limit(50);
       if (error) throw new Error(error.message);
@@ -240,16 +249,30 @@ export default function NotificationsScreen({}: Props) {
       navigation.navigate('Rider');
       return;
     }
+    if (isMerchant) {
+      // No Tabs/Orders/Rider routes in the merchant shell: order updates
+      // land on the dashboard Orders tab; everything else (inquiries via
+      // message badges, review results) lands on the overview.
+      navigation.navigate('Merchant', n.order_id ? { tab: 'orders' as const } : undefined);
+      return;
+    }
     // Message notifications deep-link straight into the order chat.
     if (n.kind === 'message' && n.order_id) {
       navigation.navigate('Chat', { orderId: n.order_id });
       return;
     }
     // Pre-order store inquiries (no order): customers jump to the store
-    // thread; merchants land on the dashboard inquiries card.
+    // thread. (Merchant mode returns to the dashboard above; message rows
+    // are excluded from this inbox — chats live in the message badges.)
     if (n.kind === 'message' && !n.order_id && n.merchant_id) {
-      if (mode === 'merchant') navigation.navigate('Merchant');
-      else navigation.navigate('StoreChat', { merchantId: n.merchant_id });
+      navigation.navigate('StoreChat', { merchantId: n.merchant_id });
+      return;
+    }
+    // Store-application updates (no order): the apply/status gate lives in
+    // the merchant shell, so from a customer session just mark read and
+    // point the way (merchant/rider modes returned to their dashboards above).
+    if (n.kind === 'merchant_application') {
+      showToast({ message: 'Log out and sign in as a merchant to open your store.', type: 'info' });
       return;
     }
     // Rider-application notifications land on the rider gate (status screen);
@@ -270,7 +293,7 @@ export default function NotificationsScreen({}: Props) {
   };
 
   return (
-    <Screen footer={isRider ? undefined : <BottomNav />} footerHeight={isRider ? 0 : BOTTOM_NAV_HEIGHT}>
+    <Screen footer={noTabs ? undefined : <BottomNav />} footerHeight={noTabs ? 0 : BOTTOM_NAV_HEIGHT}>
       <ScreenHeader
         title="Notifications"
         onBack={() => navigation.goBack()}
@@ -334,11 +357,13 @@ export default function NotificationsScreen({}: Props) {
           message={
             isRider
               ? 'Pabili broadcasts, order updates and application results will appear here.'
-              : 'Order updates from your stores and riders will appear here.'
+              : isMerchant
+                ? 'New orders, order updates and review results will appear here.'
+                : 'Order updates from your stores and riders will appear here.'
           }
           icon="bell"
           action={
-            isRider ? undefined : (
+            noTabs ? undefined : (
               <Button title="Browse stores" onPress={() => goToTab(navigation, 'Shop')} />
             )
           }

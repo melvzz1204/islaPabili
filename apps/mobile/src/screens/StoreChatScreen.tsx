@@ -24,6 +24,7 @@ import { ChatComposer, ChatThread } from '../messaging/ChatThread';
 import {
   fetchStoreThread,
   sendStoreMessage,
+  setOpenStoreThread,
   useStoreThreadRealtime,
   type StoreMessageRow,
 } from '../messaging/storeChat';
@@ -65,6 +66,13 @@ export default function StoreChatScreen({ route }: Props) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Banner suppression: the merchant shell stays quiet for the open thread.
+  useEffect(() => {
+    if (!threadCustomerId) return;
+    setOpenStoreThread(`${merchantId}:${threadCustomerId}`);
+    return () => setOpenStoreThread(null);
+  }, [merchantId, threadCustomerId]);
 
   useEffect(() => {
     let active = true;

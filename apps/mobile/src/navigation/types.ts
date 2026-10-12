@@ -31,7 +31,7 @@ export type RootStackParamList = {
   JollibeeMenu: undefined;
   Notifications: undefined;
   Rider: undefined;
-  Merchant: undefined;
+  Merchant: { tab?: 'overview' | 'orders' | 'messages' | 'verify' | 'store' } | undefined;
   Onboarding: undefined;
   AuthHome: undefined;
   Login: undefined;

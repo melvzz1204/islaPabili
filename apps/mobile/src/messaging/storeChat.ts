@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth, type Supabase } from '@isla/supabase';
 import type { Database } from '@isla/supabase';
+import { useToast } from '@isla/ui';
+import { CHANNEL_CHAT, blip, getSoundSettings, notifyLocal } from '../lib/notify';
+import { getOpenOrderId } from './chat';
 
 export type StoreMessageRow = Database['public']['Tables']['store_messages']['Row'];
 
@@ -169,4 +172,159 @@ export function useUnreadStoreCount(): number {
   }, [client, profile, load, instanceId]);
 
   return count;
+}
+
+/**
+ * Merchant-side inquiry inbox: per-customer threads with names, unread flags,
+ * and totals. Powers the Messages tab list, the tab badge, and the header
+ * message button.
+ */
+export function useMerchantInquiries(merchantId: string): {
+  conversations: StoreConversation[];
+  unread: number;
+  loading: boolean;
+} {
+  const { client, profile } = useAuth();
+  const [rows, setRows] = useState<StoreMessageRow[]>([]);
+  const [names, setNames] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    if (!profile) {
+      setLoading(false);
+      return;
+    }
+    try {
+      const { data } = await client
+        .from('store_messages')
+        .select('*')
+        .eq('merchant_id', merchantId)
+        .order('created_at', { ascending: false })
+        .limit(100);
+      const list = (data ?? []) as StoreMessageRow[];
+      setRows(list);
+      const ids = [...new Set(list.map((r) => r.customer_id))];
+      if (ids.length > 0) {
+        const { data: people } = await client.from('profiles').select('id, full_name').in('id', ids);
+        const map: Record<string, string> = {};
+        for (const p of (people ?? []) as { id: string; full_name: string }[]) {
+          map[p.id] = p.full_name?.trim() || 'Customer';
+        }
+        setNames(map);
+      }
+    } catch {
+      // Offline: keep stale rows.
+    } finally {
+      setLoading(false);
+    }
+  }, [client, profile, merchantId]);
+
+  useEffect(() => {
+    void load();
+    const channel = client
+      .channel(`store-inquiries-${merchantId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'store_messages', filter: `merchant_id=eq.${merchantId}` },
+        () => void load(),
+      )
+      .subscribe();
+    return () => {
+      void client.removeChannel(channel);
+    };
+  }, [client, merchantId, load]);
+
+  const conversations = useMemo(
+    () => (profile ? toStoreConversations(rows, profile.id, names, { counterpart: 'customer' }) : []),
+    [rows, names, profile],
+  );
+  return { conversations, unread: conversations.filter((c) => c.unread).length, loading };
+}
+
+/** Store thread currently on screen (`merchantId:customerId`), banners stay quiet for it. */
+let openStoreThread: string | null = null;
+
+export function setOpenStoreThread(key: string | null) {
+  openStoreThread = key;
+}
+
+async function bannerForBody(
+  showToast: (t: { message: string; type: 'success'; duration?: number }) => void,
+  title: string,
+  snippet: string,
+  data: { orderId?: string; merchantId?: string; kind: 'message' },
+) {
+  showToast({ message: `${title}: ${snippet}`, type: 'success', duration: 4200 });
+  const prefs = await getSoundSettings();
+  if (prefs.sounds && prefs.chat) {
+    if (prefs.vibrate) blip();
+    await notifyLocal({ channel: CHANNEL_CHAT, title, body: snippet, data });
+  }
+}
+
+/**
+ * Mount once in the merchant shell. Pops a toast banner whenever the other
+ * party writes in one of this store's threads — order chats and pre-order
+ * inquiries alike — except the thread already open on screen.
+ */
+export function useMerchantMessageAlerts(merchantId: string) {
+  const { client, profile } = useAuth();
+  const { showToast } = useToast();
+  const instanceId = useMemo(() => Math.random().toString(36).slice(2, 9), []);
+
+  useEffect(() => {
+    if (!profile) return;
+    const channel = client
+      .channel(`merchant-message-alerts-${merchantId}-${instanceId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'order_messages' }, (payload) => {
+        const row = payload.new as { order_id: string; sender_id: string; body: string };
+        if (row.sender_id === profile.id || row.order_id === getOpenOrderId()) return;
+        void (async () => {
+          const { data } = await client
+            .from('orders')
+            .select('id, order_number, merchant_id')
+            .eq('id', row.order_id)
+            .maybeSingle();
+          const o = data as { order_number: string; merchant_id: string | null } | null;
+          if (!o || o.merchant_id !== merchantId) return;
+          const { data: person } = await client
+            .from('profiles')
+            .select('full_name')
+            .eq('id', row.sender_id)
+            .maybeSingle();
+          const name = (person as { full_name?: string } | null)?.full_name?.trim() || 'New message';
+          const snippet = row.body.length > 80 ? `${row.body.slice(0, 80)}…` : row.body;
+          await bannerForBody(showToast, `${name} · #${o.order_number}`, snippet, {
+            orderId: row.order_id,
+            kind: 'message',
+          });
+        })();
+      })
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'store_messages', filter: `merchant_id=eq.${merchantId}` },
+        (payload) => {
+          const row = payload.new as { merchant_id: string; customer_id: string; sender_id: string; body: string };
+          if (row.sender_id === profile.id) return;
+          if (openStoreThread === `${row.merchant_id}:${row.customer_id}`) return;
+          void (async () => {
+            const { data: person } = await client
+              .from('profiles')
+              .select('full_name')
+              .eq('id', row.sender_id)
+              .maybeSingle();
+            const name = (person as { full_name?: string } | null)?.full_name?.trim() || 'Customer question';
+            const snippet = row.body.length > 80 ? `${row.body.slice(0, 80)}…` : row.body;
+            await bannerForBody(showToast, name, snippet, {
+              merchantId: row.merchant_id,
+              kind: 'message',
+            });
+          })();
+        },
+      )
+      .subscribe();
+    return () => {
+      void client.removeChannel(channel);
+    };
+  }, [client, profile, merchantId, showToast, instanceId]);
 }

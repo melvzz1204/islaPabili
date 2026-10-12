@@ -4,6 +4,46 @@ import { useToast } from '@isla/ui';
 import { CHANNEL_ORDERS, blip, cancelDeliveredReminder, getSoundSettings, notifyLocal, scheduleDeliveredReminder } from './notify';
 
 /**
+ * Merchant new-order fanfare: every new inbox notification also fires an
+ * in-app toast + tray notification with sound, so an incoming order ("New
+ * order … needs your confirmation") is impossible to miss while the
+ * dashboard is open. Chat rows already banner through the merchant message
+ * alerts.
+ */
+export function useMerchantOrderAlerts() {
+  const { client, profile } = useAuth();
+  const { showToast } = useToast();
+  const instanceId = useMemo(() => Math.random().toString(36).slice(2, 9), []);
+
+  useEffect(() => {
+    if (!profile) return;
+    const channel = client
+      .channel(`merchant-order-alerts-${profile.id}-${instanceId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${profile.id}` },
+        (payload) => {
+          const n = payload.new as { title: string; body: string; kind: string | null };
+          // Chat rows already banner through the message alerts.
+          if (n.kind === 'message') return;
+          showToast({ message: `${n.title}, ${n.body}`, type: 'success', duration: 5000 });
+          void (async () => {
+            const prefs = await getSoundSettings();
+            if (prefs.sounds && prefs.orderUpdates) {
+              if (prefs.vibrate) blip();
+              await notifyLocal({ channel: CHANNEL_ORDERS, title: n.title, body: n.body });
+            }
+          })();
+        },
+      )
+      .subscribe();
+    return () => {
+      void client.removeChannel(channel);
+    };
+  }, [client, profile, showToast, instanceId]);
+}
+
+/**
  * Customer order-update fanfare: every new inbox notification also fires an
  * in-app toast + tray notification with sound, so status changes (rider
  * assigned, on the way, delivered…) are impossible to miss.

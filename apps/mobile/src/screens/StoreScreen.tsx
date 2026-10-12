@@ -5,6 +5,7 @@ import { useAuth } from '@isla/supabase';
 import { CACHE_TTLS, cacheKey } from '../lib/cache';
 import { useCachedQuery } from '../lib/useCachedQuery';
 import {
+  AppIcon,
   Badge,
   Button,
   Card,
@@ -111,18 +112,27 @@ export default function StoreScreen({ route }: Props) {
     >
       <ScreenHeader title={merchant.name} subtitle={`${KIND_LABEL[merchant.kind]} · ${merchant.town}`} onBack={() => navigation.goBack()} right={<Badge label="Open" status="success" dot />} />
 
-      {isJollibeeMerchantName(merchant.name) ? null : (
-        <Button
-          title={session ? `Message ${merchant.name}` : 'Log in to message the store'}
-          variant="secondary"
-          onPress={() => {
-            if (!session) navigation.navigate('AuthHome');
-            else navigation.navigate('StoreChat', { merchantId: merchant.id });
-          }}
-        />
-      )}
-
       <StoreListComposer merchantId={merchant.id} merchantName={merchant.name} />
+
+      {isJollibeeMerchantName(merchant.name) ? null : (
+        <Card style={styles.messageCard}>
+          <View style={styles.messageHead}>
+            <AppIcon name="message" size={22} color={colors.primary} />
+            <View style={styles.messageText}>
+              <Text style={styles.messageTitle}>Questions about this store?</Text>
+              <Text style={styles.messageSub}>Ask about stock, price, or availability — the store replies here.</Text>
+            </View>
+          </View>
+          <Button
+            title={session ? `Message ${merchant.name}` : 'Log in to message the store'}
+            icon={<AppIcon name="message" size={18} color={colors.onPrimary} />}
+            onPress={() => {
+              if (!session) navigation.navigate('AuthHome');
+              else navigation.navigate('StoreChat', { merchantId: merchant.id });
+            }}
+          />
+        </Card>
+      )}
     </Screen>
   );
 }
@@ -207,4 +217,9 @@ const styles = StyleSheet.create({
 
   errorActions: { gap: spacing.sm, width: '100%' },
   footerStack: { gap: spacing.sm },
+  messageCard: { borderColor: colors.primary, borderWidth: 1.5 },
+  messageHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  messageText: { flex: 1, gap: 1 },
+  messageTitle: { ...typography.subhead, fontWeight: '700' },
+  messageSub: { ...typography.caption, color: colors.muted },
 });

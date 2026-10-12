@@ -225,6 +225,98 @@ export function useUnreadMessages(role: 'customer' | 'rider'): number {
   return conversations.filter((c) => c.unread).length;
 }
 
+/**
+ * Merchant shared: own store orders plus their latest message. Covers every
+ * status (not just the replyable confirm/pack/ready window): the merchant
+ * can READ all of its threads, closed ones render as read-only history in
+ * Chat. Same read-map badge semantics as useConversations, so opening a
+ * Chat thread clears its badge on every mounted hook.
+ */
+export function useMerchantOrderChats(merchantId: string) {
+  const { client, profile } = useAuth();
+  const [items, setItems] = useState<Conversation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [readTick, setReadTick] = useState(0);
+
+  useEffect(() => {
+    const fn = () => setReadTick((t) => t + 1);
+    readListeners.add(fn);
+    return () => {
+      readListeners.delete(fn);
+    };
+  }, []);
+
+  const conversations = useMemo(() => applyRead(items), [items, readTick]);
+
+  const load = useCallback(async () => {
+    if (!profile) {
+      setLoading(false);
+      return;
+    }
+    await ensureReadMap(profile.id);
+    try {
+      const { data: orders } = await client
+        .from('orders')
+        .select('*')
+        .eq('merchant_id', merchantId)
+        .order('created_at', { ascending: false })
+        .limit(20);
+      const list = (orders ?? []) as OrderRow[];
+      if (list.length === 0) {
+        setItems([]);
+        return;
+      }
+      const ids = list.map((o) => o.id);
+      const { data: messages } = await client
+        .from('order_messages')
+        .select('*')
+        .in('order_id', ids)
+        .order('created_at', { ascending: false });
+      const latest = new Map<string, MessageRow>();
+      for (const m of (messages ?? []) as MessageRow[]) {
+        if (!latest.has(m.order_id)) latest.set(m.order_id, m);
+      }
+      setItems(
+        list.map((order) => {
+          const last = latest.get(order.id) ?? null;
+          return { order, lastMessage: last, unread: !!last && last.sender_id !== profile.id };
+        }),
+      );
+    } catch {
+      // Offline: keep stale items on screen.
+    } finally {
+      setLoading(false);
+    }
+  }, [client, profile, merchantId]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  // Live: any new message refreshes the badge. Per-hook suffix, same as
+  // useConversations — a shared topic name crashes on concurrent mounts.
+  const instanceId = useMemo(() => Math.random().toString(36).slice(2, 9), []);
+  useEffect(() => {
+    if (!profile) return;
+    const channel = client
+      .channel(`merchant-conversations-${merchantId}-${instanceId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'order_messages' }, () =>
+        void load(),
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'orders', filter: `merchant_id=eq.${merchantId}` },
+        () => void load(),
+      )
+      .subscribe();
+    return () => {
+      void client.removeChannel(channel);
+    };
+  }, [client, profile, load, merchantId, instanceId]);
+
+  return { conversations, loading, refresh: load };
+}
+
 // --- Live incoming-message banners --------------------------------------------
 
 /** Order thread currently on screen, banners stay quiet for it. */
@@ -232,6 +324,10 @@ let openOrderId: string | null = null;
 
 export function setOpenOrderId(orderId: string | null) {
   openOrderId = orderId;
+}
+
+export function getOpenOrderId(): string | null {
+  return openOrderId;
 }
 
 /**

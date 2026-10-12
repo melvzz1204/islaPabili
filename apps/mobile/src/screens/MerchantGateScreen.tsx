@@ -11,7 +11,6 @@ import type { RootNavProp, RootStackScreen } from '../navigation/types';
 type MerchantApplicationRow = Database['public']['Tables']['merchant_applications']['Row'];
 
 type Props = RootStackScreen<'Merchant'>;
-
 type GateState =
   | { kind: 'loading' }
   | { kind: 'home'; merchantId: string }
@@ -23,13 +22,14 @@ type GateState =
  * pending/rejected → status; none → register the store.
  * Leaving the shell always means logging out.
  */
-export default function MerchantGateScreen({}: Props) {
+export default function MerchantGateScreen({ route }: Props) {
   const navigation = useNavigation<RootNavProp>();
   const { client, profile } = useAuth();
   const { showToast } = useToast();
   const [state, setState] = useState<GateState>({ kind: 'loading' });
   const [logoutOpen, setLogoutOpen] = useState(false);
   const canGoBack = navigation.canGoBack();
+  const initialTab = route.params?.tab;
 
   const handleLogout = () => {
     setLogoutOpen(false);
@@ -98,7 +98,7 @@ export default function MerchantGateScreen({}: Props) {
   if (state.kind === 'home') {
     return (
       <View style={styles.flex}>
-        <MerchantHomeScreen merchantId={state.merchantId} />
+        <MerchantHomeScreen merchantId={state.merchantId} initialTab={initialTab} />
       </View>
     );
   }
