@@ -276,6 +276,7 @@ export type Database = {
           id: string
           is_read: boolean
           kind: string | null
+          merchant_id: string | null
           order_id: string | null
           title: string
           user_id: string
@@ -286,6 +287,7 @@ export type Database = {
           id?: string
           is_read?: boolean
           kind?: string | null
+          merchant_id?: string | null
           order_id?: string | null
           title: string
           user_id: string
@@ -296,11 +298,19 @@ export type Database = {
           id?: string
           is_read?: boolean
           kind?: string | null
+          merchant_id?: string | null
           order_id?: string | null
           title?: string
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "notifications_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "notifications_order_id_fkey"
             columns: ["order_id"]
@@ -956,6 +966,55 @@ export type Database = {
             foreignKeyName: "rider_status_rider_id_fkey"
             columns: ["rider_id"]
             isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      store_messages: {
+        Row: {
+          body: string
+          created_at: string
+          customer_id: string
+          id: string
+          merchant_id: string
+          sender_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          customer_id: string
+          id?: string
+          merchant_id: string
+          sender_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          customer_id?: string
+          id?: string
+          merchant_id?: string
+          sender_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "store_messages_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "store_messages_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "store_messages_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },

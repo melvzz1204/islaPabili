@@ -16,13 +16,13 @@ import { AuthModeProvider, useAuthMode } from './src/lib/authMode';
 import { consumeCheckoutReturn } from './src/lib/checkoutReturn';
 import { registerPushToken } from './src/lib/push';
 import { useConversations, useIncomingMessageAlerts } from './src/messaging/chat';
+import { useUnreadStoreCount } from './src/messaging/storeChat';
 import { useOrderUpdateAlerts } from './src/lib/orderAlerts';
 import { initNotifications, getPromoTarget, scheduleAlakSingko, scheduleDailyCraving, setPendingRiderTab } from './src/lib/notify';
 import type { RootStackParamList, TabParamList } from './src/navigation/types';
 import AuthHomeScreen from './src/screens/auth/AuthHomeScreen';
 import LoginScreen from './src/screens/auth/LoginScreen';
 import RegisterScreen from './src/screens/auth/RegisterScreen';
-import PhoneScreen from './src/screens/auth/PhoneScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
 import WelcomeOnboardingScreen, { WELCOME_SEEN_KEY } from './src/screens/WelcomeOnboardingScreen';
 import HomeScreen from './src/screens/HomeScreen';
@@ -36,6 +36,7 @@ import JollibeeMenuScreen from './src/screens/JollibeeMenuScreen';
 import OrdersScreen from './src/screens/OrdersScreen';
 import MessagesScreen from './src/screens/MessagesScreen';
 import ChatScreen from './src/screens/ChatScreen';
+import StoreChatScreen from './src/screens/StoreChatScreen';
 import TrackScreen from './src/screens/TrackScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import { OtaPrompt, UpdatePrompt } from './src/components/UpdatePrompt';
@@ -95,11 +96,12 @@ function TabBarIcon({
  */
 function MainTabs({ guest }: { guest: boolean }) {
   const { conversations } = useConversations('customer');
+  const storeUnread = useUnreadStoreCount();
   // Live banner for incoming rider messages, anywhere in the customer shell.
   useIncomingMessageAlerts('customer');
   // Toast + tray + sound for every order status notification.
   useOrderUpdateAlerts();
-  const unread = guest ? 0 : conversations.filter((c) => c.unread).length;
+  const unread = guest ? 0 : conversations.filter((c) => c.unread).length + storeUnread;
   if (guest) {
     return (
       <Tabs.Navigator screenOptions={{ headerShown: false }} tabBar={() => null}>
@@ -212,6 +214,7 @@ function Root() {
       <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
         <Stack.Screen name="Merchant" component={MerchantGateScreen} />
         <Stack.Screen name="Chat" component={ChatScreen} />
+        <Stack.Screen name="StoreChat" component={StoreChatScreen} />
         <Stack.Screen name="Notifications" component={NotificationsScreen} />
       </Stack.Navigator>
     );
@@ -225,7 +228,6 @@ function Root() {
         <Stack.Screen name="AuthHome" component={AuthHomeScreen} />
         <Stack.Screen name="Login" component={LoginScreen} />
         <Stack.Screen name="Register" component={RegisterScreen} />
-        <Stack.Screen name="Phone" component={PhoneScreen} />
       </Stack.Navigator>
     );
   }
@@ -266,6 +268,7 @@ function Root() {
       <Stack.Screen name="JollibeeMenu" component={JollibeeMenuScreen} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} />
       <Stack.Screen name="Chat" component={ChatScreen} />
+      <Stack.Screen name="StoreChat" component={StoreChatScreen} />
       <Stack.Screen name="Track" component={TrackScreen} />
       <Stack.Screen name="Settings" component={SettingsScreen} />
       <Stack.Screen name="Rider" component={RiderGateScreen} />
@@ -273,7 +276,6 @@ function Root() {
       <Stack.Screen name="AuthHome" component={AuthHomeScreen} />
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="Register" component={RegisterScreen} />
-      <Stack.Screen name="Phone" component={PhoneScreen} />
     </Stack.Navigator>
   );
 }

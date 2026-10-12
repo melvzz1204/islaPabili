@@ -117,11 +117,6 @@ export default function LoginScreen() {
         variant="secondary"
         onPress={() => navigation.navigate('Register')}
       />
-      <Button
-        title="Continue with phone"
-        variant="ghost"
-        onPress={() => navigation.navigate('Phone')}
-      />
 
       <TextLink label="Back to all sign-in options" onPress={() => navigation.navigate('AuthHome')} />
     </Screen>

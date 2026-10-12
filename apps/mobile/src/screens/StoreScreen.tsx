@@ -20,6 +20,7 @@ import {
 import {
   KIND_LABEL,
   fetchMerchant,
+  isJollibeeMerchantName,
   type Merchant,
 } from '../marketplace/data';
 import { CartBar, QtyStepper } from '../marketplace/components';
@@ -32,7 +33,9 @@ type Props = RootStackScreen<'Store'>;
 export default function StoreScreen({ route }: Props) {
   const navigation = useNavigation<RootNavProp>();
   const { merchantId } = route.params;
-  const { client } = useAuth();
+  const { client, session } = useAuth();
+
+  // Pre-order inquiry: Jollibee is rider-delivery-only, no direct store chat.
 
   // Cache-first store header (10-min), offline fallback.
   const {
@@ -107,6 +110,17 @@ export default function StoreScreen({ route }: Props) {
       footerHeight={88 + BOTTOM_NAV_HEIGHT}
     >
       <ScreenHeader title={merchant.name} subtitle={`${KIND_LABEL[merchant.kind]} · ${merchant.town}`} onBack={() => navigation.goBack()} right={<Badge label="Open" status="success" dot />} />
+
+      {isJollibeeMerchantName(merchant.name) ? null : (
+        <Button
+          title={session ? `Message ${merchant.name}` : 'Log in to message the store'}
+          variant="secondary"
+          onPress={() => {
+            if (!session) navigation.navigate('AuthHome');
+            else navigation.navigate('StoreChat', { merchantId: merchant.id });
+          }}
+        />
+      )}
 
       <StoreListComposer merchantId={merchant.id} merchantName={merchant.name} />
     </Screen>

@@ -764,6 +764,13 @@ export default function CheckoutScreen({}: Props) {
             onChangeText={setAddress}
             multiline
           />
+          {profile?.address?.trim() && profile.address.trim() !== address.trim() ? (
+            <Button
+              title={`Use my saved address`}
+              variant="ghost"
+              onPress={() => setAddress(profile.address!.trim())}
+            />
+          ) : null}
           <Button
             title={gps ? 'Location pinned ✓, tap to re-pin' : 'Use my exact location'}
             variant="secondary"

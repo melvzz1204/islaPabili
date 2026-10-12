@@ -16,14 +16,15 @@ function message(error: unknown): string | null {
 
 export async function signUpWithPassword(
   client: Supabase,
-  input: { username: string; email?: string; password: string; fullName: string },
+  input: { username: string; email?: string; password: string; fullName: string; address?: string },
 ): Promise<AuthResult> {
   const username = normalizeUsername(input.username);
   const email = input.email?.trim() ? input.email.trim() : authEmailForUsername(username);
+  const address = input.address?.trim() ? input.address.trim() : undefined;
   const { error } = await client.auth.signUp({
     email,
     password: input.password,
-    options: { data: { username, full_name: input.fullName } },
+    options: { data: { username, full_name: input.fullName, ...(address ? { address } : null) } },
   });
   return { error: message(error) };
 }

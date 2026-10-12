@@ -25,7 +25,6 @@ export default function AuthHomeScreen() {
       <View style={styles.ctaCard}>
         <Button title="Log in" style={styles.pill} onPress={() => navigation.navigate('Login')} />
         <Button title="Create an account" variant="secondary" onPress={() => navigation.navigate('Register')} />
-        <Button title="Continue with phone" variant="ghost" onPress={() => navigation.navigate('Phone')} />
       </View>
     </Screen>
   );

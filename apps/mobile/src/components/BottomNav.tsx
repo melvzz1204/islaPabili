@@ -5,6 +5,7 @@ import { useAuth } from '@isla/supabase';
 import { AppIcon, colors, typography, type AppIconName } from '@isla/ui';
 import { goToTab, type RootNavProp, type TabParamList } from '../navigation/types';
 import { useUnreadMessages } from '../messaging/chat';
+import { useUnreadStoreCount } from '../messaging/storeChat';
 import { useAuthMode } from '../lib/authMode';
 
 type Item = { tab: keyof TabParamList; label: string; icon: AppIconName };
@@ -65,7 +66,8 @@ export function BottomNav() {
   // Live customer unread count. The rider shell never mounts customer tabs,
   // so only badge in customer mode (same profile can exist in both shells).
   const customerUnread = useUnreadMessages('customer');
-  const messageBadge = session && mode !== 'rider' ? customerUnread : 0;
+  const storeUnread = useUnreadStoreCount();
+  const messageBadge = session && mode !== 'rider' ? customerUnread + storeUnread : 0;
 
   // Guests only have the Shop tab, offer it plus a way into sign-in.
   if (!session) {

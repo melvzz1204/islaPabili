@@ -245,6 +245,13 @@ export default function NotificationsScreen({}: Props) {
       navigation.navigate('Chat', { orderId: n.order_id });
       return;
     }
+    // Pre-order store inquiries (no order): customers jump to the store
+    // thread; merchants land on the dashboard inquiries card.
+    if (n.kind === 'message' && !n.order_id && n.merchant_id) {
+      if (mode === 'merchant') navigation.navigate('Merchant');
+      else navigation.navigate('StoreChat', { merchantId: n.merchant_id });
+      return;
+    }
     // Rider-application notifications land on the rider gate (status screen);
     // rows written before 0020 have no kind, so fall back to title matching.
     // Pabili broadcasts (kind pabili, no order) also land on the Rider tab,

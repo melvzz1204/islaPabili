@@ -54,6 +54,7 @@ export default function RegisterScreen() {
   const [fullName, setFullName] = useState('');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
+  const [address, setAddress] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [acceptedTerms, setAcceptedTerms] = useState(false);
@@ -146,11 +147,24 @@ export default function RegisterScreen() {
       email: cleanEmail || undefined,
       password,
       fullName: fullName.trim(),
+      address: address.trim() || undefined,
     });
     setSubmitting(false);
     if (error) {
       Alert.alert('Sign up failed', error);
       return;
+    }
+    // When email confirmation is off there is already a session — persist the
+    // address straight onto the profile (the trigger also copies it from
+    // user_metadata for the confirm-email path).
+    if (address.trim()) {
+      const { data } = await client.auth.getSession();
+      if (data.session?.user) {
+        await client
+          .from('profiles')
+          .update({ address: address.trim() })
+          .eq('id', data.session.user.id);
+      }
     }
     const { data } = await client.auth.getSession();
     showToast({
@@ -230,6 +244,14 @@ export default function RegisterScreen() {
           onBlur={() => touch('email')}
           error={emailError}
           fieldStyle={styles.field}
+        />
+        <TextField
+          label="Delivery address (optional)"
+          placeholder="Street / barangay / landmark"
+          value={address}
+          onChangeText={setAddress}
+          fieldStyle={styles.field}
+          hint="Saved to your profile — you can reuse it at checkout."
         />
       </Card>
 

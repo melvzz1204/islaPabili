@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useAuth } from '@isla/supabase';
 import {
   AppIcon,
@@ -15,13 +15,20 @@ import {
   typography,
 } from '@isla/ui';
 import { useConversations } from '../messaging/chat';
+import {
+  toStoreConversations,
+  useUnreadStoreCount,
+  type StoreConversation,
+  type StoreMessageRow,
+} from '../messaging/storeChat';
 import type { RootNavProp, TabScreen } from '../navigation/types';
 
 type Props = TabScreen<'Messages'>;
 
 export function useUnreadMessagesCount(): number {
   const { conversations } = useConversations('customer');
-  return conversations.filter((c) => c.unread).length;
+  const storeUnread = useUnreadStoreCount();
+  return conversations.filter((c) => c.unread).length + storeUnread;
 }
 
 export default function MessagesScreen({}: Props) {
@@ -29,11 +36,72 @@ export default function MessagesScreen({}: Props) {
   const { client, profile } = useAuth();
   const { conversations, loading, refresh } = useConversations('customer');
   const [riderNames, setRiderNames] = useState<Record<string, string>>({});
+  const [storeRows, setStoreRows] = useState<StoreMessageRow[]>([]);
+  const [storeNames, setStoreNames] = useState<Record<string, string>>({});
+  const [storeLoading, setStoreLoading] = useState(true);
+
+  const loadStores = useCallback(
+    async (force = false) => {
+      if (!profile) {
+        setStoreLoading(false);
+        return;
+      }
+      if (!force) setStoreLoading(true);
+      try {
+        const { data, error } = await client
+          .from('store_messages')
+          .select('*')
+          .eq('customer_id', profile.id)
+          .order('created_at', { ascending: false })
+          .limit(100);
+        if (error) throw new Error(error.message);
+        const rows = (data ?? []) as StoreMessageRow[];
+        setStoreRows(rows);
+        const ids = [...new Set(rows.map((r) => r.merchant_id))];
+        if (ids.length > 0) {
+          const { data: merchants } = await client.from('merchants').select('id, name').in('id', ids);
+          const map: Record<string, string> = {};
+          for (const m of (merchants ?? []) as { id: string; name: string }[]) map[m.id] = m.name;
+          setStoreNames(map);
+        }
+      } catch {
+        // Offline: keep stale rows.
+      } finally {
+        setStoreLoading(false);
+      }
+    },
+    [client, profile],
+  );
 
   useFocusEffect(
     useCallback(() => {
       void refresh();
-    }, [refresh]),
+      void loadStores(true);
+    }, [refresh, loadStores]),
+  );
+
+  const storeInstanceId = useMemo(() => Math.random().toString(36).slice(2, 9), []);
+  useEffect(() => {
+    if (!profile) return;
+    const channel = client
+      .channel(`messages-stores-${profile.id}-${storeInstanceId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'store_messages', filter: `customer_id=eq.${profile.id}` },
+        () => void loadStores(true),
+      )
+      .subscribe();
+    return () => {
+      void client.removeChannel(channel);
+    };
+  }, [client, profile, loadStores, storeInstanceId]);
+
+  const storeConversations: StoreConversation[] = useMemo(
+    () =>
+      profile
+        ? toStoreConversations(storeRows, profile.id, storeNames, { counterpart: 'merchant' })
+        : [],
+    [storeRows, storeNames, profile],
   );
 
   useEffect(() => {
@@ -54,16 +122,19 @@ export default function MessagesScreen({}: Props) {
     };
   }, [client, conversations]);
 
+  const totalCount = conversations.length + storeConversations.length;
+  const busy = loading || storeLoading;
+
   return (
     <Screen>
       <View style={styles.header}>
         <Text style={styles.title}>Messages</Text>
         <Text style={styles.subtitle}>
-          {loading ? 'Loading…' : conversations.length ? `${conversations.length} conversation${conversations.length === 1 ? '' : 's'}` : 'Rider chats live here'}
+          {busy ? 'Loading…' : totalCount ? `${totalCount} conversation${totalCount === 1 ? '' : 's'}` : 'Rider + store chats live here'}
         </Text>
       </View>
 
-      {loading ? (
+      {busy ? (
         <View style={styles.list}>
           {[0, 1, 2].map((i) => (
             <View key={i} style={styles.skeletonRow}>
@@ -75,48 +146,92 @@ export default function MessagesScreen({}: Props) {
             </View>
           ))}
         </View>
-      ) : conversations.length === 0 ? (
+      ) : totalCount === 0 ? (
         <EmptyState
           title="No conversations yet"
-          message="Once a rider accepts your order, you can coordinate pickup and delivery here in real time."
+          message="Ask a store about stock or price before ordering, or coordinate delivery with your rider here once an order is on the way."
           icon="message"
         />
       ) : (
         <View style={styles.list}>
-          {conversations.map(({ order, lastMessage, unread }) => (
-            <Card
-              key={order.id}
-              variant="flat"
-              style={styles.card}
-              onPress={() => navigation.navigate('Chat', { orderId: order.id })}
-            >
-              <View style={styles.avatar}>
-                <AppIcon name="rider" size={22} color={colors.primaryDeep} />
-              </View>
-              <View style={styles.body}>
-                <View style={styles.topRow}>
-                  <Text style={styles.name} numberOfLines={1}>
-                    {order.rider_id ? riderNames[order.rider_id] ?? 'Your rider' : 'Finding a rider…'}
-                  </Text>
-                  {lastMessage ? (
-                    <Text style={styles.time}>
-                      {new Date(lastMessage.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+          {storeConversations.length > 0 ? (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Store inquiries · no order yet</Text>
+              {storeConversations.map((c) => (
+                <Card
+                  key={c.merchantId}
+                  variant="flat"
+                  style={styles.card}
+                  onPress={() => navigation.navigate('StoreChat', { merchantId: c.merchantId })}
+                >
+                  <View style={styles.avatarStore}>
+                    <AppIcon name="storefront" size={22} color={colors.primaryDeep} />
+                  </View>
+                  <View style={styles.body}>
+                    <View style={styles.topRow}>
+                      <Text style={styles.name} numberOfLines={1}>
+                        {c.merchantName}
+                      </Text>
+                      {c.lastMessage ? (
+                        <Text style={styles.time}>
+                          {new Date(c.lastMessage.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                        </Text>
+                      ) : null}
+                    </View>
+                    <Text style={styles.orderNo} numberOfLines={1}>
+                      PRE-ORDER INQUIRY
                     </Text>
-                  ) : null}
-                </View>
-                <Text style={styles.orderNo} numberOfLines={1}>
-                  #{order.order_number} · {order.status.replace(/_/g, ' ')}
-                </Text>
-                <Text style={[styles.preview, unread && styles.previewUnread]} numberOfLines={1}>
-                  {lastMessage
-                    ? `${lastMessage.sender_id === profile?.id ? 'You: ' : ''}${lastMessage.body}`
-                    : 'Say hello to coordinate delivery.'}
-                </Text>
-              </View>
-              {unread ? <View style={styles.dot} /> : null}
-              {order.status === 'completed' ? <Badge label="Done" status="delivered" /> : null}
-            </Card>
-          ))}
+                    <Text style={[styles.preview, c.unread && styles.previewUnread]} numberOfLines={1}>
+                      {c.lastMessage
+                        ? `${c.lastMessage.sender_id === profile?.id ? 'You: ' : ''}${c.lastMessage.body}`
+                        : 'Ask about stock, price, or availability.'}
+                    </Text>
+                  </View>
+                  {c.unread ? <View style={styles.dot} /> : null}
+                </Card>
+              ))}
+            </View>
+          ) : null}
+
+          {conversations.length > 0 ? (
+            <View style={styles.section}>
+              {storeConversations.length > 0 ? <Text style={styles.sectionTitle}>Order chats</Text> : null}
+              {conversations.map(({ order, lastMessage, unread }) => (
+                <Card
+                  key={order.id}
+                  variant="flat"
+                  style={styles.card}
+                  onPress={() => navigation.navigate('Chat', { orderId: order.id })}
+                >
+                  <View style={styles.avatar}>
+                    <AppIcon name="rider" size={22} color={colors.primaryDeep} />
+                  </View>
+                  <View style={styles.body}>
+                    <View style={styles.topRow}>
+                      <Text style={styles.name} numberOfLines={1}>
+                        {order.rider_id ? riderNames[order.rider_id] ?? 'Your rider' : 'Finding a rider…'}
+                      </Text>
+                      {lastMessage ? (
+                        <Text style={styles.time}>
+                          {new Date(lastMessage.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                        </Text>
+                      ) : null}
+                    </View>
+                    <Text style={styles.orderNo} numberOfLines={1}>
+                      #{order.order_number} · {order.status.replace(/_/g, ' ')}
+                    </Text>
+                    <Text style={[styles.preview, unread && styles.previewUnread]} numberOfLines={1}>
+                      {lastMessage
+                        ? `${lastMessage.sender_id === profile?.id ? 'You: ' : ''}${lastMessage.body}`
+                        : 'Say hello to coordinate delivery.'}
+                    </Text>
+                  </View>
+                  {unread ? <View style={styles.dot} /> : null}
+                  {order.status === 'completed' ? <Badge label="Done" status="delivered" /> : null}
+                </Card>
+              ))}
+            </View>
+          ) : null}
         </View>
       )}
     </Screen>
@@ -128,11 +243,21 @@ const styles = StyleSheet.create({
   title: { ...typography.display, fontSize: 27 },
   subtitle: { ...typography.caption },
   list: { gap: spacing.sm },
+  section: { gap: spacing.sm },
+  sectionTitle: { ...typography.label, color: colors.muted, textTransform: 'uppercase' },
   card: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md },
   avatar: {
     width: 46,
     height: 46,
     borderRadius: 23,
+    backgroundColor: colors.primaryTint,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarStore: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
     backgroundColor: colors.primaryTint,
     alignItems: 'center',
     justifyContent: 'center',

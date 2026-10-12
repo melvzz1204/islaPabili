@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppIcon, colors, radius, shadows, spacing, typography } from '@isla/ui';
-import type { MessageRow } from './chat';
+
+export type ChatMessage = { id: string; body: string; created_at: string; sender_id: string };
 
 export function dayLabel(iso: string): string {
   const d = new Date(iso);
@@ -20,7 +21,7 @@ export function clock(iso: string): string {
 }
 
 /** Day dividers + grouped bubbles with tails, ticks and inline timestamps. */
-export function ChatThread({ messages, myId }: { messages: MessageRow[]; myId: string }) {
+export function ChatThread({ messages, myId }: { messages: ChatMessage[]; myId: string }) {
   let lastDay = '';
   return (
     <>

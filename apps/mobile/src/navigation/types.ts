@@ -24,6 +24,7 @@ export type RootStackParamList = {
   Cart: undefined;
   Checkout: undefined;
   Chat: { orderId: string };
+  StoreChat: { merchantId: string; customerId?: string };
   Track: { orderId: string };
   Settings: undefined;
   PabiliCreate: { comboId?: string; items?: { name: string; qty: string }[]; store?: string } | undefined;
@@ -35,7 +36,6 @@ export type RootStackParamList = {
   AuthHome: undefined;
   Login: undefined;
   Register: undefined;
-  Phone: undefined;
 };
 
 /** Pre-login-only routes. Browsing the catalog is public. */
@@ -43,7 +43,6 @@ export type AuthStackParamList = {
   AuthHome: undefined;
   Login: undefined;
   Register: undefined;
-  Phone: undefined;
 };
 
 export type RootStackScreen<Route extends keyof RootStackParamList> =

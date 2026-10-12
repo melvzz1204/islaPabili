@@ -24,6 +24,7 @@ import {
 import { TextField } from '../ui/TextField';
 import { peso } from '../marketplace/data';
 import { canStoreChat } from '../messaging/chat';
+import { toStoreConversations, type StoreMessageRow } from '../messaging/storeChat';
 import type { RootNavProp } from '../navigation/types';
 
 type OrderRow = Database['public']['Tables']['orders']['Row'];
@@ -399,6 +400,7 @@ function MerchantOrders({ merchantId }: { merchantId: string }) {
 
   return (
     <View style={styles.section}>
+      <MerchantInquiries merchantId={merchantId} />
       <SegmentedTabs<InboxTab>
         segments={[
           { value: 'new', label: 'New', badge: counts.new },
@@ -513,6 +515,85 @@ function MerchantOrders({ merchantId }: { merchantId: string }) {
         )}
       </SheetModal>
     </View>
+  );
+}
+
+function MerchantInquiries({ merchantId }: { merchantId: string }) {
+  const navigation = useNavigation<RootNavProp>();
+  const { client, profile } = useAuth();
+  const [rows, setRows] = useState<StoreMessageRow[]>([]);
+  const [names, setNames] = useState<Record<string, string>>({});
+
+  const load = useCallback(async () => {
+    try {
+      const { data } = await client
+        .from('store_messages')
+        .select('*')
+        .eq('merchant_id', merchantId)
+        .order('created_at', { ascending: false })
+        .limit(100);
+      const list = (data ?? []) as StoreMessageRow[];
+      setRows(list);
+      const ids = [...new Set(list.map((r) => r.customer_id))];
+      if (ids.length > 0) {
+        const { data: people } = await client.from('profiles').select('id, full_name').in('id', ids);
+        const map: Record<string, string> = {};
+        for (const p of (people ?? []) as { id: string; full_name: string }[]) {
+          map[p.id] = p.full_name?.trim() || 'Customer';
+        }
+        setNames(map);
+      }
+    } catch {
+      // Offline: keep stale rows.
+    }
+  }, [client, merchantId]);
+
+  useEffect(() => {
+    void load();
+    const channel = client
+      .channel(`store-inquiries-${merchantId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'store_messages', filter: `merchant_id=eq.${merchantId}` },
+        () => void load(),
+      )
+      .subscribe();
+    return () => {
+      void client.removeChannel(channel);
+    };
+  }, [client, merchantId, load]);
+
+  const items = useMemo(
+    () => (profile ? toStoreConversations(rows, profile.id, names, { counterpart: 'customer' }) : []),
+    [rows, names, profile],
+  );
+  if (items.length === 0) return null;
+  const unreadCount = items.filter((i) => i.unread).length;
+
+  return (
+    <Card variant="tinted">
+      <Text style={styles.detailTitle}>
+        Customer questions{unreadCount > 0 ? ` · ${unreadCount} new` : ''} (no order yet)
+      </Text>
+      <Text style={styles.cardSub}>Answer stock/price questions — these shoppers have not ordered yet.</Text>
+      {items.slice(0, 5).map((c) => (
+        <View key={c.customerId} style={styles.attentionRow}>
+          <View style={styles.itemText}>
+            <Text style={styles.itemName} numberOfLines={1}>
+              {c.unread ? '● ' : ''}{c.customerName}
+            </Text>
+            <Text style={styles.cardSub} numberOfLines={1}>
+              {c.lastMessage ? `${c.lastMessage.sender_id === profile?.id ? 'You: ' : ''}${c.lastMessage.body}` : ''}
+            </Text>
+          </View>
+          <Button
+            title="Reply"
+            variant="secondary"
+            onPress={() => navigation.navigate('StoreChat', { merchantId, customerId: c.customerId })}
+          />
+        </View>
+      ))}
+    </Card>
   );
 }
 

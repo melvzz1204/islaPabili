@@ -777,6 +777,13 @@ export default function PabiliCreateScreen({ route }: Props) {
         <Text style={styles.fieldLabel}>Town</Text>
         <SingleTownPicker variant="field" value={town} onChange={setTown} />
         <AddressAutocomplete value={address} onChangeText={setAddress} />
+        {profile?.address?.trim() && profile.address.trim() !== address.trim() ? (
+          <Button
+            title="Use my saved address"
+            variant="ghost"
+            onPress={() => setAddress(profile.address!.trim())}
+          />
+        ) : null}
       </Card>
 
       <Card style={styles.summaryCard}>
