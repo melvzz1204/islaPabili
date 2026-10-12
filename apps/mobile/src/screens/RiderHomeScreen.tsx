@@ -1610,7 +1610,7 @@ function SettingsView({
         <SectionHeader title="Sounds & alerts" />
         <SoundSettingsForm role="rider" />
       </View>
-      <Button title="Log out of rider mode" variant="secondary" onPress={onLogout} />
+      <Button title="Log out of rider mode" variant="danger" onPress={onLogout} />
       <Text style={styles.meta}>Customer mode needs a fresh login after logout.</Text>
     </View>
   );

@@ -1094,7 +1094,7 @@ function MerchantStore({ merchantId }: { merchantId: string }) {
         placeholder="Ano ang tinda ninyo?"
       />
       <Button title={saving ? 'Saving…' : 'Save store profile'} onPress={() => void save()} disabled={saving} />
-      <Button title="Log out" variant="ghost" onPress={logout} />
+      <Button title="Log out" variant="danger" onPress={logout} />
     </View>
   );
 }

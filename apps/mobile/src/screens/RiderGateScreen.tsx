@@ -37,7 +37,7 @@ export default function RiderGateScreen({}: Props) {
       {canGoBack ? (
         <Button title="Back" variant="secondary" onPress={() => navigation.goBack()} />
       ) : null}
-      <Button title="Log out" variant="ghost" onPress={() => setLogoutOpen(true)} />
+      <Button title="Log out" variant="danger" onPress={() => setLogoutOpen(true)} />
     </View>
   );
 

@@ -233,7 +233,7 @@ export default function ProfileScreen({ navigation }: Props) {
         </Card>
       </View>
 
-      <Button title="Sign out" variant="secondary" onPress={() => setConfirmSignOut(true)} />
+      <Button title="Sign out" variant="danger" onPress={() => setConfirmSignOut(true)} />
 
       <SheetModal
         visible={editingTowns}

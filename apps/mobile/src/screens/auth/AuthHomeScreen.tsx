@@ -33,7 +33,7 @@ export default function AuthHomeScreen() {
 const styles = StyleSheet.create({
   ctaCard: {
     gap: spacing.sm,
-    padding: spacing.lg,
+    padding: spacing.base,
     borderRadius: radius.lg,
     backgroundColor: colors.surface,
     borderWidth: 1,

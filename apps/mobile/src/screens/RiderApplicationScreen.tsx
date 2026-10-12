@@ -3,7 +3,7 @@ import { Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native
 import { File as FileHandle } from 'expo-file-system';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
-import { isAllTowns, isNoTowns, resolveOptedTowns, TOWN_LABELS, type Town } from '@isla/shared';
+import { resolveOptedTowns, TOWN_LABELS, type Town } from '@isla/shared';
 import { useAuth } from '@isla/supabase';
 import type { Database } from '@isla/supabase';
 import {
@@ -21,7 +21,7 @@ import {
   typography,
 } from '@isla/ui';
 import { TextField } from '../ui/TextField';
-import { TownPicker } from '../ui/TownPicker';
+import { SingleTownPicker } from '../ui/TownPicker';
 
 type RiderApplicationRow = Database['public']['Tables']['rider_applications']['Row'];
 
@@ -123,9 +123,13 @@ type Props = {
 
 export default function RiderApplicationScreen({ onSubmitted }: Props) {
   const { client, profile, refreshProfile } = useAuth();
-  // Operating area is a set: a rider may cover several municipalities, or all
-  // of them. Falls back to home_town for riders who have not applied yet.
-  const [operatingTowns, setOperatingTowns] = useState<Town[]>(() => resolveOptedTowns(profile));
+  // Operating area is exactly one municipality. Stored as a single-element
+  // array (operating_towns stays an array column, so dispatch queries and the
+  // rider shell keep working unchanged).
+  const [operatingTown, setOperatingTown] = useState<Town | null>(
+    () => resolveOptedTowns(profile)[0] ?? profile?.home_town ?? null,
+  );
+  const [address, setAddress] = useState(profile?.address ?? '');
   const [phone, setPhone] = useState(profile?.phone ?? '');
   const [drivingYears, setDrivingYears] = useState('');
   const [docs, setDocs] = useState<Partial<Record<DocKey, DocPick>>>({});
@@ -137,7 +141,7 @@ export default function RiderApplicationScreen({ onSubmitted }: Props) {
   const fail = (title: string, message?: string) => setFormError({ title, message });
   const [submitting, setSubmitting] = useState(false);
 
-  const hasArea = !isNoTowns(operatingTowns);
+  const hasArea = operatingTown != null;
   const years = Number(drivingYears);
   const yearsValid = drivingYears.trim() !== '' && Number.isFinite(years) && years >= 0;
   const attachedDocs = DOC_FIELDS.filter((f) => docs[f.key]);
@@ -284,10 +288,10 @@ export default function RiderApplicationScreen({ onSubmitted }: Props) {
   };
 
   const handleSubmit = async () => {
-    if (isNoTowns(operatingTowns)) {
+    if (!operatingTown) {
       fail(
         'Operating area required',
-        "Pick at least one municipality where you can deliver, or tap 'All' to cover the island.",
+        'Pick the one municipality where you can deliver.',
       );
       return;
     }
@@ -329,12 +333,13 @@ export default function RiderApplicationScreen({ onSubmitted }: Props) {
       // Operating area is its own column. home_town means "where the rider
       // lives", so only fill it when the rider has not set one yet, otherwise
       // applying as a rider would silently move a customer's delivery town.
-      const primaryTown = operatingTowns[0] ?? null;
+      const primaryTown = operatingTown;
       const { error: profileError } = await client
         .from('profiles')
         .update({
           ...(profile?.home_town ? {} : { home_town: primaryTown }),
           phone: phone.trim(),
+          ...(address.trim() ? { address: address.trim() } : {}),
         })
         .eq('id', uid);
       if (profileError) throw profileError;
@@ -342,7 +347,7 @@ export default function RiderApplicationScreen({ onSubmitted }: Props) {
       const { error: appError } = await client.from('rider_applications').insert({
         rider_id: uid,
         ...urls,
-        operating_towns: operatingTowns,
+        operating_towns: [operatingTown],
         driving_experience_years: years,
         status: 'pending',
       });
@@ -394,14 +399,20 @@ export default function RiderApplicationScreen({ onSubmitted }: Props) {
         <StepTitle
           index="01"
           title="Operating area"
-          subtitle="Where will you accept pabili? Tap All to cover the whole island."
+          subtitle="Pick the one municipality where you will accept pabili."
         />
-        <TownPicker value={operatingTowns} onChange={setOperatingTowns} />
+        <SingleTownPicker value={operatingTown} onChange={setOperatingTown} />
         <Text style={styles.hint}>
-          {isAllTowns(operatingTowns)
-            ? `You will be dispatched anywhere on the island. Your first pick (${TOWN_LABELS[operatingTowns[0]]}) is recorded as your home town.`
-            : 'You can request more municipalities later.'}
+          {operatingTown
+            ? `You will be dispatched in ${TOWN_LABELS[operatingTown]}.`
+            : 'Select your municipality to continue.'}
         </Text>
+        <TextField
+          label="Address (optional)"
+          placeholder="Street / barangay"
+          value={address}
+          onChangeText={setAddress}
+        />
       </View>
 
       <View style={styles.section}>
