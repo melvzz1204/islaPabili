@@ -24,6 +24,7 @@ import {
   isJollibeeMerchantName,
   type Merchant,
 } from '../marketplace/data';
+import { resolveStoreChatTarget } from '../messaging/chat';
 import { CartBar, QtyStepper } from '../marketplace/components';
 import { useCart } from '../marketplace/cart';
 import { BottomNav, BOTTOM_NAV_HEIGHT } from '../components/BottomNav';
@@ -56,6 +57,20 @@ export default function StoreScreen({ route }: Props) {
       : null;
 
   const goShop = () => goToTab(navigation, 'Shop');
+
+  // One live thread per store: an active order chat wins over a new inquiry.
+  const openMessageStore = async () => {
+    if (!session) {
+      navigation.navigate('AuthHome');
+      return;
+    }
+    const target = await resolveStoreChatTarget(client, {
+      merchantId,
+      customerId: session.user.id,
+    });
+    if (target.route === 'Chat') navigation.navigate('Chat', { orderId: target.orderId });
+    else navigation.navigate('StoreChat', { merchantId: target.merchantId });
+  };
 
   // --- States ---------------------------------------------------------------
 
@@ -126,10 +141,7 @@ export default function StoreScreen({ route }: Props) {
           <Button
             title={session ? `Message ${merchant.name}` : 'Log in to message the store'}
             icon={<AppIcon name="message" size={18} color={colors.onPrimary} />}
-            onPress={() => {
-              if (!session) navigation.navigate('AuthHome');
-              else navigation.navigate('StoreChat', { merchantId: merchant.id });
-            }}
+            onPress={() => void openMessageStore()}
           />
         </Card>
       )}

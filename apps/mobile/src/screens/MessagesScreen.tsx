@@ -13,10 +13,12 @@ import {
   spacing,
   typography,
 } from '@isla/ui';
-import { useConversations } from '../messaging/chat';
+import { useConversations, resolveStoreChatTarget } from '../messaging/chat';
 import { ThreadAvatar, conversationColor } from '../messaging/ChatThread';
 import {
+  applyStoreRead,
   toStoreConversations,
+  useReadTick,
   useUnreadStoreCount,
   type StoreConversation,
   type StoreMessageRow,
@@ -35,6 +37,7 @@ export default function MessagesScreen({}: Props) {
   const navigation = useNavigation<RootNavProp>();
   const { client, profile } = useAuth();
   const { conversations, loading, refresh } = useConversations('customer');
+  const readTick = useReadTick();
   const [riderNames, setRiderNames] = useState<Record<string, string>>({});
   const [storeRows, setStoreRows] = useState<StoreMessageRow[]>([]);
   const [storeNames, setStoreNames] = useState<Record<string, string>>({});
@@ -96,13 +99,10 @@ export default function MessagesScreen({}: Props) {
     };
   }, [client, profile, loadStores, storeInstanceId]);
 
-  const storeConversations: StoreConversation[] = useMemo(
-    () =>
-      profile
-        ? toStoreConversations(storeRows, profile.id, storeNames, { counterpart: 'merchant' })
-        : [],
-    [storeRows, storeNames, profile],
-  );
+  const storeConversations: StoreConversation[] = useMemo(() => {
+    if (!profile) return [];
+    return applyStoreRead(toStoreConversations(storeRows, profile.id, storeNames, { counterpart: 'merchant' }));
+  }, [storeRows, storeNames, profile, readTick]);
 
   useEffect(() => {
     const ids = [...new Set(conversations.map((c) => c.order.rider_id).filter(Boolean))] as string[];
@@ -124,6 +124,13 @@ export default function MessagesScreen({}: Props) {
 
   const totalCount = conversations.length + storeConversations.length;
   const busy = loading || storeLoading;
+
+  // One live thread per store: an active order chat wins over the inquiry.
+  const openStoreThread = async (merchantId: string) => {
+    const target = await resolveStoreChatTarget(client, { merchantId, customerId: profile?.id });
+    if (target.route === 'Chat') navigation.navigate('Chat', { orderId: target.orderId });
+    else navigation.navigate('StoreChat', { merchantId: target.merchantId });
+  };
 
   return (
     <Screen>
@@ -162,7 +169,7 @@ export default function MessagesScreen({}: Props) {
                   key={c.merchantId}
                   variant="flat"
                   style={[styles.card, c.unread && { backgroundColor: conversationColor(c.merchantId).soft }]}
-                  onPress={() => navigation.navigate('StoreChat', { merchantId: c.merchantId })}
+                  onPress={() => void openStoreThread(c.merchantId)}
                 >
                   <ThreadAvatar
                     initial={c.merchantName}

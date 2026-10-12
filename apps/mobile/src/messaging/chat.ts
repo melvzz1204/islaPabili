@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useAuth, type Database } from '@isla/supabase';
+import { useAuth, type Database, type Supabase } from '@isla/supabase';
 import { useToast } from '@isla/ui';
 import { CHANNEL_CHAT, blip, getSoundSettings, notifyLocal } from '../lib/notify';
 import { CACHE_TTLS, cacheKey, fetchWithCache, peekEntry, readPersistedEntry } from '../lib/cache';
@@ -37,6 +37,50 @@ export const MERCHANT_CHAT_STATUSES: OrderRow['status'][] = [
 
 export function canStoreChat(status: OrderRow['status']): boolean {
   return (MERCHANT_CHAT_STATUSES as string[]).includes(status);
+}
+
+/**
+ * Where "message the store" should land: the active order chat when one
+ * exists, else the pre-order inquiry thread. Keeps one live conversation
+ * per store–customer pair so the two never compete.
+ */
+export async function resolveStoreChatTarget(
+  client: Supabase,
+  args: { merchantId: string; customerId?: string },
+): Promise<
+  | { route: 'Chat'; orderId: string }
+  | { route: 'StoreChat'; merchantId: string; customerId?: string }
+> {
+  const orderId =
+    args.customerId != null
+      ? await findActiveStoreOrder(client, { merchantId: args.merchantId, customerId: args.customerId })
+      : null;
+  if (orderId) return { route: 'Chat', orderId };
+  return { route: 'StoreChat', merchantId: args.merchantId, customerId: args.customerId };
+}
+
+/**
+ * Newest order with this store still in the confirm/pack/ready window, or
+ * null. Backs resolveStoreChatTarget above.
+ */
+export async function findActiveStoreOrder(
+  client: Supabase,
+  args: { merchantId: string; customerId: string },
+): Promise<string | null> {
+  try {
+    const { data } = await client
+      .from('orders')
+      .select('id')
+      .eq('merchant_id', args.merchantId)
+      .eq('customer_id', args.customerId)
+      .in('status', [...MERCHANT_CHAT_STATUSES])
+      .order('created_at', { ascending: false })
+      .limit(1);
+    const rows = (data ?? []) as { id: string }[];
+    return rows[0]?.id ?? null;
+  } catch {
+    return null;
+  }
 }
 
 // --- Presence (Messenger-style online status) --------------------------------
@@ -116,7 +160,20 @@ let readMap: Record<string, string> = {};
 let readLoaded = false;
 const readListeners = new Set<() => void>();
 
-async function ensureReadMap(owner: string): Promise<void> {
+/** Re-render hook badges the moment any thread is marked read. */
+export function subscribeRead(fn: () => void): () => void {
+  readListeners.add(fn);
+  return () => {
+    readListeners.delete(fn);
+  };
+}
+
+/** Latest seen timestamp for any thread key (order id or `store:<merchantId>`). */
+export function isThreadRead(key: string, atIso: string): boolean {
+  return (readMap[key] ?? '') >= atIso;
+}
+
+export async function ensureReadMap(owner: string): Promise<void> {
   if (readLoaded && readOwner === owner) return;
   readOwner = owner;
   readMap = {};
@@ -134,14 +191,28 @@ async function ensureReadMap(owner: string): Promise<void> {
  * Mark a thread read up to `atIso` (the latest visible message's
  * `created_at`). All badges recompute instantly, on every mounted shell.
  */
-export function markConversationRead(orderId: string, atIso: string): void {
-  if (!orderId || !atIso) return;
-  if ((readMap[orderId] ?? '') >= atIso) return;
-  readMap = { ...readMap, [orderId]: atIso };
+export function markThreadRead(key: string, atIso: string): void {
+  if (!key || !atIso) return;
+  if ((readMap[key] ?? '') >= atIso) return;
+  readMap = { ...readMap, [key]: atIso };
   for (const fn of readListeners) fn();
   if (readOwner) {
     void AsyncStorage.setItem(`${READ_KEY}:${readOwner}`, JSON.stringify(readMap)).catch(() => undefined);
   }
+}
+
+/** Order-chat shorthand (key = order id). */
+export function markConversationRead(orderId: string, atIso: string): void {
+  markThreadRead(orderId, atIso);
+}
+
+/** Store-inquiry shorthand (key = `store:<merchantId>`). */
+export function storeThreadKey(merchantId: string): string {
+  return `store:${merchantId}`;
+}
+
+export function markStoreThreadRead(merchantId: string, atIso: string): void {
+  markThreadRead(storeThreadKey(merchantId), atIso);
 }
 
 function applyRead(list: Conversation[]): Conversation[] {
@@ -150,7 +221,7 @@ function applyRead(list: Conversation[]): Conversation[] {
     unread:
       c.unread &&
       !!c.lastMessage &&
-      c.lastMessage.created_at > (readMap[c.order.id] ?? ''),
+      !isThreadRead(c.order.id, c.lastMessage.created_at),
   }));
 }
 

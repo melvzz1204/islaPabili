@@ -3,7 +3,7 @@ import { useAuth, type Supabase } from '@isla/supabase';
 import type { Database } from '@isla/supabase';
 import { useToast } from '@isla/ui';
 import { CHANNEL_CHAT, blip, getSoundSettings, notifyLocal } from '../lib/notify';
-import { getOpenOrderId } from './chat';
+import { ensureReadMap, getOpenOrderId, isThreadRead, storeThreadKey, subscribeRead } from './chat';
 
 export type StoreMessageRow = Database['public']['Tables']['store_messages']['Row'];
 
@@ -114,6 +114,27 @@ export function toStoreConversations(
   return out;
 }
 
+/**
+ * Clear-on-view for store threads: opening a thread marks everything visible
+ * as read, so the badge drops the moment it is seen (mirrors order chats).
+ */
+export function applyStoreRead(list: StoreConversation[]): StoreConversation[] {
+  return list.map((c) => ({
+    ...c,
+    unread:
+      c.unread &&
+      !!c.lastMessage &&
+      !isThreadRead(storeThreadKey(c.merchantId), c.lastMessage.created_at),
+  }));
+}
+
+/** Re-render helper for components deriving store badges from conversations. */
+export function useReadTick(): number {
+  const [tick, setTick] = useState(0);
+  useEffect(() => subscribeRead(() => setTick((t) => t + 1)), []);
+  return tick;
+}
+
 export function useRefreshKey(): [number, () => void] {
   const [tick, setTick] = useState(0);
   const bump = useCallback(() => setTick((t) => t + 1), []);
@@ -124,12 +145,14 @@ export function useRefreshKey(): [number, () => void] {
 export function useUnreadStoreCount(): number {
   const { client, profile } = useAuth();
   const [count, setCount] = useState(0);
+  const readTick = useReadTick();
 
   const load = useCallback(async () => {
     if (!profile) {
       setCount(0);
       return;
     }
+    await ensureReadMap(profile.id);
     try {
       const { data } = await client
         .from('store_messages')
@@ -143,13 +166,14 @@ export function useUnreadStoreCount(): number {
       for (const r of rows) {
         if (seen.has(r.merchant_id)) continue;
         seen.add(r.merchant_id);
-        if (r.sender_id !== profile.id) n += 1;
+        // Clear-on-view: an opened thread stops counting even before a reply.
+        if (r.sender_id !== profile.id && !isThreadRead(storeThreadKey(r.merchant_id), r.created_at)) n += 1;
       }
       setCount(n);
     } catch {
       // Offline: keep last count.
     }
-  }, [client, profile]);
+  }, [client, profile, readTick]);
 
   useEffect(() => {
     void load();
@@ -188,12 +212,14 @@ export function useMerchantInquiries(merchantId: string): {
   const [rows, setRows] = useState<StoreMessageRow[]>([]);
   const [names, setNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const readTick = useReadTick();
 
   const load = useCallback(async () => {
     if (!profile) {
       setLoading(false);
       return;
     }
+    await ensureReadMap(profile.id);
     try {
       const { data } = await client
         .from('store_messages')
@@ -217,7 +243,7 @@ export function useMerchantInquiries(merchantId: string): {
     } finally {
       setLoading(false);
     }
-  }, [client, profile, merchantId]);
+  }, [client, profile, merchantId, readTick]);
 
   useEffect(() => {
     void load();
@@ -235,8 +261,11 @@ export function useMerchantInquiries(merchantId: string): {
   }, [client, merchantId, load]);
 
   const conversations = useMemo(
-    () => (profile ? toStoreConversations(rows, profile.id, names, { counterpart: 'customer' }) : []),
-    [rows, names, profile],
+    () =>
+      profile
+        ? applyStoreRead(toStoreConversations(rows, profile.id, names, { counterpart: 'customer' }))
+        : [],
+    [rows, names, profile, readTick],
   );
   return { conversations, unread: conversations.filter((c) => c.unread).length, loading };
 }

@@ -1241,11 +1241,20 @@ function RiderMessagesView({
 
   // Clear-on-view: the open thread counts as read, so the messages-tab badge
   // drops the moment the rider sees it (including live arrivals while open).
+  // The matching bell rows are marked read too.
   useEffect(() => {
-    if (!openId || messages.length === 0) return;
+    if (!openId || messages.length === 0 || !profile) return;
     const latest = messages[messages.length - 1];
-    if (latest?.created_at) markConversationRead(openId, latest.created_at);
-  }, [openId, messages]);
+    if (!latest?.created_at) return;
+    markConversationRead(openId, latest.created_at);
+    void client
+      .from('notifications')
+      .update({ is_read: true })
+      .eq('user_id', profile.id)
+      .eq('kind', 'message')
+      .eq('order_id', openId)
+      .eq('is_read', false);
+  }, [openId, messages, client, profile]);
 
   // Per-mount suffix: concurrent mounts must never share a realtime topic
   // (realtime-js throws on `.on()` after `.subscribe()` for the same topic).

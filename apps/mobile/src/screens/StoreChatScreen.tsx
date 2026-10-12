@@ -8,7 +8,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { useAuth } from '@isla/supabase';
 import {
   AppIcon,
@@ -29,7 +29,8 @@ import {
   type StoreMessageRow,
 } from '../messaging/storeChat';
 import { fetchMerchant } from '../marketplace/data';
-import { fetchStorePresence, fetchUserPresence, presenceLabel, type Presence } from '../messaging/chat';
+import { invokeInquiryPush } from '../lib/push';
+import { fetchStorePresence, fetchUserPresence, markStoreThreadRead, presenceLabel, type Presence } from '../messaging/chat';
 import { useAuthMode } from '../lib/authMode';
 import { BottomNav } from '../components/BottomNav';
 import type { RootNavProp, RootStackScreen } from '../navigation/types';
@@ -126,6 +127,24 @@ export default function StoreChatScreen({ route }: Props) {
   }, []);
   useStoreThreadRealtime(client, merchantId, threadCustomerId, onInsert);
 
+  // Clear-on-view: everything visible counts as read, so badges drop the
+  // moment the thread is seen (including live arrivals while reading). The
+  // matching bell rows are marked read too.
+  const focused = useIsFocused();
+  useEffect(() => {
+    if (!focused || messages.length === 0 || !profile) return;
+    const latest = messages[messages.length - 1];
+    if (!latest?.created_at) return;
+    markStoreThreadRead(merchantId, latest.created_at);
+    void client
+      .from('notifications')
+      .update({ is_read: true })
+      .eq('user_id', profile.id)
+      .eq('kind', 'message')
+      .eq('merchant_id', merchantId)
+      .eq('is_read', false);
+  }, [focused, messages, merchantId, client, profile]);
+
   const send = async (body: string) => {
     const text = body.trim();
     if (!text || !profile || sending || !threadCustomerId) return;
@@ -137,6 +156,8 @@ export default function StoreChatScreen({ route }: Props) {
         senderId: profile.id,
         body: text,
       });
+      // Wake the other side when their app is killed/backgrounded.
+      void invokeInquiryPush(client, { merchantId, customerId: threadCustomerId });
       await load();
     } catch (err) {
       showToast({ message: err instanceof Error ? err.message : 'Could not send.', type: 'error' });

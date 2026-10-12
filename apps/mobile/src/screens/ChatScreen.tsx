@@ -161,13 +161,22 @@ export default function ChatScreen({ route }: Props) {
 
   // Clear-on-view: everything visible in this open thread counts as read, so
   // the Messages tab badge drops the moment the thread is seen (including
-  // messages that arrive live while reading).
+  // messages that arrive live while reading). The matching bell rows are
+  // marked read too.
   const focused = useIsFocused();
   useEffect(() => {
-    if (!focused || messages.length === 0) return;
+    if (!focused || messages.length === 0 || !profile) return;
     const latest = messages[messages.length - 1];
-    if (latest?.created_at) markConversationRead(orderId, latest.created_at);
-  }, [focused, messages, orderId]);
+    if (!latest?.created_at) return;
+    markConversationRead(orderId, latest.created_at);
+    void client
+      .from('notifications')
+      .update({ is_read: true })
+      .eq('user_id', profile.id)
+      .eq('kind', 'message')
+      .eq('order_id', orderId)
+      .eq('is_read', false);
+  }, [focused, messages, orderId, client, profile]);
 
   // Per-mount suffix: concurrent mounts must never share a realtime topic
   // (realtime-js throws on `.on()` after `.subscribe()` for the same topic).

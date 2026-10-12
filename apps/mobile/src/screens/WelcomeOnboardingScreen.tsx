@@ -2,7 +2,6 @@ import { useCallback, useRef, useState } from 'react';
 import {
   Dimensions,
   FlatList,
-  Pressable,
   StyleSheet,
   Text,
   View,
@@ -135,29 +134,12 @@ export default function WelcomeOnboardingScreen({ onDone }: { onDone: () => void
       />
 
       <View style={styles.footer}>
-        {/* Screenshot parity: single orange CTA ("Get Started" on last slide). */}
+        {/* Single orange CTA ("Get Started" on last slide). */}
         <Button
           title={isLast ? 'Get Started' : 'Next'}
           variant="accent"
           onPress={() => (isLast ? finish() : goTo(index + 1))}
         />
-        <View style={styles.skipRow}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Skip intro" onPress={finish} hitSlop={12}>
-            <Text style={styles.skipText}>SKIP</Text>
-          </Pressable>
-          {!isLast ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Next slide"
-              onPress={() => goTo(index + 1)}
-              hitSlop={12}
-            >
-              <Text style={styles.nextText}>NEXT</Text>
-            </Pressable>
-          ) : (
-            <View style={{ width: 40 }} />
-          )}
-        </View>
       </View>
     </SafeAreaView>
   );
@@ -206,8 +188,5 @@ const styles = StyleSheet.create({
   dotActive: { width: 22, backgroundColor: colors.primary, opacity: 1 },
   title: { ...typography.title, textAlign: 'center', marginBottom: spacing.sm },
   body: { ...typography.body, color: colors.muted, textAlign: 'center', maxWidth: 300 },
-  footer: { paddingHorizontal: spacing.xxl, paddingBottom: spacing.lg, gap: spacing.md },
-  skipRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  skipText: { ...typography.label, color: colors.faint, letterSpacing: 0.6 },
-  nextText: { ...typography.label, color: colors.text, letterSpacing: 0.6 },
+  footer: { paddingHorizontal: spacing.xxl, paddingBottom: spacing.lg },
 });

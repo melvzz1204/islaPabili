@@ -27,7 +27,7 @@ import {
 } from '@isla/ui';
 import { TextField } from '../ui/TextField';
 import { peso } from '../marketplace/data';
-import { canStoreChat, useMerchantOrderChats, type Conversation } from '../messaging/chat';
+import { canStoreChat, resolveStoreChatTarget, useMerchantOrderChats, type Conversation } from '../messaging/chat';
 import { ThreadAvatar, conversationColor } from '../messaging/ChatThread';
 import { useMerchantInquiries, useMerchantMessageAlerts, type StoreConversation } from '../messaging/storeChat';
 import { useMerchantOrderAlerts } from '../lib/orderAlerts';
@@ -263,6 +263,12 @@ function MerchantMessages({
   const navigation = useNavigation<RootNavProp>();
   const { client, profile } = useAuth();
   const [customerNames, setCustomerNames] = useState<Record<string, string>>({});
+  // One live thread per store–customer pair: an active order chat wins.
+  const openInquiry = async (customerId: string) => {
+    const target = await resolveStoreChatTarget(client, { merchantId, customerId });
+    if (target.route === 'Chat') navigation.navigate('Chat', { orderId: target.orderId });
+    else navigation.navigate('StoreChat', { merchantId, customerId });
+  };
   const orderThreads = useMemo(
     () =>
       [...orderChats]
@@ -353,7 +359,7 @@ function MerchantMessages({
                 key={c.customerId}
                 accessibilityRole="button"
                 accessibilityLabel={`Open questions from ${c.customerName}`}
-                onPress={() => navigation.navigate('StoreChat', { merchantId, customerId: c.customerId })}
+                onPress={() => void openInquiry(c.customerId)}
                 style={({ pressed }) => [
                   styles.threadRow,
                   c.unread && { backgroundColor: accent.soft },
@@ -585,13 +591,7 @@ function MerchantOverview({ merchantId, onGoOrders }: { merchantId: string; onGo
             </View>
           ))}
         </Card>
-      ) : (
-        <EmptyState
-          compact
-          title="All caught up"
-          message="New customer orders will pop up here the moment they arrive."
-        />
-      )}
+      ) : null}
     </View>
   );
 }
@@ -1358,17 +1358,17 @@ const styles = StyleSheet.create({
   },
   logoLetter: { ...typography.title, color: colors.primaryDeep },
   logoText: { flex: 1, gap: 2 },
-  heroRow: { flexDirection: 'row', gap: spacing.md, alignItems: 'center', marginBottom: spacing.sm },
-  heroLogo: { width: 72, height: 72, borderRadius: radius.lg },
+  heroRow: { flexDirection: 'row', gap: spacing.md, alignItems: 'center', marginBottom: spacing.md },
+  heroLogo: { width: 80, height: 80, borderRadius: radius.lg },
   heroLogoEmpty: {
-    width: 72,
-    height: 72,
+    width: 80,
+    height: 80,
     borderRadius: radius.lg,
     backgroundColor: colors.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
   stat: {
     flexGrow: 1,
     flexBasis: '47%',
@@ -1376,17 +1376,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.hairline,
     borderRadius: radius.lg,
-    padding: spacing.md,
-    gap: 2,
+    padding: spacing.lg,
+    gap: spacing.xs,
   },
-  statValue: { ...typography.title, fontSize: 22, fontWeight: '800' },
+  statValue: { ...typography.title, fontSize: 26, fontWeight: '800' },
   statLabel: { ...typography.label, fontWeight: '700' },
   statHint: { ...typography.caption, color: colors.muted },
-  bars: { flexDirection: 'row', gap: spacing.xs, alignItems: 'stretch', marginTop: spacing.sm },
-  barCol: { flex: 1, alignItems: 'center', gap: 4 },
+  bars: { flexDirection: 'row', gap: spacing.sm, alignItems: 'stretch', marginTop: spacing.md },
+  barCol: { flex: 1, alignItems: 'center', gap: spacing.xs },
   barCount: { ...typography.caption, fontWeight: '700' },
   barTrack: {
-    height: 72,
+    height: 120,
     width: '100%',
     borderRadius: radius.sm,
     backgroundColor: colors.surfaceSunken,

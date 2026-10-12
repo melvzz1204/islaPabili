@@ -52,3 +52,21 @@ export async function invokePush(
     // Best-effort; in-app realtime banners already fired.
   }
 }
+
+/**
+ * Wake the other side of a pre-order inquiry (no order row): the store
+ * owners when a customer writes, the customer when an owner replies.
+ * Fire-and-forget, like invokePush.
+ */
+export async function invokeInquiryPush(
+  client: Supabase,
+  args: { merchantId: string; customerId: string },
+): Promise<void> {
+  try {
+    await client.functions.invoke('push-send', {
+      body: { kind: 'inquiry', merchant_id: args.merchantId, customer_id: args.customerId },
+    });
+  } catch {
+    // Best-effort; in-app realtime banners already fired.
+  }
+}

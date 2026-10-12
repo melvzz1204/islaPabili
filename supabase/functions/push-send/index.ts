@@ -8,15 +8,19 @@
 //
 // POST { order_id: string, kind: 'pabili' | 'message' | 'status' | 'merchant',
 //        title?: string, body?: string }
+// POST { kind: 'inquiry', merchant_id: string, customer_id: string,
+//        title?: string, body?: string } — pre-order inquiry, no order row.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 
-type Kind = "pabili" | "message" | "status" | "merchant";
+type Kind = "pabili" | "message" | "status" | "merchant" | "inquiry";
 
 type Body = {
   order_id?: string;
+  merchant_id?: string;
+  customer_id?: string;
   kind?: Kind;
   title?: string;
   body?: string;
@@ -56,9 +60,12 @@ Deno.serve(async (req) => {
   } catch {
     return json(400, { error: { message: "Invalid JSON body." } });
   }
-  const { order_id: orderId, kind } = payload;
-  if (!orderId || (kind !== "pabili" && kind !== "message" && kind !== "status" && kind !== "merchant")) {
-    return json(400, { error: { message: "order_id and kind ('pabili' | 'message' | 'status' | 'merchant') are required." } });
+  const { order_id: orderId, merchant_id: merchantId, customer_id: customerId, kind } = payload;
+  if (!kind || (kind !== "inquiry" && !orderId)) {
+    return json(400, { error: { message: "kind is required (order_id required except for 'inquiry')." } });
+  }
+  if (kind === "inquiry" && (!merchantId || !customerId)) {
+    return json(400, { error: { message: "merchant_id and customer_id are required for 'inquiry'." } });
   }
 
   // Caller identity from their own JWT (forwarded by functions.invoke).
@@ -70,6 +77,56 @@ Deno.serve(async (req) => {
   if (userError || !callerId) return json(401, { error: { message: "Not signed in." } });
 
   const admin = createClient(url, serviceKey);
+
+  // Pre-order inquiry (no order row): customer <-> store owners wake each
+  // other. Caller must be the customer or an owner of the store; the sender
+  // never wakes themselves.
+  if (kind === "inquiry") {
+    const { data: ownerLink } = await admin
+      .from("merchant_owners")
+      .select("profile_id")
+      .eq("merchant_id", merchantId!)
+      .eq("profile_id", callerId)
+      .maybeSingle();
+    const callerIsOwner = !!ownerLink;
+    const callerIsCustomer = callerId === customerId;
+    if (!callerIsOwner && !callerIsCustomer) {
+      return json(403, { error: { message: "Not a thread participant." } });
+    }
+    let recipientIds: string[];
+    if (callerIsCustomer) {
+      const { data: owners } = await admin
+        .from("merchant_owners")
+        .select("profile_id")
+        .eq("merchant_id", merchantId!);
+      recipientIds = [...new Set(((owners ?? []) as { profile_id: string }[]).map((r) => r.profile_id))]
+        .filter((id) => id !== callerId);
+    } else {
+      recipientIds = [customerId!];
+    }
+    if (recipientIds.length === 0) return json(200, { sent: 0 });
+    const { data: last } = await admin
+      .from("store_messages")
+      .select("body")
+      .eq("merchant_id", merchantId!)
+      .eq("customer_id", customerId!)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const { data: sender } = await admin.from("profiles").select("full_name").eq("id", callerId).maybeSingle();
+    const name = ((sender as { full_name?: string } | null)?.full_name?.trim()) || "New inquiry";
+    const text = (last as { body?: string } | null)?.body ?? payload.body?.trim() ?? "";
+    return await sendToTokens(
+      admin,
+      recipientIds,
+      payload.title?.trim() || `${name}`,
+      snippet(payload.body?.trim() || text || "Sent you a message."),
+      "isla-chat",
+      { merchantId, customerId, kind },
+    );
+  }
+
+  const { data: order, error: orderError } = await admin
 
   const { data: order, error: orderError } = await admin
     .from("orders")
@@ -186,6 +243,18 @@ Deno.serve(async (req) => {
 
   if (recipientIds.length === 0) return json(200, { sent: 0 });
 
+  return await sendToTokens(admin, recipientIds, title, snippet(body), channelId, { orderId, kind });
+});
+
+/** Look up Expo tokens for recipients and fan out via the Expo Push API. */
+async function sendToTokens(
+  admin: ReturnType<typeof createClient>,
+  recipientIds: string[],
+  title: string,
+  body: string,
+  channelId: string,
+  data: Record<string, string | undefined>,
+): Promise<Response> {
   const { data: tokens } = await admin.from("push_tokens").select("token").in("user_id", recipientIds);
   const pushTokens = [...new Set(((tokens ?? []) as { token: string }[]).map((t) => t.token))].filter((t) =>
     /^(ExponentPushToken|ExpoPushToken)\[.+\]$/.test(t),
@@ -199,7 +268,7 @@ Deno.serve(async (req) => {
     sound: "default",
     priority: "high",
     channelId,
-    data: { orderId, kind },
+    data,
   }));
 
   let res: Response;
@@ -218,6 +287,6 @@ Deno.serve(async (req) => {
     console.error(`Expo push HTTP ${res.status}: ${resultText.slice(0, 300)}`);
     return json(502, { error: { message: "Push provider rejected the send." } });
   }
-  console.log(`Push ${kind} for order ${o.order_number} → ${pushTokens.length} token(s).`);
+  console.log(`Push → ${pushTokens.length} token(s).`);
   return json(200, { sent: pushTokens.length });
-});
+}
