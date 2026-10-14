@@ -4,12 +4,12 @@
 // status advance), so no DB webhooks are needed: the client invokes this
 // function, we verify the caller is an order participant with the user's own
 // JWT, then push to the *recipient's* stored Expo tokens via the Expo Push
-// API (service role reads only — clients never hold privileged credentials).
+// API (service role reads only, clients never hold privileged credentials).
 //
 // POST { order_id: string, kind: 'pabili' | 'message' | 'status' | 'merchant',
 //        title?: string, body?: string }
 // POST { kind: 'inquiry', merchant_id: string, customer_id: string,
-//        title?: string, body?: string } — pre-order inquiry, no order row.
+//        title?: string, body?: string }, pre-order inquiry, no order row.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -127,8 +127,6 @@ Deno.serve(async (req) => {
   }
 
   const { data: order, error: orderError } = await admin
-
-  const { data: order, error: orderError } = await admin
     .from("orders")
     .select("id, order_number, town, dropoff_address, customer_id, rider_id, merchant_id, total_delivery_fee, status")
     .eq("id", orderId)
@@ -174,7 +172,7 @@ Deno.serve(async (req) => {
       .eq("is_current", true);
     recipientIds = [...new Set(((requests ?? []) as { rider_id: string }[]).map((r) => r.rider_id))];
     if (!title) title = `New pabili · #${o.order_number}`;
-    if (!body) body = `${o.town} · ${o.dropoff_address} · ₱${Number(o.total_delivery_fee ?? 0)} fee — first to accept wins.`;
+    if (!body) body = `${o.town} · ${o.dropoff_address} · ₱${Number(o.total_delivery_fee ?? 0)} fee, first to accept wins.`;
   } else if (kind === "message") {
     // Rider <-> customer wake each other (unchanged).
     const otherId = isCustomer ? o.rider_id : o.customer_id;
@@ -221,7 +219,7 @@ Deno.serve(async (req) => {
       .eq("merchant_id", o.merchant_id);
     recipientIds = [...new Set(((owners ?? []) as { profile_id: string }[]).map((r) => r.profile_id))];
     if (!title) title = `New order · #${o.order_number}`;
-    if (!body) body = `${o.town} · ${o.dropoff_address || "counter pickup"} — open your store dashboard to accept.`;
+    if (!body) body = `${o.town} · ${o.dropoff_address || "counter pickup"}, open your store dashboard to accept.`;
   } else {
     // status: rider's advance pings the customer; a customer cancel pings the rider.
     const otherId = isRider ? o.customer_id : o.rider_id;

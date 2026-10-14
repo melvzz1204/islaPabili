@@ -121,7 +121,9 @@ export default function RiderHomeScreen() {
   const [msgOrderId, setMsgOrderId] = useState<string | null>(null);
   // Full-screen incoming-request takeover (request id, null = none showing).
   const [overlayId, setOverlayId] = useState<string | null>(null);
-  const sirenFor = useRef<string | null>(null);
+  // Offer ids already alarmed, so every incoming offer triggers exactly one
+  // takeover even when several are live at once (multi-order).
+  const alarmedOffers = useRef<Set<string>>(new Set());
 
   // Live GPS broadcast while holding an active delivery, this is what the
   // customer watches on the Track screen.
@@ -249,30 +251,38 @@ export default function RiderHomeScreen() {
     void refreshStatus();
   }, [refreshStatus]);
 
-  // Incoming-request siren: the newest unseen offer takes over the screen
-  // with sound + insistent vibration, wherever the rider is in the app.
+  // Incoming-request siren: every new offer alarms once (sound + insistent
+  // vibration) even when several are live. A new offer only auto-opens the
+  // takeover when none is showing, so it never yanks the rider away from the
+  // request they are already reading (use "next" to reach the queued one).
   useEffect(() => {
-    const newest = incoming[0];
-    if (!newest || sirenFor.current === newest.request.id) return;
-    sirenFor.current = newest.request.id;
-    setOverlayId(newest.request.id);
+    const fresh = incoming.find((o) => !alarmedOffers.current.has(o.request.id));
+    if (!fresh) return;
+    alarmedOffers.current.add(fresh.request.id);
+    setOverlayId((cur) => cur ?? fresh.request.id);
     void (async () => {
       const prefs = await getSoundSettings();
       if (prefs.sounds && prefs.riderRequest) {
         if (prefs.vibrate) sirenVibrate();
         await notifyLocal({
           channel: CHANNEL_ORDERS,
-          title: `New pabili · #${newest.order.order_number}`,
-          body: `${TOWN_LABELS[newest.order.town]} · ${newest.items.length} items · ${peso(Number(newest.order.total_delivery_fee ?? 0))} fee, first to accept wins.`,
-          data: { orderId: newest.order.id, kind: 'pabili' },
+          title: `New pabili · #${fresh.order.order_number}`,
+          body: `${TOWN_LABELS[fresh.order.town]} · ${fresh.items.length} items · ${peso(Number(fresh.order.total_delivery_fee ?? 0))} fee, first to accept wins.`,
+          data: { orderId: fresh.order.id, kind: 'pabili' },
         });
       }
     })();
   }, [incoming]);
 
-  // The takeover clears the moment its offer leaves the inbox.
+  // Keep the takeover on a live offer: when the shown one leaves the inbox
+  // (accepted / declined / expired), slide to the next live offer instead of
+  // dropping the rider; clear only when nothing is left.
   useEffect(() => {
-    if (overlayId && !incoming.some((o) => o.request.id === overlayId)) {
+    if (!overlayId) return;
+    if (incoming.some((o) => o.request.id === overlayId)) return;
+    const next = incoming[0] ?? null;
+    if (next) setOverlayId(next.request.id);
+    else {
       setOverlayId(null);
       stopVibration();
     }
@@ -563,6 +573,8 @@ export default function RiderHomeScreen() {
       {overlayOffer ? (
         <IncomingOverlay
           offer={overlayOffer}
+          index={Math.max(0, incoming.findIndex((o) => o.request.id === overlayOffer.request.id))}
+          total={incoming.length}
           storeAddr={overlayOffer.order.merchant_id ? (storeAddrs[overlayOffer.order.merchant_id] ?? null) : null}
           working={working === overlayOffer.order.id}
           onAccept={() => {
@@ -572,6 +584,13 @@ export default function RiderHomeScreen() {
           onDecline={() => {
             stopVibration();
             void respond(overlayOffer, 'declined');
+          }}
+          onBrowse={(dir) => {
+            if (incoming.length < 2) return;
+            const i = incoming.findIndex((o) => o.request.id === overlayOffer.request.id);
+            const j = (i + dir + incoming.length) % incoming.length;
+            stopVibration();
+            setOverlayId(incoming[j]!.request.id);
           }}
           onViewAll={() => {
             dismissOverlay();
@@ -587,17 +606,23 @@ export default function RiderHomeScreen() {
 
 function IncomingOverlay({
   offer,
+  index,
+  total,
   storeAddr,
   working,
   onAccept,
   onDecline,
+  onBrowse,
   onViewAll,
 }: {
   offer: IncomingOffer;
+  index: number;
+  total: number;
   storeAddr: string | null;
   working: boolean;
   onAccept: () => void;
   onDecline: () => void;
+  onBrowse: (dir: 1 | -1) => void;
   onViewAll: () => void;
 }) {
   const [now, setNow] = useState(() => Date.now());
@@ -618,6 +643,31 @@ function IncomingOverlay({
             <View style={styles.takePulse} />
             <Text style={styles.takeEyebrowText}>INCOMING PABILI · FIRST TO ACCEPT WINS</Text>
           </View>
+          {total > 1 ? (
+            <View style={styles.takeQueue}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Previous request"
+                hitSlop={10}
+                onPress={() => onBrowse(-1)}
+                style={({ pressed }) => [styles.takeQueueBtn, pressed && styles.pressed]}
+              >
+                <AppIcon name="back" size={16} color={colors.text} />
+              </Pressable>
+              <Text style={styles.takeQueueText}>
+                Offer {index + 1} of {total}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Next request"
+                hitSlop={10}
+                onPress={() => onBrowse(1)}
+                style={({ pressed }) => [styles.takeQueueBtn, pressed && styles.pressed]}
+              >
+                <AppIcon name="chevronRight" size={16} color={colors.text} />
+              </Pressable>
+            </View>
+          ) : null}
           <Text style={styles.takeOrder}>#{offer.order.order_number}</Text>
           <Text style={styles.takeAddr} numberOfLines={2}>
             {TOWN_LABELS[offer.order.town]} · {offer.order.dropoff_address}
@@ -1967,6 +2017,25 @@ const styles = StyleSheet.create({
   takeEyebrow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs },
   takePulse: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.accent },
   takeEyebrowText: { ...typography.micro, color: colors.accentDark, fontWeight: '800', letterSpacing: 1 },
+  takeQueue: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.surfaceSunken,
+    borderRadius: radius.pill,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+  },
+  takeQueueBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  takeQueueText: { ...typography.label, fontWeight: '700' },
   takeOrder: { ...typography.display, fontSize: 32, textAlign: 'center' },
   takeAddr: { ...typography.body, textAlign: 'center' },
   takeStore: { ...typography.subhead, fontWeight: '600', color: colors.primaryDeep, textAlign: 'center' },
