@@ -1,5 +1,5 @@
 import type { PropsWithChildren, ReactNode } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppIcon } from '../icons';
 import { colors, radius, shadows, spacing, typography } from '../tokens';
@@ -12,6 +12,8 @@ type SheetModalProps = PropsWithChildren<{
   footer?: ReactNode;
   /** Fraction of screen height the sheet may occupy. */
   maxHeightRatio?: number;
+  /** Lift the sheet above the keyboard (forms). Defaults to false. */
+  avoidKeyboard?: boolean;
 }>;
 
 /** Bottom sheet with drag handle, tappable backdrop and safe-area padding. */
@@ -23,46 +25,55 @@ export function SheetModal({
   onClose,
   footer,
   maxHeightRatio = 0.88,
+  avoidKeyboard = false,
 }: SheetModalProps) {
   const insets = useSafeAreaInsets();
+
+  const sheet = (
+    <View style={[styles.sheet, shadows.sheet, { maxHeight: `${maxHeightRatio * 100}%` }]}>
+      <View style={styles.handle} />
+      {title ? (
+        <View style={styles.header}>
+          <View style={styles.headerText}>
+            <Text style={styles.title}>{title}</Text>
+            {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+            onPress={onClose}
+            hitSlop={10}
+            style={({ pressed }) => [styles.close, pressed && styles.pressed]}
+          >
+            <AppIcon name="close" size={14} color={colors.body} />
+          </Pressable>
+        </View>
+      ) : null}
+      <ScrollView
+        style={styles.body}
+        contentContainerStyle={styles.bodyContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        {children}
+      </ScrollView>
+      {footer ? (
+        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, spacing.base) }]}>{footer}</View>
+      ) : (
+        <View style={{ height: Math.max(insets.bottom, spacing.base) }} />
+      )}
+    </View>
+  );
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose} statusBarTranslucent>
       <View style={styles.overlay}>
         <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close" />
-        <View style={[styles.sheet, shadows.sheet, { maxHeight: `${maxHeightRatio * 100}%` }]}>
-          <View style={styles.handle} />
-          {title ? (
-            <View style={styles.header}>
-              <View style={styles.headerText}>
-                <Text style={styles.title}>{title}</Text>
-                {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
-              </View>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Close"
-                onPress={onClose}
-                hitSlop={10}
-                style={({ pressed }) => [styles.close, pressed && styles.pressed]}
-              >
-                <AppIcon name="close" size={14} color={colors.body} />
-              </Pressable>
-            </View>
-          ) : null}
-          <ScrollView
-            style={styles.body}
-            contentContainerStyle={styles.bodyContent}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-          >
-            {children}
-          </ScrollView>
-          {footer ? (
-            <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, spacing.base) }]}>{footer}</View>
-          ) : (
-            <View style={{ height: Math.max(insets.bottom, spacing.base) }} />
-          )}
-        </View>
+        {avoidKeyboard ? (
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>{sheet}</KeyboardAvoidingView>
+        ) : (
+          sheet
+        )}
       </View>
     </Modal>
   );
