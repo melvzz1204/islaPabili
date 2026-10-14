@@ -104,14 +104,14 @@ export function RiderReview({
       <div className="isla-card">
         <h2>Rider profile</h2>
         <div className="detail-grid">
-          <Detail label="Full name" value={profile?.full_name || '—'} />
-          <Detail label="Username" value={profile?.username || '—'} />
-          <Detail label="Email" value={profile?.email || '—'} />
-          <Detail label="Phone" value={profile?.phone || '—'} />
-          <Detail label="Account role" value={profile?.role || '—'} />
+          <Detail label="Full name" value={profile?.full_name || '-'} />
+          <Detail label="Username" value={profile?.username || '-'} />
+          <Detail label="Email" value={profile?.email || '-'} />
+          <Detail label="Phone" value={profile?.phone || '-'} />
+          <Detail label="Account role" value={profile?.role || '-'} />
           <Detail label="Home town" value={townName(profile?.home_town)} />
           <Detail label="Browses" value={townSummary(profile?.town_preferences)} />
-          <Detail label="Address" value={profile?.address || '—'} />
+          <Detail label="Address" value={profile?.address || '-'} />
           <Detail label="Account active" value={profile?.is_active ? 'Yes' : 'No'} />
           <Detail label="Joined" value={formatDateTime(profile?.created_at)} />
         </div>
@@ -124,8 +124,8 @@ export function RiderReview({
           <Detail label="Driving experience" value={`${application.driving_experience_years ?? 0} years`} />
           <Detail label="Applied" value={formatDateTime(application.created_at)} />
           <Detail label="Reference" value={application.id.slice(0, 8)} />
-          <Detail label="Reviewed" value={application.reviewed_at ? formatDateTime(application.reviewed_at) : '—'} />
-          <Detail label="Admin notes" value={application.admin_notes || '—'} />
+          <Detail label="Reviewed" value={application.reviewed_at ? formatDateTime(application.reviewed_at) : '-'} />
+          <Detail label="Admin notes" value={application.admin_notes || '-'} />
         </div>
       </div>
 
@@ -159,7 +159,7 @@ export function RiderReview({
         <div className="isla-card">
           <h2>Decision</h2>
           <p>
-            Approving promotes the rider and notifies them. Declining requires a reason — the rider
+            Approving promotes the rider and notifies them. Declining requires a reason, the rider
             receives it verbatim in their notifications.
           </p>
           <div className="btn-row">

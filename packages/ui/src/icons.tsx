@@ -211,6 +211,7 @@ export function AppIcon({
   name,
   size = 24,
   color,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   weight: _weight,
   style,
   testID,

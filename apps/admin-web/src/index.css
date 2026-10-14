@@ -1,7 +1,7 @@
 @import "@isla/ui/src/web-tokens.css";
 
 /* ============================================================
-   IslaPabili Admin — premium, light & airy design system
+   IslaPabili Admin, premium, light & airy design system
    One teal accent · hairline borders · generous whitespace
    ============================================================ */
 
@@ -38,7 +38,7 @@
   --r-sm: 10px;
   --r-xs: 8px;
 
-  /* elevation — barely there */
+  /* elevation, barely there */
   --shadow: 0 1px 2px rgba(14, 27, 26, 0.04), 0 1px 3px rgba(14, 27, 26, 0.05);
   --shadow-md: 0 2px 8px rgba(14, 27, 26, 0.05), 0 10px 28px -18px rgba(14, 27, 26, 0.22);
   --shadow-lg: 0 24px 60px -28px rgba(14, 27, 26, 0.4);

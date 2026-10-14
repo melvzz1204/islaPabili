@@ -81,7 +81,7 @@ export function avgRating(ratings: Rating[]): number | null {
 }
 
 export function delta(current: number, previous: number): { text: string; up: boolean | null } {
-  if (!previous) return { text: '—', up: null };
+  if (!previous) return { text: '-', up: null };
   const d = ((current - previous) / previous) * 100;
   return { text: `${d >= 0 ? '+' : ''}${d.toFixed(1)}%`, up: d >= 0 };
 }

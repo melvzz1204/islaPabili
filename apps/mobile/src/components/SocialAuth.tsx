@@ -91,12 +91,13 @@ const PROVIDER_LABELS: Record<'google' | 'facebook', string> = {
   facebook: 'Facebook',
 };
 
-/** Brand lockup shown on the sign-in landing screen. Compact so the
- * Log in / Create account buttons stay above the fold — no scroll needed. */
+/** Brand lockup shown on the sign-in landing screen. Horizontal [logo] name
+ * row — compact so the Log in / Create account buttons stay above the fold,
+ * no scroll needed. */
 export function AuthIntro() {
   return (
     <View style={styles.intro}>
-      <BrandLogo width={84} />
+      <BrandLogo width={56} />
       <Text style={styles.wordmark}>Isla Pabili</Text>
     </View>
   );
@@ -118,6 +119,13 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.6, transform: [{ scale: 0.94 }] },
   dim: { opacity: 0.45 },
 
-  intro: { alignItems: 'center', gap: spacing.sm, marginTop: spacing.md, marginBottom: spacing.xs },
-  wordmark: { ...typography.title, fontSize: 22, color: colors.ink, textAlign: 'center' },
+  intro: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  wordmark: { ...typography.title, fontSize: 24, color: colors.ink },
 });

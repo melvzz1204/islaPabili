@@ -5,7 +5,7 @@ const LOGO = require('../../assets/islapabili_logo.png');
 
 /**
  * IslaPabili brand mark from `apps/mobile/assets/islapabili_logo.png`.
- * Square badge — height follows width.
+ * Square badge, height follows width.
  */
 type BrandLogoProps = {
   /** Rendered width/height in px. Defaults to 200. */

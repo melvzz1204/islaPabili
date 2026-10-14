@@ -3,7 +3,7 @@ import type { CSSProperties } from 'react';
 /**
  * Minimal monochrome line-icon set for the admin console.
  * Every glyph is a 24×24 stroke drawing that inherits `currentColor`,
- * so icons tint to whatever text color sits around them — the backbone
+ * so icons tint to whatever text color sits around them, the backbone
  * of the premium, restrained look.
  */
 

@@ -136,8 +136,8 @@ function MerchantDetail({ data, id, busy, onToggle }: {
         <Detail label="GMV (recent 600)" value={peso(sumBy(orders, (o) => o.grand_total))} />
         <Detail label="Orders" value={num(orders.length)} />
         <Detail label="Catalog" value={`${products.filter((p) => p.is_active).length}/${products.length} live`} />
-        <Detail label="Address" value={m.address || '—'} />
-        <Detail label="Phone" value={m.phone || '—'} />
+        <Detail label="Address" value={m.address || '-'} />
+        <Detail label="Phone" value={m.phone || '-'} />
       </div>
       <div className="btn-row">
         <button type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={() => onToggle(m.id, !m.is_active)}>
@@ -171,7 +171,7 @@ function MerchantDetail({ data, id, busy, onToggle }: {
                     <tr key={o.id}>
                       <td><strong>{o.order_number}</strong><small>{o.fulfillment_mode?.replace(/_/g, ' ') ?? ''}</small></td>
                       <td>{formatDateTime(o.created_at)}</td>
-                      <td>{c?.full_name || c?.username || '—'}<small>{c?.phone ?? ''}</small></td>
+                      <td>{c?.full_name || c?.username || '-'}<small>{c?.phone ?? ''}</small></td>
                       <td><Badge tone={statusTone(o.status)}>{o.status.replace(/_/g, ' ').toUpperCase()}</Badge></td>
                       <td><strong>{peso(Number(o.grand_total ?? 0))}</strong></td>
                     </tr>
@@ -194,7 +194,7 @@ function StoreApplications({ data, onOpen }: { data: AdminData; onOpen: (id: str
   return (
     <Card
       title="Store applications"
-      subtitle="Review the storefront, owner and permit — approve to go live"
+      subtitle="Review the storefront, owner and permit, approve to go live"
       action={<Segmented value={f} onChange={setF} options={(['pending', 'approved', 'rejected', 'all'] as const).map((k) => ({ key: k, label: k[0].toUpperCase() + k.slice(1), count: count(k) }))} />}
     >
       {rows.length === 0 ? <Empty icon="clipboard" title={`No ${f} applications`} body="New store registrations land here for review." /> : (
@@ -264,12 +264,12 @@ function MerchantReviewBody({ app, data, onDone }: { app: MerchantApp; data: Adm
       {error ? <p className="error" role="alert">{error}</p> : null}
       <div className="detail-grid">
         <Detail label="Store name" value={app.store_name} />
-        <Detail label="Owner" value={app.owner_name || profile?.full_name || '—'} />
-        <Detail label="Phone" value={app.phone || profile?.phone || '—'} />
-        <Detail label="Email" value={profile?.email || '—'} />
+        <Detail label="Owner" value={app.owner_name || profile?.full_name || '-'} />
+        <Detail label="Phone" value={app.phone || profile?.phone || '-'} />
+        <Detail label="Email" value={profile?.email || '-'} />
         <Detail label="Town" value={app.town} />
         <Detail label="Category" value={app.category.replace('_', ' ')} />
-        <Detail label="Address" value={app.address || '—'} />
+        <Detail label="Address" value={app.address || '-'} />
         <Detail label="Applied" value={formatDateTime(app.created_at)} />
       </div>
       {app.description ? (
@@ -305,13 +305,13 @@ function MerchantReviewBody({ app, data, onDone }: { app: MerchantApp; data: Adm
             )}
           </div>
         </div>
-        {permitUrl ? <p className="muted">Permit link opened in a new tab — signed links expire in 5 min.</p> : null}
+        {permitUrl ? <p className="muted">Permit link opened in a new tab, signed links expire in 5 min.</p> : null}
       </div>
       {app.status === 'pending' ? (
         <div className="panel-soft">
           <h4>Decision</h4>
           <Field label="Reason (required to decline)">
-            <textarea className="input" rows={3} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Permit unreadable — please re-upload a clearer photo." />
+            <textarea className="input" rows={3} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Permit unreadable, please re-upload a clearer photo." />
           </Field>
           <div className="btn-row">
             <button type="button" className="btn btn-primary" disabled={busy !== null} onClick={() => void decide('approved')}>
@@ -323,7 +323,7 @@ function MerchantReviewBody({ app, data, onDone }: { app: MerchantApp; data: Adm
           </div>
         </div>
       ) : (
-        <p className="muted">Decided {app.status}{app.reviewed_at ? ` on ${formatDateTime(app.reviewed_at)}` : ''}{app.admin_notes ? ` — “${app.admin_notes}”` : ''}.</p>
+        <p className="muted">Decided {app.status}{app.reviewed_at ? ` on ${formatDateTime(app.reviewed_at)}` : ''}{app.admin_notes ? `, “${app.admin_notes}”` : ''}.</p>
       )}
     </div>
   );

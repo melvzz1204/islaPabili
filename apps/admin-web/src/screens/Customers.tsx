@@ -67,11 +67,11 @@ export function Customers({ data, loading, reload }: { data: AdminData; loading:
             <tbody>
               {rows.slice(0, 100).map(({ p, orders, spend, last }) => (
                 <tr key={p.id} className="row-link" onClick={() => setSelectedId(p.id)}>
-                  <td><strong>{p.full_name || p.username || '—'}</strong><small>{p.phone ?? p.email ?? ''}</small></td>
-                  <td>{p.home_town ? TOWN_LABELS[p.home_town] : '—'}</td>
+                  <td><strong>{p.full_name || p.username || '-'}</strong><small>{p.phone ?? p.email ?? ''}</small></td>
+                  <td>{p.home_town ? TOWN_LABELS[p.home_town] : '-'}</td>
                   <td><strong>{num(orders)}</strong></td>
                   <td><strong>{peso(spend)}</strong></td>
-                  <td>{last ? formatDateTime(last) : '—'}</td>
+                  <td>{last ? formatDateTime(last) : '-'}</td>
                   <td>{p.is_active ? <Badge tone="ok">ACTIVE</Badge> : <Badge tone="bad">BLOCKED</Badge>}</td>
                   <td onClick={(e) => e.stopPropagation()}>
                     <button
@@ -159,8 +159,8 @@ function CustomerFile({
       <div className="profile-head">
         <div className="profile-avatar">{initial}</div>
         <div className="profile-id">
-          <strong>{customer.full_name || '—'}</strong>
-          <small>@{customer.username || '—'} · {customer.id.slice(0, 8)}…</small>
+          <strong>{customer.full_name || '-'}</strong>
+          <small>@{customer.username || '-'} · {customer.id.slice(0, 8)}…</small>
         </div>
         {customer.is_active ? <Badge tone="ok">ACTIVE</Badge> : <Badge tone="bad">BLOCKED</Badge>}
         <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={onToggle}>
@@ -171,21 +171,21 @@ function CustomerFile({
       <div className="kpi-grid">
         <div className="kpi"><div className="kpi-label">Orders</div><div className="kpi-value">{num(orders.length)}</div><div className="kpi-hint">{num(active)} active now</div></div>
         <div className="kpi kpi-green"><div className="kpi-label">Lifetime spend</div><div className="kpi-value">{peso(sumBy(orders, (o) => o.grand_total))}</div><div className="kpi-hint">{num(done)} completed · {num(cancelled)} cancelled</div></div>
-        <div className="kpi kpi-orange"><div className="kpi-label">Ratings given</div><div className="kpi-value">{rating ? `★ ${rating.toFixed(1)}` : '—'}</div><div className="kpi-hint">{num(ratings.length)} reviews</div></div>
+        <div className="kpi kpi-orange"><div className="kpi-label">Ratings given</div><div className="kpi-value">{rating ? `★ ${rating.toFixed(1)}` : '-'}</div><div className="kpi-hint">{num(ratings.length)} reviews</div></div>
       </div>
 
       <Card title="Account information" subtitle="Profile record">
         <div className="detail-grid">
-          <Detail label="Full name" value={customer.full_name || '—'} />
-          <Detail label="Username" value={customer.username ? `@${customer.username}` : '—'} />
-          <Detail label="Email" value={customer.email || '—'} />
-          <Detail label="Phone" value={customer.phone || '—'} />
-          <Detail label="Home town" value={customer.home_town ? TOWN_LABELS[customer.home_town] : '—'} />
+          <Detail label="Full name" value={customer.full_name || '-'} />
+          <Detail label="Username" value={customer.username ? `@${customer.username}` : '-'} />
+          <Detail label="Email" value={customer.email || '-'} />
+          <Detail label="Phone" value={customer.phone || '-'} />
+          <Detail label="Home town" value={customer.home_town ? TOWN_LABELS[customer.home_town] : '-'} />
           <Detail label="Municipalities" value={townSummary(customer.town_preferences)} />
-          <Detail label="Delivery address" value={customer.address || '—'} />
+          <Detail label="Delivery address" value={customer.address || '-'} />
           <Detail label="Last updated" value={formatDateTime(customer.updated_at)} />
         </div>
-        {!customer.phone ? <p className="muted">No phone on file — onboarding is incomplete for this account.</p> : null}
+        {!customer.phone ? <p className="muted">No phone on file, onboarding is incomplete for this account.</p> : null}
       </Card>
 
       <Card title="Recent orders" subtitle={`${num(orders.length)} in window`}>
@@ -202,7 +202,7 @@ function CustomerFile({
                     <tr key={o.id}>
                       <td><strong>{o.order_number}</strong><small>{o.fulfillment_mode?.replace(/_/g, ' ') ?? ''}</small></td>
                       <td>{formatDateTime(o.created_at)}</td>
-                      <td>{rider ? rider.full_name || rider.username : '—'}</td>
+                      <td>{rider ? rider.full_name || rider.username : '-'}</td>
                       <td><Badge tone={statusTone(o.status)}>{o.status.replace(/_/g, ' ').toUpperCase()}</Badge></td>
                       <td><strong>{peso(Number(o.grand_total ?? 0))}</strong></td>
                     </tr>
@@ -214,7 +214,7 @@ function CustomerFile({
         )}
       </Card>
 
-      <Card title="Recent messages" subtitle="Rider–customer chat across this account's orders">
+      <Card title="Recent messages" subtitle="Rider-customer chat across this account's orders">
         {messages.length === 0 ? (
           <Empty icon="message" title="No messages yet" body="Chat threads appear here once a rider is assigned." />
         ) : (
@@ -227,7 +227,7 @@ function CustomerFile({
                 <li key={m.id}>
                   <span className="stars"><Icon name={isRider ? 'bike' : 'user'} size={16} /></span>
                   <span>
-                    <strong>{sender?.full_name || sender?.username || '—'} <small>· {isRider ? 'Rider' : 'Customer'}</small></strong>
+                    <strong>{sender?.full_name || sender?.username || '-'} <small>· {isRider ? 'Rider' : 'Customer'}</small></strong>
                     <small>{m.body.length > 140 ? `${m.body.slice(0, 140)}…` : m.body}</small>
                     <small>{order ? `#${order.order_number} · ` : ''}{formatDateTime(m.created_at)}</small>
                   </span>
@@ -236,7 +236,7 @@ function CustomerFile({
             })}
           </ul>
         )}
-        <p className="muted">Full threads live under each order — open Orders and select a row with chat.</p>
+        <p className="muted">Full threads live under each order, open Orders and select a row with chat.</p>
       </Card>
 
       <Card title="Ratings given" subtitle="Reviews this customer left for riders">        {ratings.length === 0 ? (
@@ -265,7 +265,7 @@ function CustomerFile({
           <p className="muted">You cannot delete your own admin account.</p>
         ) : !confirming ? (
           <>
-            <p className="muted">Permanently deletes this profile plus all of its orders, ratings and history. Their login will stop working. Blocking is reversible — deletion is not.</p>
+            <p className="muted">Permanently deletes this profile plus all of its orders, ratings and history. Their login will stop working. Blocking is reversible, deletion is not.</p>
             <button type="button" className="btn btn-danger btn-sm" onClick={() => { setConfirming(true); setConfirmText(''); setDeleteError(null); }}>
               Delete account…
             </button>

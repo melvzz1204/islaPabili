@@ -14,6 +14,7 @@ import { ToastProvider } from './src/ui/Toast';
 import { CartProvider } from './src/marketplace/cart';
 import { AuthModeProvider, useAuthMode } from './src/lib/authMode';
 import { consumeCheckoutReturn } from './src/lib/checkoutReturn';
+import { consumePabiliReturn } from './src/lib/pabiliReturn';
 import { registerPushToken } from './src/lib/push';
 import { useConversations, useIncomingMessageAlerts } from './src/messaging/chat';
 import { useUnreadStoreCount } from './src/messaging/storeChat';
@@ -166,7 +167,7 @@ function Root() {
 
   // Register this device for server-side wake-up pushes. Re-runs on every
   // foreground so a refreshed (or previously denied) Expo token still lands
-  // in push_tokens — this is what wakes minimized/killed apps.
+  // in push_tokens, this is what wakes minimized/killed apps.
   useEffect(() => {
     const uid = session?.user?.id ?? null;
     if (!uid) {
@@ -239,12 +240,9 @@ function Root() {
     return <WelcomeOnboardingScreen onDone={() => setWelcomeSeen(true)} />;
   }
 
-  // A guest who tapped "log in to checkout" lands straight on Checkout.
-  const toCheckout = Boolean(session) && consumeCheckoutReturn();
-
   // Onboarding always wins: a half-finished profile blocks checkout validation.
   // profileLoaded guarantees we only show it when the profile is confirmed
-  // incomplete — never as a flash while the profile is still fetching.
+  // incomplete, never as a flash while the profile is still fetching.
   if (session && profileLoaded) {
     // resolveOptedTowns falls back to home_town for pre-migration rows.
     if (profile == null || profile.phone == null || isNoTowns(resolveOptedTowns(profile))) {
@@ -252,10 +250,17 @@ function Root() {
     }
   }
 
+  // Computed right before the navigator mounts so the one-shot return flags are
+  // not consumed on a render that shows onboarding (or anything else) instead.
+  // A guest who tapped "log in to checkout" lands straight on Checkout; a guest
+  // who tried to send a pabili list lands straight back on it.
+  const toCheckout = Boolean(session) && consumeCheckoutReturn();
+  const toPabili = Boolean(session) && !toCheckout && consumePabiliReturn();
+
   return (
     <Stack.Navigator
       screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}
-      initialRouteName={toCheckout ? 'Checkout' : 'Tabs'}
+      initialRouteName={toCheckout ? 'Checkout' : toPabili ? 'PabiliCreate' : 'Tabs'}
     >
       <Stack.Screen name="Tabs">
         {() => <MainTabs guest={!session} />}
@@ -272,6 +277,7 @@ function Root() {
       <Stack.Screen name="Track" component={TrackScreen} />
       <Stack.Screen name="Settings" component={SettingsScreen} />
       <Stack.Screen name="Rider" component={RiderGateScreen} />
+      <Stack.Screen name="Merchant" component={MerchantGateScreen} />
       <Stack.Screen name="Onboarding" component={OnboardingScreen} />
       <Stack.Screen name="AuthHome" component={AuthHomeScreen} />
       <Stack.Screen name="Login" component={LoginScreen} />
@@ -295,7 +301,7 @@ function goToPromoTarget(data: unknown) {
       navigationRef.navigate('Tabs', { screen: 'Shop' } as never);
     }
   } catch {
-    // Rider/merchant shells lack these routes — fall back to Shop tab.
+    // Rider/merchant shells lack these routes, fall back to Shop tab.
     try {
       navigationRef.navigate('Tabs', { screen: 'Shop' } as never);
     } catch {
@@ -315,7 +321,7 @@ function goToRiderRequest() {
   try {
     navigationRef.navigate('Rider' as never);
   } catch {
-    // Rider shell may not be mounted (customer mode) — handoff stays pending.
+    // Rider shell may not be mounted (customer mode), handoff stays pending.
   }
 }
 

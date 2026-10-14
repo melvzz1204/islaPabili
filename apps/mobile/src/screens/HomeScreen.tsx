@@ -168,6 +168,7 @@ export default function HomeScreen({}: Props) {
 
       {/* Prototype landing content: how-it-works timeline + big CTA. */}
       <HowItWorks
+        variant="home"
         onCreate={() => navigation.navigate('PabiliCreate')}
         onBrowse={() => goToTab(navigation, 'Shop')}
       />

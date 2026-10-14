@@ -6,7 +6,7 @@ export type OtaStatus = 'idle' | 'checking' | 'downloading' | 'ready' | 'error';
 
 /**
  * Over-the-air updates (EAS Update): JS-only changes download in the
- * background and apply on restart — no APK reinstall. Native changes
+ * background and apply on restart, no APK reinstall. Native changes
  * (permissions, new native deps, SDK upgrades) still need a store build
  * via the app_releases flow in UpdatePrompt.
  */

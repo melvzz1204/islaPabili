@@ -263,7 +263,7 @@ function MerchantMessages({
   const navigation = useNavigation<RootNavProp>();
   const { client, profile } = useAuth();
   const [customerNames, setCustomerNames] = useState<Record<string, string>>({});
-  // One live thread per store–customer pair: an active order chat wins.
+  // One live thread per store-customer pair: an active order chat wins.
   const openInquiry = async (customerId: string) => {
     const target = await resolveStoreChatTarget(client, { merchantId, customerId });
     if (target.route === 'Chat') navigation.navigate('Chat', { orderId: target.orderId });
@@ -578,7 +578,7 @@ function MerchantOverview({ merchantId, onGoOrders }: { merchantId: string; onGo
       {stats.attention.length > 0 ? (
         <Card>
           <Text style={styles.detailTitle}>Needs your confirmation</Text>
-          <Text style={styles.cardSub}>Oldest first — accept so the kitchen can start.</Text>
+          <Text style={styles.cardSub}>Oldest first. Accept so the kitchen can start.</Text>
           {stats.attention.map((o) => (
             <View key={o.id} style={styles.attentionRow}>
               <View style={styles.itemText}>
@@ -932,7 +932,7 @@ function MerchantOrderDetail({
             <Text style={styles.itemName}>
               {it.quantity}× {it.name}
             </Text>
-            <Text style={styles.cardSub}>Listed {it.estimated_price != null ? peso(Number(it.estimated_price)) : '—'} each</Text>
+            <Text style={styles.cardSub}>Listed {it.estimated_price != null ? peso(Number(it.estimated_price)) : '-'} each</Text>
           </View>
           {editable ? (
             <TextField

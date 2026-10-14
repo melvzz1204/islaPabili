@@ -135,7 +135,7 @@ export default function StoreScreen({ route }: Props) {
             <AppIcon name="message" size={22} color={colors.primary} />
             <View style={styles.messageText}>
               <Text style={styles.messageTitle}>Questions about this store?</Text>
-              <Text style={styles.messageSub}>Ask about stock, price, or availability — the store replies here.</Text>
+              <Text style={styles.messageSub}>Ask about stock, price, or availability. The store replies here.</Text>
             </View>
           </View>
           <Button

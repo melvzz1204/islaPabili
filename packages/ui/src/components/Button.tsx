@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, type StyleProp, type ViewStyle } from 'react-native';
 import { colors, layout, radius, spacing, typography } from '../tokens';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'accent' | 'ghost' | 'danger' | 'soft';
+export type ButtonVariant = 'primary' | 'secondary' | 'accent' | 'ghost' | 'danger' | 'soft' | 'outline';
 
 type ButtonProps = {
   title: string;
@@ -23,6 +23,9 @@ const VARIANTS = {
   danger: { bg: colors.danger, fg: colors.onPrimary, border: 'transparent' },
   soft: { bg: colors.primarySoft, fg: colors.primaryDeep, border: 'transparent' },
   secondary: { bg: colors.surface, fg: colors.text, border: colors.borderStrong },
+  // Transparent with a brand-orange outline: a lighter secondary that still
+  // reads as IslaPabili beside a solid primary button.
+  outline: { bg: 'transparent', fg: colors.primary, border: colors.primary },
   ghost: { bg: 'transparent', fg: colors.primary, border: 'transparent' },
 } as const;
 

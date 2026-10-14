@@ -47,7 +47,7 @@ const STATUS_META: Record<OrderStatus, StatusMeta> = {
   rider_assigned: { label: 'Rider assigned', badge: 'transit' },
   items_purchased: { label: 'Items purchased', badge: 'transit' },
   in_transit: { label: 'On the way', badge: 'transit' },
-  delivered: { label: 'Nadala na — pakicheck', badge: 'pending' },
+  delivered: { label: 'Nadala na, pakicheck', badge: 'pending' },
   completed: { label: 'Delivered', badge: 'delivered' },
   cancelled: { label: 'Cancelled', badge: 'cancelled' },
   failed: { label: 'Failed', badge: 'cancelled' },

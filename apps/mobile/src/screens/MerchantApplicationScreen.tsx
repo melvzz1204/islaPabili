@@ -278,7 +278,7 @@ export default function MerchantApplicationScreen({ onSubmitted }: Props) {
         />
         <TextField
           label="Store name *"
-          placeholder="Aling Nena's Sari-Sari – Boac"
+          placeholder="Aling Nena's Sari-Sari, Boac"
           value={storeName}
           onChangeText={setStoreName}
         />

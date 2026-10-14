@@ -5,7 +5,7 @@ import { useOtaUpdate } from '../lib/otaUpdate';
 
 /**
  * Over-the-air update sheet: the new JS bundle is already downloaded,
- * one restart applies it — no reinstall. Mounted next to UpdatePrompt.
+ * one restart applies it, no reinstall. Mounted next to UpdatePrompt.
  */
 export function OtaPrompt() {
   const { showPrompt, restart, later } = useOtaUpdate();
@@ -18,7 +18,7 @@ export function OtaPrompt() {
           <AppIcon name="spark" size={26} color={colors.onPrimary} />
         </View>
         <Text style={styles.title}>Update downloaded</Text>
-        <Text style={styles.otaBody}>Fresh improvements are ready. Restart now to apply them — no reinstall needed.</Text>
+        <Text style={styles.otaBody}>Fresh improvements are ready. Restart now to apply them, no reinstall needed.</Text>
         <Button title="Restart now" onPress={() => void restart()} />
         <Pressable accessibilityRole="button" accessibilityLabel="Later" onPress={later} hitSlop={8}>
           <Text style={styles.later}>Later</Text>

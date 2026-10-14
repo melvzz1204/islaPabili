@@ -2,14 +2,16 @@ import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import { AppIcon, Button, Card, colors, radius, spacing, typography, type AppIconName } from '@isla/ui';
 
-/** Landing steps, mirrors the Figma "How its works?" prototype timeline. */
-export const HOW_IT_WORKS_STEPS: {
+type Step = {
   title: string;
   body: string;
   icon: AppIconName;
   medallion: ViewStyle;
   tint: string;
-}[] = [
+};
+
+/** Landing steps, mirrors the Figma "How its works?" prototype timeline. */
+export const HOW_IT_WORKS_STEPS: Step[] = [
   {
     title: 'Browse live stores',
     body: 'Find tindahan near you and add items to cart.',
@@ -68,9 +70,43 @@ export const HOW_IT_WORKS_STEPS: {
   },
 ];
 
+/**
+ * Concise 3-step overview for the guest landing. Shown collapsed so the
+ * primary CTA stays the focus; expanding swaps in the full timeline above.
+ */
+export const LANDING_STEPS: Step[] = [
+  {
+    title: 'Mamili o mag-list',
+    body: 'Pumili ng tindahan, o i-type mo lang ang kailangan mo.',
+    icon: 'storefront',
+    medallion: { backgroundColor: colors.primaryTint },
+    tint: colors.primaryDeep,
+  },
+  {
+    title: 'Rider ang bibili',
+    body: 'Sila ang pipila at mag-confirm ng items sa chat.',
+    icon: 'rider',
+    medallion: { backgroundColor: colors.accentSoft },
+    tint: colors.accentDark,
+  },
+  {
+    title: 'Hatid sa pinto mo',
+    body: 'I-track ang rider hanggang dumating sa inyo.',
+    icon: 'route',
+    medallion: { backgroundColor: colors.primarySoft },
+    tint: colors.primary,
+  },
+];
+
 type Props = {
   onCreate: () => void;
   onBrowse: () => void;
+  /**
+   * 'landing' collapses to 3 steps with a "show all" expander and drops the
+   * hero card + CTA pair (the landing screen owns those). 'home' keeps the
+   * full auto-cycling timeline used on the signed-in Home tab.
+   */
+  variant?: 'landing' | 'home';
 };
 
 /**
@@ -78,8 +114,11 @@ type Props = {
  * (and tappable) icon timeline, big CTA plus a trust row. Shared by the
  * signed-in Home tab and the guest landing screen.
  */
-export function HowItWorks({ onCreate, onBrowse }: Props) {
+export function HowItWorks({ onCreate, onBrowse, variant = 'home' }: Props) {
+  const isLanding = variant === 'landing';
   const [active, setActive] = useState(0);
+  const [expanded, setExpanded] = useState(false);
+  const steps = isLanding && !expanded ? LANDING_STEPS : HOW_IT_WORKS_STEPS;
 
   // Staggered entrance: hero, then each step, then the CTA.
   const heroA = useRef(new Animated.Value(0)).current;
@@ -112,13 +151,15 @@ export function HowItWorks({ onCreate, onBrowse }: Props) {
     ]).start();
   }, [heroA, ctaA, stepAs]);
 
-  // Spotlight cycles through the steps; tapping one jumps straight to it.
+  // Spotlight cycles through the steps on Home; the landing stays still so it
+  // never competes with the primary CTA. Tapping a step always jumps to it.
   useEffect(() => {
+    if (isLanding) return;
     const t = setInterval(() => {
       setActive((a) => (a + 1) % HOW_IT_WORKS_STEPS.length);
     }, 2600);
     return () => clearInterval(t);
-  }, []);
+  }, [isLanding]);
 
   // Smooth medallion zoom toward the spotlighted step.
   const spotAs = useRef(HOW_IT_WORKS_STEPS.map(() => new Animated.Value(0))).current;
@@ -135,24 +176,26 @@ export function HowItWorks({ onCreate, onBrowse }: Props) {
 
   return (
     <>
-      <Animated.View style={{ opacity: heroA }}>
-        <Card variant="tinted" style={styles.hero}>
-          <View style={styles.heroMedallion}>
-            <AppIcon name="pabili" size={28} color={colors.onPrimary} />
-          </View>
-          <View style={styles.heroText}>
-            <Text style={styles.heroTitle}>Pabili na, hatid pa sa pinto mo.</Text>
-            <Text style={styles.heroBody}>
-              Browse live stores across Marinduque, or send one list and a rider shops it for you.
-            </Text>
-          </View>
-        </Card>
-      </Animated.View>
+      {isLanding ? null : (
+        <Animated.View style={{ opacity: heroA }}>
+          <Card variant="tinted" style={styles.hero}>
+            <View style={styles.heroMedallion}>
+              <AppIcon name="pabili" size={28} color={colors.onPrimary} />
+            </View>
+            <View style={styles.heroText}>
+              <Text style={styles.heroTitle}>Pabili na, hatid pa sa pinto mo.</Text>
+              <Text style={styles.heroBody}>
+                Browse live stores across Marinduque, or send one list and a rider shops it for you.
+              </Text>
+            </View>
+          </Card>
+        </Animated.View>
+      )}
 
       <View style={styles.howWrap}>
         <Text style={styles.howTitle}>How it works?</Text>
         <View style={styles.steps}>
-          {HOW_IT_WORKS_STEPS.map((step, i) => {
+          {steps.map((step, i) => {
             const enter = stepAs[i]!;
             const spotlight = spotAs[i]!;
             const isActive = i === active;
@@ -185,7 +228,7 @@ export function HowItWorks({ onCreate, onBrowse }: Props) {
                     >
                       <AppIcon name={step.icon} size={20} color={isActive ? colors.onPrimary : step.tint} />
                     </Animated.View>
-                    {i < HOW_IT_WORKS_STEPS.length - 1 ? <View style={styles.stepLine} /> : null}
+                    {i < steps.length - 1 ? <View style={styles.stepLine} /> : null}
                   </View>
                   <View style={styles.stepText}>
                     <Text style={[styles.stepTitle, isActive && styles.stepTitleActive]}>{step.title}</Text>
@@ -196,14 +239,25 @@ export function HowItWorks({ onCreate, onBrowse }: Props) {
             );
           })}
         </View>
+        {isLanding ? (
+          <Button
+            title={expanded ? 'Ipakita ang 3 steps' : 'Tingnan lahat ng steps'}
+            variant="ghost"
+            size="md"
+            fullWidth={false}
+            onPress={() => setExpanded((v) => !v)}
+          />
+        ) : null}
       </View>
 
-      <Animated.View style={{ opacity: ctaA }}>
-        <View style={styles.ctaWrap}>
-          <Button title="Browse stores" onPress={onBrowse} />
-          <Button title="Create Pabili List" variant="secondary" onPress={onCreate} />
-        </View>
-      </Animated.View>
+      {isLanding ? null : (
+        <Animated.View style={{ opacity: ctaA }}>
+          <View style={styles.ctaWrap}>
+            <Button title="Browse stores" onPress={onBrowse} />
+            <Button title="Create Pabili List" variant="secondary" onPress={onCreate} />
+          </View>
+        </Animated.View>
+      )}
     </>
   );
 }

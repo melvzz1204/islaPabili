@@ -1,4 +1,4 @@
-# IslaPabili — Deployment MVP (Android-first, ngayon)
+# IslaPabili, Deployment MVP (Android-first, ngayon)
 
 > Target: mag-live sa Marinduque na pinakamura pero stable. Android lang muna.
 
@@ -26,7 +26,7 @@ Libre / walang bayad sa stack na ito:
 - Push: `expo-notifications`. Libre.
 - Payment: COD + manual GCash/Maya (`CheckoutScreen.tsx`). Walang gateway fee.
 
-## 2. Magkano — MVP
+## 2. Magkano, MVP
 
 | Item | Cost | Notes |
 |---|---|---|
@@ -34,7 +34,7 @@ Libre / walang bayad sa stack na ito:
 | Expo EAS Free | $0/mo | 15 Android + 15 iOS builds/mo, 1K MAU OTA, low-priority queue |
 | Admin-web hosting | $0/mo | Vercel / Netlify / Cloudflare Pages free |
 | Google Play Console | $25 one-time (~₱1,450) | Isang bayad lang, habambuhay. Visa/Mastercard/Amex lang, bawal prepaid/PayPal |
-| Custom domain (optional) | ~₱600–800/year | Para sa admin-web. Kung wala, libre `*.vercel.app` URL muna |
+| Custom domain (optional) | ~₱600-800/year | Para sa admin-web. Kung wala, libre `*.vercel.app` URL muna |
 | Semaphore SMS OTP | ₱0.56/text ex-VAT (~₱0.63 VAT-in) | Globe/Smart/Sun/DITO. Walang monthly fee |
 
 **Total Day 1: ~₱1,450 one-time + ₱0/mo + SMS usage.**
@@ -52,7 +52,7 @@ SMS examples (VAT-in na):
 - [ ] `apps/mobile/.env` may `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (tingnan ang `.env.example`)
 - [ ] `apps/admin-web/.env` may `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`
 - [ ] Semaphore API key naka-set bilang Supabase secret (`supabase secrets set SEMAPHORE_API_KEY=...`)
-- [ ] `CRON_SECRET` naka-set (`supabase secrets set CRON_SECRET=...`) — ginagamit ng `reminder-send` at `promo-craving`
+- [ ] `CRON_SECRET` naka-set (`supabase secrets set CRON_SECRET=...`), ginagamit ng `reminder-send` at `promo-craving`
 - [ ] `google-services.json` nasa `apps/mobile/` na (nandiyan na)
 - [ ] Play Console account verified ($25 bayad na)
 
@@ -117,4 +117,4 @@ eas update --channel production --message "fix: ..."
 Lumipat sa `docs/DEPLOYMENT-SCALE.md` pag tumama ka sa alinman:
 - Supabase Free nag-pause, lumagpas 500MB DB, o kailangan ng backups
 - EAS Free naubos (30 builds/mo) o lagpas 1K OTA users
-- SMS bill lumalaki — panahon na para i-review ang OTP flow at push-first policy
+- SMS bill lumalaki, panahon na para i-review ang OTP flow at push-first policy

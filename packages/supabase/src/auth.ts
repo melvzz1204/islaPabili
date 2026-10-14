@@ -149,7 +149,7 @@ export function resolveProviderAvatar(user: AvatarUser | null | undefined): stri
 }
 
 export async function signOut(client: Supabase): Promise<void> {
-  // The revoke call can hang (offline / unreachable backend) — never let it
+  // The revoke call can hang (offline / unreachable backend), never let it
   // block logout UX. Cap it, then clear the local session regardless.
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
@@ -158,7 +158,7 @@ export async function signOut(client: Supabase): Promise<void> {
   try {
     await Promise.race([client.auth.signOut(), timeout]);
   } catch {
-    // Session already expired, timed out, or offline — still clear local state.
+    // Session already expired, timed out, or offline, still clear local state.
     await client.auth.signOut({ scope: 'local' }).catch(() => undefined);
   } finally {
     if (timer) clearTimeout(timer);

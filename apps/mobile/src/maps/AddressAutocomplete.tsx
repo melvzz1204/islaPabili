@@ -85,7 +85,7 @@ export function AddressAutocomplete({
             </View>
           ) : null}
           {!searching && results.length === 0 ? (
-            <Text style={styles.muted}>No matches — keep typing, barangay + town helps.</Text>
+            <Text style={styles.muted}>No matches. Keep typing, barangay + town helps.</Text>
           ) : null}
           {results.map((r, i) => {
             const short = shortenPlaceName(r.display_name);

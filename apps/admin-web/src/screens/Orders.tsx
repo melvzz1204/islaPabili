@@ -83,8 +83,8 @@ export function Orders({ data, loading }: { data: AdminData; loading: boolean })
                   return (
                     <tr key={o.id} className="rowlink" onClick={() => setSelected(o)}>
                       <td><strong>{o.order_number}</strong><small>{formatDateTime(o.created_at)} · {TOWN_LABELS[o.town as keyof typeof TOWN_LABELS] ?? o.town}</small></td>
-                      <td>{c?.full_name || c?.username || '—'}<small>{c?.phone ?? ''}</small></td>
-                      <td>{o.is_custom_list ? 'Custom pabili' : (m?.name ?? '—')}<small>{o.payment_method.toUpperCase()} · {o.fulfillment_mode.replaceAll('_', ' ')}</small></td>
+                      <td>{c?.full_name || c?.username || '-'}<small>{c?.phone ?? ''}</small></td>
+                      <td>{o.is_custom_list ? 'Custom pabili' : (m?.name ?? '-')}<small>{o.payment_method.toUpperCase()} · {o.fulfillment_mode.replaceAll('_', ' ')}</small></td>
                       <td><strong>{peso(o.grand_total)}</strong><small>fee {peso(o.total_delivery_fee)}</small></td>
                       <td><Badge tone={statusTone(o.status)}>{o.status.replaceAll('_', ' ')}</Badge></td>
                       <td><span className="go">{chatCount > 0 ? <><Icon name="message" size={14} />{chatCount}</> : null} <Icon name="chevronRight" size={15} /></span></td>
@@ -93,7 +93,7 @@ export function Orders({ data, loading }: { data: AdminData; loading: boolean })
                 })}
               </tbody>
             </table>
-            {visible.length > 80 ? <p className="muted center">Showing first 80 of {visible.length} — refine filters to narrow.</p> : null}
+            {visible.length > 80 ? <p className="muted center">Showing first 80 of {visible.length}, refine filters to narrow.</p> : null}
           </div>
         )}
       </Card>
@@ -130,17 +130,17 @@ export function OrderDetail({ data, order, onChanged }: { data: AdminData; order
         <Detail label="Fulfillment" value={order.fulfillment_mode.replaceAll('_', ' ')} />
       </div>
       <div className="detail-grid">
-        <Detail label="Customer" value={`${customer?.full_name || customer?.username || '—'} · ${customer?.phone || ''}`} />
+        <Detail label="Customer" value={`${customer?.full_name || customer?.username || '-'} · ${customer?.phone || ''}`} />
         <Detail label="Rider" value={rider ? `${rider.full_name || rider.username} · ${rider.phone || ''}` : 'Unassigned'} />
-        <Detail label="Merchant" value={order.is_custom_list ? `Custom: ${order.pickup_name || 'pabili list'}` : (merchant?.name ?? '—')} />
-        <Detail label="Drop-off" value={order.dropoff_address || '—'} />
+        <Detail label="Merchant" value={order.is_custom_list ? `Custom: ${order.pickup_name || 'pabili list'}` : (merchant?.name ?? '-')} />
+        <Detail label="Drop-off" value={order.dropoff_address || '-'} />
       </div>
       <div className="panel-soft">
         <h4>Items ({items.length})</h4>
         {items.length === 0 ? <p className="muted">No item lines captured.</p> : (
           <ul className="lines">
             {items.map((i) => (
-              <li key={i.id}><span>{i.quantity}× {i.name}</span><span>{i.estimated_price ? peso(i.estimated_price) : '—'}</span></li>
+              <li key={i.id}><span>{i.quantity}× {i.name}</span><span>{i.estimated_price ? peso(i.estimated_price) : '-'}</span></li>
             ))}
           </ul>
         )}
@@ -172,7 +172,7 @@ export function OrderDetail({ data, order, onChanged }: { data: AdminData; order
 /**
  * Paper-list photos on a pabili order. Admins see thumbnails (short-lived
  * signed URLs, same pattern as rider compliance docs) and can detach +
- * delete a photo at any time — the rider and customer views update on
+ * delete a photo at any time, the rider and customer views update on
  * their next refresh since they read the same row.
  */
 function ListPhotosPanel({ order, onChanged }: { order: Order; onChanged?: (next: Order) => void }) {

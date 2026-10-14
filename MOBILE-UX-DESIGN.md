@@ -1,8 +1,8 @@
-# IslaPabili Mobile — Premium UI/UX Design Spec
+# IslaPabili Mobile, Premium UI/UX Design Spec
 
 > **Scope:** Mobile app only (customer + rider). Merchant and admin are out of scope.
 > **Platform:** React Native (Expo SDK 57), targeting low-to-mid-range Android devices.
-> **Design language:** "Tropical Premium" — warm, trustworthy, island-inspired, fast.
+> **Design language:** "Tropical Premium", warm, trustworthy, island-inspired, fast.
 
 ---
 
@@ -14,13 +14,13 @@
 |---|---|
 | **Bilisan (Speed)** | Every interaction feels instant. Skeletons over spinners. Optimistic UI. |
 | **Tiwala (Trust)** | Clear pricing, live status, transparent fares. No surprises. |
-| **Bahay (Home)** | Warm, welcoming, familiar. Like a neighbor sari-sari store — not a warehouse. |
+| **Bahay (Home)** | Warm, welcoming, familiar. Like a neighbor sari-sari store, not a warehouse. |
 | **Isla (Island)** | Distinctly Marinduque. Teal waters, orange sunsets, green mountains. Not another faceless delivery app. |
 
 ### Brand Personality
 - **Voice:** Taglish, warm, direct. "Bili at Deliver sa Pintuan Mo."
 - **Tone:** Friendly but efficient. Never corporate.
-- **Feeling:** Like texting a friend who runs errands for you — reliable, no fuss.
+- **Feeling:** Like texting a friend who runs errands for you, reliable, no fuss.
 
 ---
 
@@ -112,7 +112,7 @@ gradient.earth   = ['#F97316', '#FB923C', '#FDBA74']  // Warm orange
 ### 2.5 Elevation & Shadows
 
 ```js
-// Card — subtle, breathable
+// Card, subtle, breathable
 shadow.card = {
   shadowColor: '#0F172A',
   shadowOffset: { width: 0, height: 1 },
@@ -121,7 +121,7 @@ shadow.card = {
   elevation: 2,
 }
 
-// FAB / Floating — prominent but not heavy
+// FAB / Floating, prominent but not heavy
 shadow.fab = {
   shadowColor: '#0F172A',
   shadowOffset: { width: 0, height: 4 },
@@ -130,7 +130,7 @@ shadow.fab = {
   elevation: 8,
 }
 
-// Sheet / Modal — highest layer
+// Sheet / Modal, highest layer
 shadow.sheet = {
   shadowColor: '#0F172A',
   shadowOffset: { width: 0, height: -4 },
@@ -261,7 +261,7 @@ shadow.sheet = {
 
 ---
 
-### 3.6 FAB (Floating Action Button — Cart)
+### 3.6 FAB (Floating Action Button, Cart)
 
 | Property | Value |
 |---|---|
@@ -1134,8 +1134,8 @@ Each screen has a contextual empty state:
 |---|---|---|---|---|
 | Cart | cart | "Your cart is empty" | "Add something tasty from local stores." | "Browse stores" |
 | Orders | orders | "No orders yet" | "Your orders will appear here with live tracking." | "Browse stores" |
-| Notifications | bell | "All caught up!" | "No new notifications." | — |
-| Search | search | "No results found" | "Try a different search term." | — |
+| Notifications | bell | "All caught up!" | "No new notifications." |, |
+| Search | search | "No results found" | "Try a different search term." |, |
 
 ---
 

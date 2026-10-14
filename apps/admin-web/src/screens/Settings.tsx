@@ -61,7 +61,7 @@ export function Settings({ data, reload }: { data: AdminData; reload: () => void
       is_active: true,
     });
     setRelBusy(false);
-    setRelMsg(error ? error.message : `Release v${relVersion.trim()} (build ${build}) published — apps on older builds will prompt.`);
+    setRelMsg(error ? error.message : `Release v${relVersion.trim()} (build ${build}) published, apps on older builds will prompt.`);
     if (!error) { setRelVersion(''); setRelBuild(''); setRelMin(''); setRelUrl(''); setRelNotes(''); reload(); }
   };
 
@@ -98,14 +98,14 @@ export function Settings({ data, reload }: { data: AdminData; reload: () => void
             <Detail label="GMV (completed)" value={peso(sumBy(data.orders.filter((o) => o.status === 'completed'), (o) => o.grand_total))} />
             <Detail label="RLS" value={<Badge tone="ok">ADMIN READ · ENFORCED</Badge>} />
           </div>
-          <p className="muted">Destructive actions are intentionally absent — pause instead of delete so the audit trail stays intact.</p>
+          <p className="muted">Destructive actions are intentionally absent, pause instead of delete so the audit trail stays intact.</p>
         </Card>
       </div>
       <Card title="App releases" subtitle="Publish a build to prompt users with What's new + download">
         <div className="detail-grid">
-          <Detail label="Live release" value={latestRelease ? `v${latestRelease.version} · build ${latestRelease.build_number}` : '—'} />
-          <Detail label="Min build" value={latestRelease ? String(latestRelease.min_build) : '—'} />
-          <Detail label="Published" value={latestRelease ? new Date(latestRelease.created_at).toLocaleString('en-PH') : '—'} />
+          <Detail label="Live release" value={latestRelease ? `v${latestRelease.version} · build ${latestRelease.build_number}` : '-'} />
+          <Detail label="Min build" value={latestRelease ? String(latestRelease.min_build) : '-'} />
+          <Detail label="Published" value={latestRelease ? new Date(latestRelease.created_at).toLocaleString('en-PH') : '-'} />
           <Detail label="Releases" value={num(data.releases.length)} />
         </div>
         <div className="form-row">

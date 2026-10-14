@@ -63,13 +63,13 @@ export function AdminLogin({ onSignedIn }: { onSignedIn: () => void }) {
           <button type="submit" className="btn btn-primary btn-lg" disabled={busy}>
             {busy ? 'Signing in…' : 'Sign in to console →'}
           </button>
-          <p className="muted center">No public sign-up — accounts are provisioned by superadmin. RLS enforces access.</p>
+          <p className="muted center">No public sign-up, accounts are provisioned by superadmin. RLS enforces access.</p>
         </form>
       </div>
       <div className="auth-side">
         <div className="auth-metric"><strong>₱45 + ₱15/km</strong><span>transparent island fare</span></div>
         <div className="auth-metric"><strong>Live</strong><span>orders · riders · stores</span></div>
-        <p>“Salamat sa pag-Pabili” — every completed order, rated and settled.</p>
+        <p>“Salamat sa pag-Pabili”, every completed order, rated and settled.</p>
       </div>
     </div>
   );

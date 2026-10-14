@@ -100,7 +100,7 @@ export const FARE_FALLBACK_KM = 3.2;
 // edits take effect in every checkout without an app release.
 // ---------------------------------------------------------------------------
 
-/** Approximate poblacion coordinates per town — estimate fallback only. */
+/** Approximate poblacion coordinates per town, estimate fallback only. */
 export const TOWN_CENTERS: Record<Town, { lat: number; lng: number }> = {
   boac: { lat: 13.449, lng: 121.8395 },
   gasan: { lat: 13.3197, lng: 121.8527 },

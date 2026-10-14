@@ -17,7 +17,7 @@ values (
 );
 
 -- NOTE: no demo merchants are seeded. Only merchants approved through the
--- merchant application flow appear in the Shop (Jollibee included — the
+-- merchant application flow appear in the Shop (Jollibee included, the
 -- registered store keeps its own id; see migration 0040).
 
 -- -----------------------------------------------------------------------------

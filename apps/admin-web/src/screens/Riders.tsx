@@ -100,9 +100,9 @@ function Fleet({ data, riders }: { data: AdminData; riders: AdminData['profiles'
                 <tr key={p.id}>
                   <td><strong>{p.full_name || p.username || 'Unnamed'}</strong><small>{p.phone ?? p.email ?? ''}</small></td>
                   <td>{s?.on_duty ? <Badge tone="ok">ON DUTY</Badge> : <Badge tone="neutral">OFF</Badge>}</td>
-                  <td>{s?.current_town ? TOWN_LABELS[s.current_town] : '—'}<small>last seen {s ? formatDateTime(s.last_seen_at) : '—'}</small></td>
+                  <td>{s?.current_town ? TOWN_LABELS[s.current_town] : '-'}<small>last seen {s ? formatDateTime(s.last_seen_at) : '-'}</small></td>
                   <td><strong>{num(done)}</strong><small>{num(os.length)} assigned</small></td>
-                  <td>{r ? `★ ${r.toFixed(1)}` : '—'}</td>
+                  <td>{r ? `★ ${r.toFixed(1)}` : '-'}</td>
                   <td>{p.is_active ? <Badge tone="ok">ACTIVE</Badge> : <Badge tone="bad">PAUSED</Badge>}</td>
                 </tr>
               );
@@ -122,7 +122,7 @@ function Applications({ data, onOpen }: { data: AdminData; onOpen: (id: string) 
   return (
     <Card
       title="Rider applications"
-      subtitle="Compliance review — approve to promote, decline with a reason"
+      subtitle="Compliance review, approve to promote, decline with a reason"
       action={<Segmented value={f} onChange={setF} options={(['pending', 'approved', 'rejected', 'all'] as const).map((k) => ({ key: k, label: k[0].toUpperCase() + k.slice(1), count: count(k) }))} />}
     >
       {rows.length === 0 ? <Empty icon="clipboard" title={`No ${f} applications`} body="New rider sign-ups land here for review." /> : (
@@ -193,10 +193,10 @@ function ReviewBody({ appId, data, onDone }: { appId: string; data: AdminData; o
     <div className="stack">
       {error ? <p className="error" role="alert">{error}</p> : null}
       <div className="detail-grid">
-        <Detail label="Full name" value={profile?.full_name || '—'} />
-        <Detail label="Phone" value={profile?.phone || '—'} />
-        <Detail label="Email" value={profile?.email || '—'} />
-        <Detail label="Home town" value={profile?.home_town ? TOWN_LABELS[profile.home_town] : '—'} />
+        <Detail label="Full name" value={profile?.full_name || '-'} />
+        <Detail label="Phone" value={profile?.phone || '-'} />
+        <Detail label="Email" value={profile?.email || '-'} />
+        <Detail label="Home town" value={profile?.home_town ? TOWN_LABELS[profile.home_town] : '-'} />
         <Detail label="Operating area" value={townSummary(app.operating_towns)} />
         <Detail label="Experience" value={`${app.driving_experience_years ?? 0} years`} />
       </div>
@@ -214,8 +214,8 @@ function ReviewBody({ appId, data, onDone }: { appId: string; data: AdminData; o
       {app.status === 'pending' ? (
         <div className="panel-soft">
           <h4>Decision</h4>
-          <Field label="Reason (required to decline — rider sees this verbatim)">
-            <textarea className="input" rows={3} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Back of license unreadable — retake in daylight." />
+          <Field label="Reason (required to decline, rider sees this verbatim)">
+            <textarea className="input" rows={3} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Back of license unreadable, retake in daylight." />
           </Field>
           <div className="btn-row">
             <button type="button" className="btn btn-primary" disabled={busy !== null} onClick={() => void decide('approved')}>{busy === 'approve' ? 'Approving…' : 'Approve rider'}</button>
@@ -223,7 +223,7 @@ function ReviewBody({ appId, data, onDone }: { appId: string; data: AdminData; o
           </div>
         </div>
       ) : (
-        <p className="muted">Decided {app.status} {app.reviewed_at ? `on ${formatDateTime(app.reviewed_at)}` : ''}{app.admin_notes ? ` — “${app.admin_notes}”` : ''}.</p>
+        <p className="muted">Decided {app.status} {app.reviewed_at ? `on ${formatDateTime(app.reviewed_at)}` : ''}{app.admin_notes ? `, “${app.admin_notes}”` : ''}.</p>
       )}
     </div>
   );

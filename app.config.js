@@ -1,5 +1,5 @@
 /**
- * Repo-root Expo config — EAS Build always runs from the directory containing
+ * Repo-root Expo config, EAS Build always runs from the directory containing
  * eas.json (the repo root), while the app lives in apps/mobile.
  *
  * This wrapper re-exports apps/mobile/app.json (the single source of truth)

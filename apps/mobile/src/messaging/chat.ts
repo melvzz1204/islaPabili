@@ -42,7 +42,7 @@ export function canStoreChat(status: OrderRow['status']): boolean {
 /**
  * Where "message the store" should land: the active order chat when one
  * exists, else the pre-order inquiry thread. Keeps one live conversation
- * per store–customer pair so the two never compete.
+ * per store-customer pair so the two never compete.
  */
 export async function resolveStoreChatTarget(
   client: Supabase,
@@ -425,7 +425,7 @@ export function useMerchantOrderChats(merchantId: string) {
   }, [load]);
 
   // Live: any new message refreshes the badge. Per-hook suffix, same as
-  // useConversations — a shared topic name crashes on concurrent mounts.
+  // useConversations, a shared topic name crashes on concurrent mounts.
   const instanceId = useMemo(() => Math.random().toString(36).slice(2, 9), []);
   useEffect(() => {
     if (!profile) return;

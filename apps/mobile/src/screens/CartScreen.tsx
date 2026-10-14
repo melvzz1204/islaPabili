@@ -157,7 +157,7 @@ function CartLineRow({ name, price, qty, photoUrl, onChange, onRemove }: CartLin
           </Text>
           <View style={styles.lineFoot}>
             <QtyStepper qty={qty} onChange={onChange} label={name} />
-            <Text style={styles.lineTotal}>{price == null ? '—' : peso(price * qty)}</Text>
+            <Text style={styles.lineTotal}>{price == null ? '-' : peso(price * qty)}</Text>
           </View>
         </View>
         <Pressable

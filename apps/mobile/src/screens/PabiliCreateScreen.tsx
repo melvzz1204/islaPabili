@@ -7,6 +7,7 @@ import * as Location from 'expo-location';
 import { TOWN_CENTERS, fareBreakdownLabel, fareConfigFromDefaults, type FareConfig, type Town } from '@isla/shared';
 import { useAuth } from '@isla/supabase';
 import { callRpc } from '../lib/rpc';
+import { clearPabiliDraft, loadPabiliDraft, requestPabiliReturn, savePabiliDraft } from '../lib/pabiliReturn';
 import { invokePush } from '../lib/push';
 import { flatFallbackQuote, loadFareConfig, quoteTrip } from '../marketplace/fare';
 import {
@@ -73,7 +74,7 @@ const comboArt = (id: string) =>
 
 export default function PabiliCreateScreen({ route }: Props) {
   const navigation = useNavigation<RootNavProp>();
-  const { client, profile } = useAuth();
+  const { client, profile, session } = useAuth();
   const { showToast } = useToast();
   // Deep-link entry (e.g. the Jollibee tile on Home) preloads a combo,
   // or a custom item list (e.g. picked from the Jollibee menu).
@@ -126,6 +127,28 @@ export default function PabiliCreateScreen({ route }: Props) {
   const [working, setWorking] = useState(false);
   const [fareConfig, setFareConfig] = useState<FareConfig>(() => fareConfigFromDefaults());
   const pulse = useRef(new Animated.Value(0)).current;
+
+  // Returning from a guest → login handoff: restore the saved pabili draft so
+  // nothing typed is lost. An explicit deep-link preset always wins.
+  // (Paper-list photos are device-local and not restored.)
+  const restoredDraft = useRef(false);
+  useEffect(() => {
+    if (restoredDraft.current) return;
+    restoredDraft.current = true;
+    if (routeParams) return;
+    void (async () => {
+      const draft = await loadPabiliDraft();
+      if (!draft) return;
+      setRows(draft.rows);
+      setName(draft.name);
+      setPhone(draft.phone);
+      setTown((draft.town as Town | null) ?? null);
+      setAddress(draft.address);
+      setStorePick(draft.storePick);
+      setCustomStore(draft.customStore);
+      await clearPabiliDraft();
+    })();
+  }, [routeParams]);
 
   // Live pricing rules from the admin console (base + per-km + tiers).
   useEffect(() => {
@@ -202,7 +225,7 @@ export default function PabiliCreateScreen({ route }: Props) {
       avatarUrl = signed?.signedUrl ?? null;
     }
     // The fee is revealed (from GPS kilometer distance) now that a rider
-    // exists — never before. The row already carries the submit-time quote,
+    // exists, never before. The row already carries the submit-time quote,
     // which used the same GPS pin when one was granted; recompute it here so
     // the displayed total always derives from stored coordinates. No row
     // write: customers lose update rights once the order leaves dispatch.
@@ -481,6 +504,14 @@ export default function PabiliCreateScreen({ route }: Props) {
       showToast({ message: 'Add your town and delivery address.', type: 'error' });
       return;
     }
+    if (!session) {
+      // Guest: stash the list, sign in, and we reopen this screen right after
+      // so nothing typed is lost (draft restore runs on the next mount).
+      void savePabiliDraft({ rows, name, phone, town, address, storePick, customStore });
+      requestPabiliReturn();
+      navigation.navigate('AuthHome');
+      return;
+    }
     setGpsPrompt(true);
   };
 
@@ -568,6 +599,8 @@ export default function PabiliCreateScreen({ route }: Props) {
       setSubmitting(false);
       // Wake on-duty riders whose apps are killed/backgrounded.
       if ((offered ?? 0) > 0) void invokePush(client, order.id, 'pabili');
+      // The draft made it into a real order, drop it.
+      void clearPabiliDraft();
       // Hand off to the full-screen finding moment. It stays until the
       // customer stops it or a rider accepts (realtime handoff above).
       setFinding({
@@ -601,7 +634,11 @@ export default function PabiliCreateScreen({ route }: Props) {
               <Text style={styles.stickyCount}>
                 {named.length} item{named.length === 1 ? '' : 's'} · {itemCount} pc
               </Text>
-              <Text style={styles.stickyFeeNote}>₱45 base · fee after rider accepts</Text>
+              <Text style={styles.stickyFeeNote}>
+                {session
+                  ? '₱45 base · fee after rider accepts'
+                  : 'Kailangan ng account para maka-submit, mabilis lang'}
+              </Text>
             </View>
             <Button
               title="Find a rider"
@@ -682,7 +719,7 @@ export default function PabiliCreateScreen({ route }: Props) {
         </View>
         {named.length === 0 && photos.length === 0 ? (
           <Text style={styles.emptyList}>
-            Walang laman — type your items or snap a photo of your paper list.
+            Walang laman. Type your items or snap a photo of your paper list.
           </Text>
         ) : (
           <>
@@ -859,7 +896,7 @@ export default function PabiliCreateScreen({ route }: Props) {
 
       <View style={styles.photoHead}>
         <Text style={styles.cardTitle}>Paper list photo ({photos.length}/{MAX_LIST_PHOTOS})</Text>
-        <Text style={styles.photoHint}>Snap your handwritten list — the rider reads it directly.</Text>
+        <Text style={styles.photoHint}>Snap your handwritten list. The rider reads it directly.</Text>
       </View>
       {photos.length > 0 ? (
         <View style={styles.photoGrid}>
@@ -950,7 +987,7 @@ export default function PabiliCreateScreen({ route }: Props) {
             </Text>
             <Text style={styles.findOrder}>{finding.orderNumber}</Text>
             <Text style={styles.findFeeDetail}>
-              No fee yet — the total is computed from GPS distance once a rider accepts.
+              No fee yet. The total is computed from GPS distance once a rider accepts.
             </Text>
             <Button
               title="Stop finding"

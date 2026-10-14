@@ -5,9 +5,9 @@
 // POST https://api.semaphore.co/api/v4/messages (form-encoded).
 //
 // Env (via `supabase secrets set`, never committed):
-//   SEND_SMS_HOOK_SECRET – hook secret from Dashboard (format "v1,whsec_...").
-//   SEMAPHORE_API_KEY    – from semaphore.co dashboard.
-//   SEMAPHORE_SENDERNAME – optional; omit to use the account's default sender name.
+//   SEND_SMS_HOOK_SECRET - hook secret from Dashboard (format "v1,whsec_...").
+//   SEMAPHORE_API_KEY    - from semaphore.co dashboard.
+//   SEMAPHORE_SENDERNAME - optional; omit to use the account's default sender name.
 //
 // NOTE: Semaphore silently drops messages starting with the word "TEST",
 // so the OTP template below never starts with it.

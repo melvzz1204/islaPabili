@@ -6,7 +6,7 @@
 // deliveries don't go silent. Safe to run hourly via cron.
 //
 // Auth: Supabase cron (x-cron-secret: CRON_SECRET) or an admin JWT.
-// POST { min_hours?: number } — defaults: first nudge 2h, repeat every 6h.
+// POST { min_hours?: number }, defaults: first nudge 2h, repeat every 6h.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -82,7 +82,7 @@ Deno.serve(async (req) => {
     const title = CRAVING_FALLBACK;
     const body =
       `Order ${o.order_number} naghihintay pa ng confirm mo. ` +
-      `Tap "Natanggap ko na" pag nakuha mo na — salamat!`;
+      `Tap "Natanggap ko na" pag nakuha mo na, salamat!`;
     await admin.from("notifications").insert({
       user_id: o.customer_id,
       order_id: o.id,

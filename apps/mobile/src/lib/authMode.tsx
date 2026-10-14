@@ -6,7 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
  * (customer / rider / merchant) and persisted, so a merchant lands back
  * in the store dashboard after a restart.
  *
- * Switching shells always goes through logout — the shells never render
+ * Switching shells always goes through logout, the shells never render
  * in the same session.
  */
 export type AuthMode = 'customer' | 'rider' | 'merchant';

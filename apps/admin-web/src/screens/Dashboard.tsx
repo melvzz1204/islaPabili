@@ -95,7 +95,7 @@ export function Dashboard({ data, loading, go }: {
       <div className="hero">
         <div>
           <p className="eyebrow">Marinduque · island operations</p>
-          <h1 className="hero-title">Kumusta, Admin — here&apos;s the island today.</h1>
+          <h1 className="hero-title">Kumusta, Admin! Here&apos;s the island today.</h1>
           <p className="hero-sub">
             {num(orders.length)} orders · {peso(gmv)} GMV · {pct(completed.length, orders.length)} completion
             {rating ? ` · ★ ${rating.toFixed(1)} rider rating` : ''} in {RANGES.find((r) => r.key === range)?.label.toLowerCase()}.
@@ -118,7 +118,7 @@ export function Dashboard({ data, loading, go }: {
         <Kpi tone="orange" icon="receipt" label="Orders" value={num(orders.length)} hint={`${num(active.length)} live right now`} />
         <Kpi tone="green" icon="check" label="Completion rate" value={pct(completed.length, orders.length)} hint={`${num(completed.length)} of ${num(orders.length)} done`} />
         <Kpi tone="blue" icon="bike" label="Riders on duty" value={num(onDuty.length)} hint={`${num(data.riderStatus.length)} tracked · ${num(data.profiles.filter((p) => p.role === 'rider').length)} riders`} />
-        <Kpi tone="violet" icon="star" label="Avg rider rating" value={rating ? rating.toFixed(2) : '—'} hint={`${num(data.ratings.length)} reviews`} />
+        <Kpi tone="violet" icon="star" label="Avg rider rating" value={rating ? rating.toFixed(2) : '-'} hint={`${num(data.ratings.length)} reviews`} />
         <Kpi tone="red" icon="clock" label="Pending rider approvals" value={num(pendingApps.length)} hint="Needs review" delta={pendingApps.length > 0 ? 'action' : undefined} />
       </div>
 
@@ -149,7 +149,7 @@ export function Dashboard({ data, loading, go }: {
       </div>
 
       <div className="grid-2">
-        <Card title="Demand by municipality" subtitle="Boac usually leads — watch the tails">
+        <Card title="Demand by municipality" subtitle="Boac usually leads, watch the tails">
           <Hbars items={byTown} />
         </Card>
         <Card

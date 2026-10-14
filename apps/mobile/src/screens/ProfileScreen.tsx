@@ -55,7 +55,7 @@ export default function ProfileScreen({ navigation }: Props) {
     profile?.full_name || profile?.username || email.split('@')[0] || 'IslaPabili shopper';
   const phone = profile?.phone ?? '';
   // Provider picture straight from the auth session (Google preferred over
-  // expiring Facebook lookaside URLs — see resolveProviderAvatar) as
+  // expiring Facebook lookaside URLs, see resolveProviderAvatar) as
   // fallback, so OAuth users see their photo even if the profiles.avatar_url
   // sync hasn't landed yet (e.g. migration not pushed).
   const metaAvatar = resolveProviderAvatar(session?.user);

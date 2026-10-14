@@ -59,7 +59,7 @@ export function AuthProvider({ client, children }: PropsWithChildren<{ client: S
     if (data) {
       hasProfileRef.current = true;
       // OAuth (Google/Facebook) users: adopt the provider profile picture
-      // when the profile has none yet — or replace an expiring Facebook
+      // when the profile has none yet, or replace an expiring Facebook
       // lookaside URL with the longer-lived Google photo when the account
       // has both identities linked. Never overwrites an uploaded photo.
       const resolved = resolveProviderAvatar(user);

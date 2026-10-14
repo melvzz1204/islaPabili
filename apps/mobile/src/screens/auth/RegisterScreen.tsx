@@ -154,7 +154,7 @@ export default function RegisterScreen() {
       Alert.alert('Sign up failed', error);
       return;
     }
-    // When email confirmation is off there is already a session — persist the
+    // When email confirmation is off there is already a session, persist the
     // address straight onto the profile (the trigger also copies it from
     // user_metadata for the confirm-email path).
     if (address.trim()) {
@@ -251,7 +251,7 @@ export default function RegisterScreen() {
           value={address}
           onChangeText={setAddress}
           fieldStyle={styles.field}
-          hint="Saved to your profile — you can reuse it at checkout."
+          hint="Saved to your profile. You can reuse it at checkout."
         />
       </Card>
 

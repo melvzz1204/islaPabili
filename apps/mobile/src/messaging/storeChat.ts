@@ -18,7 +18,7 @@ export type StoreConversation = {
 
 /**
  * Pre-order inquiry thread, keyed by (merchant_id, customer_id).
- * No order row needed — the customer can ask about stock/price first.
+ * No order row needed, the customer can ask about stock/price first.
  *
  * Jollibee is excluded in the UI layer (isJollibeeMerchantName): the flagship
  * is rider-delivery-only, so StoreScreen never offers this entry for it.
@@ -293,8 +293,8 @@ async function bannerForBody(
 
 /**
  * Mount once in the merchant shell. Pops a toast banner whenever the other
- * party writes in one of this store's threads — order chats and pre-order
- * inquiries alike — except the thread already open on screen.
+ * party writes in one of this store's threads, order chats and pre-order
+ * inquiries alike, except the thread already open on screen.
  */
 export function useMerchantMessageAlerts(merchantId: string) {
   const { client, profile } = useAuth();

@@ -160,7 +160,7 @@ export default function CheckoutScreen({}: Props) {
     [groupQuotes],
   );
 
-  // Jollibee is rider-delivery only — no counter pickup for that store.
+  // Jollibee is rider-delivery only, no counter pickup for that store.
   // Name-based (not fixed UUID): the registered store keeps its own id.
   const hasJollibee = useMemo(
     () => groupQuotes.some((g) => isJollibeeMerchantName(merchantNames[g.merchantId])),
@@ -194,7 +194,7 @@ export default function CheckoutScreen({}: Props) {
       const filled = await fillAddressFromCoords(coords.lat, coords.lng);
       if (filled && !address.trim()) {
         setAddress(filled);
-        showToast({ message: 'Location pinned, address filled — edit if needed.', type: 'success' });
+        showToast({ message: 'Location pinned, address filled. Edit if needed.', type: 'success' });
       } else {
         showToast({ message: 'Location pinned, delivery fee now uses real distance.', type: 'success' });
       }

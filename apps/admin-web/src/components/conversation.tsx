@@ -17,7 +17,7 @@ export function ConversationThread({ data, orderId, limit = 100 }: { data: Admin
   );
 
   if (messages.length === 0) {
-    return <Empty icon="message" title="No messages" body="No rider–customer chat on this order." />;
+    return <Empty icon="message" title="No messages" body="No rider-customer chat on this order." />;
   }
 
   return (
@@ -28,7 +28,7 @@ export function ConversationThread({ data, orderId, limit = 100 }: { data: Admin
         return (
           <div key={m.id} className={`conv-msg${isRider ? ' conv-rider' : ''}`}>
             <div className="conv-meta">
-              <strong>{sender?.full_name || sender?.username || '—'}</strong>
+              <strong>{sender?.full_name || sender?.username || '-'}</strong>
               <span className={`conv-role ${isRider ? 'rider' : 'customer'}`}>{isRider ? 'Rider' : 'Customer'}</span>
               <small>{formatDateTime(m.created_at)}</small>
             </div>

@@ -36,7 +36,7 @@ export function Finance({ data, loading, reload }: { data: AdminData; loading: b
         <div>
           <p className="eyebrow">Growth · money</p>
           <h1 className="hero-title">Finance</h1>
-          <p className="hero-sub">GMV, rider settlement, promos and pricing — the island ledger.</p>
+          <p className="hero-sub">GMV, rider settlement, promos and pricing, the island ledger.</p>
         </div>
         <Segmented value={tab} onChange={setTab} options={[
           { key: 'money', label: 'Ledger' },
@@ -61,7 +61,7 @@ export function Finance({ data, loading, reload }: { data: AdminData; loading: b
               <ul className="lines">
                 {txs.slice(0, 30).map((t) => (
                   <li key={t.id}>
-                    <span><strong>{t.kind.replaceAll('_', ' ')}</strong><small>{profileById(data.profiles, t.rider_id)?.full_name ?? '—'} · {formatDateTime(t.created_at)}</small></span>
+                    <span><strong>{t.kind.replaceAll('_', ' ')}</strong><small>{profileById(data.profiles, t.rider_id)?.full_name ?? '-'} · {formatDateTime(t.created_at)}</small></span>
                     <span className="right"><strong>{peso(t.amount)}</strong><Badge tone={t.status === 'settled' ? 'ok' : t.status === 'failed' ? 'bad' : 'pending'}>{t.status}</Badge></span>
                   </li>
                 ))}
@@ -76,7 +76,7 @@ export function Finance({ data, loading, reload }: { data: AdminData; loading: b
                   <tbody>
                     {data.wallets.slice(0, 20).map((w) => (
                       <tr key={w.id}>
-                        <td><strong>{profileById(data.profiles, w.user_id)?.full_name || '—'}</strong></td>
+                        <td><strong>{profileById(data.profiles, w.user_id)?.full_name || '-'}</strong></td>
                         <td>{peso(w.cash_on_hand)}</td>
                         <td><strong>{peso(w.payout_balance)}</strong></td>
                       </tr>
@@ -179,7 +179,7 @@ function Fares({ data, reload }: { data: AdminData; reload: () => void }) {
   };
 
   return (
-    <Card title="Fare engine" subtitle="Publishing creates a new version — history is preserved">
+    <Card title="Fare engine" subtitle="Publishing creates a new version, history is preserved">
       <div className="kpi-grid">
         <Kpi tone="teal" icon="peso" label="Base fare" value={peso(active?.base_fare ?? 45)} hint={`first ${active?.base_km ?? 2} km`} />
         <Kpi tone="blue" icon="swap" label="Per km" value={peso(active?.per_km_rate ?? 15)} hint="beyond base" />

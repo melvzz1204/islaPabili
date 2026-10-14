@@ -53,7 +53,7 @@ export function useUnreadCount(): number {
       }
       try {
         // Chat messages (kind 'message') live in the message badges, not the
-        // bell — the bell counts order updates, promos, and review results.
+        // bell, the bell counts order updates, promos, and review results.
         // kind is nullable (pre-0020 rows), so nulls must pass explicitly.
         const { count } = await client
           .from('notifications')
@@ -263,7 +263,7 @@ export default function NotificationsScreen({}: Props) {
     }
     // Pre-order store inquiries (no order): customers jump to the store
     // thread. (Merchant mode returns to the dashboard above; message rows
-    // are excluded from this inbox — chats live in the message badges.)
+    // are excluded from this inbox, chats live in the message badges.)
     if (n.kind === 'message' && !n.order_id && n.merchant_id) {
       navigation.navigate('StoreChat', { merchantId: n.merchant_id });
       return;

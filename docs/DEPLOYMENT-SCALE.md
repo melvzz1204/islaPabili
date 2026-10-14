@@ -1,4 +1,4 @@
-# IslaPabili — Deployment Scale (pag lumalaki na)
+# IslaPabili, Deployment Scale (pag lumalaki na)
 
 > Gamitin ito pag lumagpas ka na sa MVP free tiers. Kasama ang triggers, presyo 2026, at upgrade path.
 
@@ -15,7 +15,7 @@
 | SMS bill >₱3K/mo | Maraming OTP | Push-first policy + OTP rate-limit (tingnan §4) |
 | Kailangan ng iOS | App Store launch | Apple Developer $99/year (~₱5,800/year) |
 
-## 2. Magkano — scale pricing (2026)
+## 2. Magkano, scale pricing (2026)
 
 ### Supabase
 - **Pro: $25/mo (~₱1,450/mo).** Kasama: 100K MAU ($0.00325/MAU sobra), 8GB DB ($0.125/GB sobra), 250GB egress ($0.09/GB sobra), 100GB storage ($0.021/GB sobra), 2M function invocations ($2/1M sobra), daily backups 7 days.
@@ -29,9 +29,9 @@
 - OTA overage: ~$0.005/MAU sa unang tier.
 
 ### Iba pa
-- Admin-web: manatili sa free hangga't kaya. Vercel Pro $20/mo lang kung lumagpas sa free bandwidth — mas mura ang Cloudflare Pages (libre, malaki ang free egress).
+- Admin-web: manatili sa free hangga't kaya. Vercel Pro $20/mo lang kung lumagpas sa free bandwidth, mas mura ang Cloudflare Pages (libre, malaki ang free egress).
 - Google Play: walang dagdag bayad pagkatapos ng $25 one-time. Apple: $99/year kung mag-iOS.
-- Domain: ~₱600–800/year (.com). `.ph` mas mahal (~₱1,500+/year).
+- Domain: ~₱600-800/year (.com). `.ph` mas mahal (~₱1,500+/year).
 - Semaphore: parehong ₱0.56/text ex-VAT kahit lumaki. Walang volume discount na aasahan sa maliit na volume.
 
 ### Projection samples (monthly, walang Apple)
@@ -40,7 +40,7 @@
 |---|---|---|---|---|---|
 | 1K users | Pro $25 | Free $0 | ~₱630 | $0 | **~₱2,100** |
 | 10K users | Pro $25 + konting egress | Starter $19 | ~₱6,300 | $0 | **~₱8,800** |
-| 50K users | Pro $25 + overages (~$10–30) | Production $199 | ~₱31,500 | $0–20 | **~₱45,000–50,000** |
+| 50K users | Pro $25 + overages (~$10-30) | Production $199 | ~₱31,500 | $0-20 | **~₱45,000-50,000** |
 
 > Pinakamalaking variable cost sa scale ay **SMS**, hindi Supabase/EAS. Kaya push-first ang #1 cost control.
 
@@ -57,11 +57,11 @@
 
 - [ ] Push-first: lahat ng order status via `push-send` + `expo-notifications`. SMS = OTP at critical fallback lang.
 - [ ] OTP rate-limit: max 5 resends per number per hour (i-enforce sa `send-sms` function).
-- [ ] Rider `location-heartbeat` naka-throttle na (~10s snapshot, huwag bawat segundo) — tipid sa Realtime messages at DB writes.
+- [ ] Rider `location-heartbeat` naka-throttle na (~10s snapshot, huwag bawat segundo), tipid sa Realtime messages at DB writes.
 - [ ] Cron (`reminder-send` hourly, `promo-craving` daily) may `x-cron-secret` at hindi nagdo-double send.
 - [ ] Storage lifecycle: i-resize ang food photos sa upload (Expo `image-manipulator` gamit na), burahin ang luma/rejected compliance docs (`0017_compliance_doc_limits`).
 - [ ] Spend caps: mag-set ng Supabase spend cap + EAS usage alerts (80%/100% email).
-- [ ] Quarterly review: DB size, MAU, egress, function invocations — nasa Supabase Dashboard > Usage.
+- [ ] Quarterly review: DB size, MAU, egress, function invocations, nasa Supabase Dashboard > Usage.
 
 ## 5. Operasyon sa scale
 
@@ -72,6 +72,6 @@
 
 ## 6. Hindi pa kailangan (pero alam mo lang)
 
-- Supabase Team $599/mo, Enterprise custom — pang-compliance (SOC2/SSO/HIPAA) o dedicated support.
-- Read replicas, dedicated IPv4, custom domains sa Supabase — pang-high traffic o whitelabel.
-- Self-hosting ng Supabase — libre sa lisensya pero ikaw ang magbabayad ng VPS + maintenance. Mas mahal sa oras kaysa $25/mo sa ngayon.
+- Supabase Team $599/mo, Enterprise custom, pang-compliance (SOC2/SSO/HIPAA) o dedicated support.
+- Read replicas, dedicated IPv4, custom domains sa Supabase, pang-high traffic o whitelabel.
+- Self-hosting ng Supabase, libre sa lisensya pero ikaw ang magbabayad ng VPS + maintenance. Mas mahal sa oras kaysa $25/mo sa ngayon.

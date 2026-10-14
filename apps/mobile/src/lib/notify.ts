@@ -138,11 +138,11 @@ const ALAK_SINGKO_ID_KEY = 'isla-alak-singko-sched-id-v2';
 const DELIVERED_REMINDER_KEY = 'isla-delivered-reminders';
 
 const CRAVING_COPY: { title: string; body: string }[] = [
-  { title: '11AM na! Gutom ka na ba? 🍚', body: 'Anong lunch cravings mo? Pabili ka na — rider ang bahala.' },
+  { title: '11AM na! Gutom ka na ba? 🍚', body: 'Anong lunch cravings mo? Pabili ka na, rider ang bahala.' },
   { title: 'Lunch break malapit na 🍗', body: 'Order na bago mag-lunch rush. Mabilis ang rider ngayon.' },
-  { title: 'Anong ulam today? 🍲', body: 'Pabili ng paborito mo sa IslaPabili — door-to-door, COD pa.' },
+  { title: 'Anong ulam today? 🍲', body: 'Pabili ng paborito mo sa IslaPabili. Door-to-door, COD pa.' },
   { title: 'Merienda o lunch? 🥤', body: 'Isang tap lang, darating ang cravings mo. Open Shop na!' },
-  { title: 'Gutom check! 👀', body: 'Huwag magpalipas ng gutom — magpabili ka na bago 12PM rush.' },
+  { title: 'Gutom check! 👀', body: 'Huwag magpalipas ng gutom, magpabili ka na bago 12PM rush.' },
   { title: 'Craving alert 🍔', body: 'Masarap kumain nang busog. Order na, sagot na ng rider ang pila.' },
   { title: 'Tanghalian na! 🐟', body: 'Fresh, mainit, delivered. Magpabili ka na sa IslaPabili.' },
 ];
@@ -176,23 +176,23 @@ export async function scheduleDailyCraving(): Promise<void> {
 }
 
 const MORNING_COPY: { title: string; body: string }[] = [
-  { title: 'Nakabili ka na ba ng lulutuin for lunch? 🧺', body: 'Magpabili ka na ng rekado — hatid bago mag-tanghali.' },
-  { title: 'Mainit ang panahon ☀️', body: 'Wag ka na lumabas — magpabili ka na lang, rider ang bahala!' },
-  { title: 'Anong gusto mong kainin mamayang lunch? Jollibee? 🍗', body: 'Pabili na — mainit-init pa pagdating sa bahay nyo.' },
-  { title: 'Pamalengke ng maaga? 🐟', body: 'Fresh isda at gulay, isang tap lang — hindi ka na pipila sa init.' },
-  { title: 'Good morning! Almusal check ☕', body: 'Pandesal, kape o tapsilog — magpabili ka na ng umagahan.' },
-  { title: 'Kulang ba rekado mo? 🧄', body: 'Sibuyas, bawang, sili — pahabol bago ka magluto ng lunch.' },
-  { title: 'Baon for school o work? 🎒', body: 'Ihanda na ng maaga — magpabili ka na, hatid on time.' },
+  { title: 'Nakabili ka na ba ng lulutuin for lunch? 🧺', body: 'Magpabili ka na ng rekado, hatid bago mag-tanghali.' },
+  { title: 'Mainit ang panahon ☀️', body: 'Wag ka na lumabas, magpabili ka na lang, rider ang bahala!' },
+  { title: 'Anong gusto mong kainin mamayang lunch? Jollibee? 🍗', body: 'Pabili na, mainit-init pa pagdating sa bahay nyo.' },
+  { title: 'Pamalengke ng maaga? 🐟', body: 'Fresh isda at gulay, isang tap lang, hindi ka na pipila sa init.' },
+  { title: 'Good morning! Almusal check ☕', body: 'Pandesal, kape o tapsilog, magpabili ka na ng umagahan.' },
+  { title: 'Kulang ba rekado mo? 🧄', body: 'Sibuyas, bawang, sili, pahabol bago ka magluto ng lunch.' },
+  { title: 'Baon for school o work? 🎒', body: 'Ihanda na ng maaga, magpabili ka na, hatid on time.' },
 ];
 
 const MERIENDA_COPY: { title: string; body: string }[] = [
-  { title: 'Meryenda time! 🍩', body: 'Anong merienda mo? Pabili ka na — mainit-init pa pagdating.' },
+  { title: 'Meryenda time! 🍩', body: 'Anong merienda mo? Pabili ka na, mainit-init pa pagdating.' },
   { title: 'May lulutuin ka ba mamayang dinner? 🍲', body: 'Mamalengke na ng maaga, iwas siksikan mamayang hapon.' },
-  { title: 'Pagod ka siguro sa trabaho 😮‍💨', body: 'Deserve mo ang masarap na pagkain — wag ka na lumabas, ako na bahala!' },
+  { title: 'Pagod ka siguro sa trabaho 😮‍💨', body: 'Deserve mo ang masarap na pagkain, wag ka na lumabas, ako na bahala!' },
   { title: 'Banana cue o turon? 🍌', body: 'Classic merienda cravings, hatid sa bahay nyo. Pabili na!' },
-  { title: 'Halo-halo weather? 🍧', body: 'Mainit pa rin — magpabili ng pangpalamig ngayong merienda!' },
-  { title: 'Tinapay at palaman run 🥖', body: 'Pang-merienda ngayon, pang-agahan bukas — isang tap lang.' },
-  { title: 'Panghimagas check 🍮', body: 'Leche flan, minatamis o prutas — pangtapos ng araw, hatid sa yo.' },
+  { title: 'Halo-halo weather? 🍧', body: 'Mainit pa rin, magpabili ng pangpalamig ngayong merienda!' },
+  { title: 'Tinapay at palaman run 🥖', body: 'Pang-merienda ngayon, pang-agahan bukas, isang tap lang.' },
+  { title: 'Panghimagas check 🍮', body: 'Leche flan, minatamis o prutas, pangtapos ng araw, hatid sa yo.' },
 ];
 
 async function scheduleDailyPromo(
@@ -241,7 +241,7 @@ const ALAK_SINGKO_COPY: { title: string; body: string }[] = [
   { title: 'Alak-singko na! 🍢', body: 'Pulutan + malamig, hatid sa bahay nyo. Magpabili ka na!' },
   { title: '5PM na, shot na? 🥃', body: 'Alak-singko na magpabili ka na ng pulutan, hatid pa sa bahay nyo.' },
   { title: 'Pang-inuman check 👀', body: 'Kulang ba pulutan nyo? Isang tap lang, rider na bahala maghatid.' },
-  { title: 'Alak-singko na! 🍻', body: 'Tawagin na tropa — pulutan coming right up. Pabili na sa IslaPabili!' },
+  { title: 'Alak-singko na! 🍻', body: 'Tawagin na tropa, pulutan coming right up. Pabili na sa IslaPabili!' },
   { title: 'Haponan + pulutan? 🐟', body: 'Alak-singko na magpabili ka na ng pulutan, hatid pa sa bahay nyo.' },
   { title: 'Weekday wind-down 🍺', body: 'Pagod sa work? Magpabili ng pulutan, relax ka na lang sa bahay.' },
 ];
@@ -250,7 +250,7 @@ const ALAK_SINGKO_COPY: { title: string; body: string }[] = [
 export async function scheduleAlakSingko(): Promise<void> {
   if (Platform.OS === 'web') return;
   try {
-    // v1 scheduled with target=shop — migrate once to pabili-pulutan so the
+    // v1 scheduled with target=shop, migrate once to pabili-pulutan so the
     // 5PM tap lands straight on the pre-filled pulutan Pabili form.
     const legacy = await AsyncStorage.getItem('isla-alak-singko-sched-id');
     if (legacy) {
