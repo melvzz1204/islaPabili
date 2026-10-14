@@ -91,14 +91,16 @@ const PROVIDER_LABELS: Record<'google' | 'facebook', string> = {
   facebook: 'Facebook',
 };
 
-/** Brand lockup shown on the sign-in landing screen. Horizontal [logo] name
- * row — compact so the Log in / Create account buttons stay above the fold,
- * no scroll needed. */
-export function AuthIntro() {
+/** Brand lockup shown on the sign-in landing screen: [logo] Isla Pabili,
+ * with an optional tagline underneath. */
+export function AuthIntro({ tagline }: { tagline?: string }) {
   return (
-    <View style={styles.intro}>
-      <BrandLogo width={56} />
-      <Text style={styles.wordmark}>Isla Pabili</Text>
+    <View style={styles.introWrap}>
+      <View style={styles.intro}>
+        <BrandLogo width={56} />
+        <Text style={styles.wordmark}>Isla Pabili</Text>
+      </View>
+      {tagline ? <Text style={styles.tagline}>{tagline}</Text> : null}
     </View>
   );
 }
@@ -119,13 +121,8 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.6, transform: [{ scale: 0.94 }] },
   dim: { opacity: 0.45 },
 
-  intro: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.md,
-    marginBottom: spacing.xs,
-  },
-  wordmark: { ...typography.title, fontSize: 24, color: colors.ink },
+  introWrap: { alignItems: 'center', gap: spacing.sm, marginTop: spacing.md, marginBottom: spacing.sm },
+  intro: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  wordmark: { ...typography.title, fontSize: 26, color: colors.ink },
+  tagline: { ...typography.body, color: colors.muted, textAlign: 'center', maxWidth: 280 },
 });

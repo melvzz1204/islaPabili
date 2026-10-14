@@ -13,8 +13,6 @@ import {
   typography,
   type AppIconName,
 } from '@isla/ui';
-import { HowItWorks } from '../components/HowItWorks';
-import { BrandLogo } from '../components/BrandLogo';
 import type { RootNavProp, TabScreen } from '../navigation/types';
 
 type Props = TabScreen<'Shop'>;
@@ -52,20 +50,9 @@ const WAYS: Way[] = [
   },
 ];
 
-/** Small trust chip used under the hero CTA. */
-function TrustChip({ icon, label }: { icon: AppIconName; label: string }) {
-  return (
-    <View style={styles.trustChip}>
-      <AppIcon name={icon} size={14} color={colors.muted} />
-      <Text style={styles.trustText}>{label}</Text>
-    </View>
-  );
-}
-
 /**
- * Guest landing: sticky brand bar + a warm hero whose single yellow CTA sends
- * a pabili list, a 3-step "How it works?" overview (expandable to the full
- * timeline), the two ways to order, and rider/merchant paths. No store list.
+ * Guest landing: sticky top bar + a warm hero whose single yellow CTA sends
+ * a pabili list, the two ways to order, and rider/merchant paths. No store list.
  */
 export default function LandingScreen({}: Props) {
   const navigation = useNavigation<RootNavProp>();
@@ -91,10 +78,6 @@ export default function LandingScreen({}: Props) {
       >
         {/* Sticky top bar, stays put while the page scrolls. */}
         <View style={styles.topBar}>
-          <View style={styles.brandBlock}>
-            <BrandLogo width={34} />
-            <Text style={styles.brand}>IslaPabili</Text>
-          </View>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Login or register"
@@ -126,22 +109,7 @@ export default function LandingScreen({}: Props) {
               size="md"
               onPress={() => navigation.navigate('Market')}
             />
-
-            <View style={styles.trustRow}>
-              <TrustChip icon="rating" label="4.8 rating" />
-              <View style={styles.trustDot} />
-              <TrustChip icon="rider" label="5 bayan" />
-              <View style={styles.trustDot} />
-              <TrustChip icon="wallet" label="Cash o e-pay" />
-            </View>
           </Card>
-
-          {/* 3-step overview, expandable to the full timeline. */}
-          <HowItWorks
-            variant="landing"
-            onCreate={() => navigation.navigate('PabiliCreate')}
-            onBrowse={() => navigation.navigate('Market')}
-          />
 
           {/* Two ways to order. */}
           <View style={styles.section}>
@@ -197,14 +165,13 @@ const styles = StyleSheet.create({
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'flex-end',
     gap: spacing.md,
     paddingHorizontal: spacing.pagePadding,
     paddingTop: spacing.sm,
     paddingBottom: spacing.md,
     backgroundColor: colors.bg,
   },
-  brandBlock: { flex: 1, alignItems: 'flex-start', gap: 2 },
-  brand: { ...typography.title, fontSize: 18, color: colors.primaryDeep },
   loginPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -228,10 +195,6 @@ const styles = StyleSheet.create({
   hero: { gap: spacing.md },
   heroTitle: { ...typography.display, fontSize: 26 },
   heroBody: { ...typography.body, color: colors.body },
-  trustRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.sm },
-  trustChip: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  trustText: { ...typography.micro, color: colors.muted },
-  trustDot: { width: 3, height: 3, borderRadius: 2, backgroundColor: colors.faint },
 
   section: { gap: spacing.md },
   sectionTitle: { ...typography.heading, fontSize: 19 },
